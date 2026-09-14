@@ -331,9 +331,48 @@ private func checkMenuPanelGeometry() {
         tests.testLayoutMatchingPreservesExactTitlesBeforeFallback()
         tests.testLayoutMatchingConsumesDuplicateTitlesOnceAndIsolatesApps()
         await checkWindowCreation()
+        checkDesktopGrids()
         checkSavedSetups()
         checkActiveLayouts()
         checkMenuPanelGeometry()
         print("PASS: 31 geometry, matching, creation, visibility, saved-setup, active-layout, and menu-panel scenarios, \(assertionCount) assertions.")
     }
+}
+
+func checkDesktopGrids() {
+    let safari = GridApp(bundleID: "com.apple.Safari", name: "Safari")
+    let notes = GridApp(bundleID: "com.apple.Notes", name: "Notes")
+    let bound = GridWindowBinding(windowID: "123:window-1", processSession: "123|launch")
+    var grid = DesktopGrid(slots: [GridSlot(app: safari, binding: bound), GridSlot(app: notes)])
+    expect(grid.isValid && grid.slots.count == 4, "New grids include empty cells")
+    grid.move(from: 0, to: 2, repeating: true)
+    expect(grid.slots[2].app == safari && grid.slots[2].binding == nil, "Repeating creates an unbound app, not a duplicate window identity")
+    expect(grid.slots[0].binding == bound, "Repeating preserves the original window")
+    grid.move(from: 0, to: 1, repeating: false)
+    expect(grid.slots[0].app == notes && grid.slots[1].binding == bound, "Swap follows exact windows")
+    grid.resize(columns: 3, rows: 2)
+    expect(grid.slots[3].app == safari && grid.slots[2].app == nil, "Resizing preserves row and column positions")
+    expect(grid.slots.count == 6 && grid.isValid, "Dimensions and cell count agree")
+    let template = grid.template
+    expect(template.slots.allSatisfy { $0.binding == nil }, "Saved grids contain apps, never live window IDs")
+    expect(template.slots.map(\.app) == grid.slots.map(\.app), "Saving preserves app choices and holes")
+    let data = try! JSONEncoder().encode(grid)
+    expect((try! JSONDecoder().decode(DesktopGrid.self, from: data)) == grid, "Desktop sessions survive restart")
+    grid.resize(columns: 1, rows: 1)
+    expect(grid.slots.count == 1 && grid.slots[0].app == notes, "Shrinking removes assignments without closing windows")
+    var full = DesktopGrid(columns: 2, rows: 2, slots: Array(repeating: GridSlot(app: safari), count: 4))
+    let newIndex = full.makeRoom()
+    expect(full.columns == 3 && full.rows == 2 && newIndex == 2, "Adding to full grid expands without replacing an app")
+    expect(full.slots[3].app == safari, "Auto expansion preserves second row")
+    full = DesktopGrid(columns: 6, rows: 4, slots: Array(repeating: GridSlot(app: safari), count: 24))
+    expect(full.makeRoom() == nil && full.slots.count == 24, "Full maximum grid refuses overflow")
+    var invalid = full
+    invalid.slots = []
+    expect(!invalid.isValid, "Malformed persisted cell count is rejected")
+    full.move(from: -1, to: 99, repeating: true)
+    expect(full.isValid, "Invalid drag indices are ignored")
+    let bounds = CGRect(x: -1800, y: -400, width: 1800, height: 1000)
+    let frames = Geometry.grid(count: template.slots.count, in: bounds, columns: template.columns, rows: template.rows, gap: 10)
+    expect(frames.count == 6 && frames[3].minY > frames[0].minY, "Empty cells reserve real desktop geometry")
+    print("PASS: desktop-grid sizing, repetition, exact-window swaps, persistence, empty cells, overflow, and malformed state")
 }

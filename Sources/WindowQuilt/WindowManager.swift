@@ -45,6 +45,7 @@ final class WindowManager: ObservableObject {
     private var lastExternalPID: pid_t?
     private var lastSnap: (id: String, placement: Placement, cycle: Int, date: Date)?
     private var displayWork: DispatchWorkItem?
+    private let backgroundArrangements: Bool
 
     var groups: [AppGroup] {
         NSWorkspace.shared.runningApplications
@@ -55,8 +56,9 @@ final class WindowManager: ObservableObject {
             }.sorted { $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending }
     }
 
-    init(preferences: Preferences) {
+    init(preferences: Preferences, backgroundArrangements: Bool = true) {
         self.preferences = preferences
+        self.backgroundArrangements = backgroundArrangements
         let t = Timer(timeInterval: 0.85, repeats: true) { [weak self] _ in self?.refresh() }
         RunLoop.main.add(t, forMode: .common)
         timer = t
@@ -539,6 +541,7 @@ final class WindowManager: ObservableObject {
     }
 
     @objc private func displaysChanged() {
+        guard backgroundArrangements else { refresh(); return }
         displayWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }

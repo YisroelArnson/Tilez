@@ -2,3 +2,4 @@
 dist/
 Resources/AppIcon.iconset/
 .DS_Store
+backups/
