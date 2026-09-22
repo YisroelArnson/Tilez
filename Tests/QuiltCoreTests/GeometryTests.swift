@@ -318,6 +318,7 @@ private func checkMenuPanelGeometry() {
 
 @main struct CheckRunner {
     @MainActor static func main() async {
+        checkWindowMenus()
         await checkWindowDiscovery()
         let tests = GeometryTests()
         tests.testAutomaticGridsFitWithoutOverlapAcrossDisplayShapes()
@@ -331,7 +332,9 @@ private func checkMenuPanelGeometry() {
         tests.testLayoutMatchingPreservesExactTitlesBeforeFallback()
         tests.testLayoutMatchingConsumesDuplicateTitlesOnceAndIsolatesApps()
         await checkWindowCreation()
+        await checkWindowSettling()
         checkDesktopGrids()
+        checkPaneLayouts()
         checkSavedSetups()
         checkActiveLayouts()
         checkMenuPanelGeometry()
@@ -375,4 +378,136 @@ func checkDesktopGrids() {
     let frames = Geometry.grid(count: template.slots.count, in: bounds, columns: template.columns, rows: template.rows, gap: 10)
     expect(frames.count == 6 && frames[3].minY > frames[0].minY, "Empty cells reserve real desktop geometry")
     print("PASS: desktop-grid sizing, repetition, exact-window swaps, persistence, empty cells, overflow, and malformed state")
+}
+
+func checkPaneLayouts() {
+    let bounds = CGRect(x: -1800, y: -400, width: 1800, height: 1000)
+    let app = GridApp(bundleID: "chat.test", name: "Chat")
+    func slot(_ index: Int) -> GridSlot {
+        GridSlot(app: app, binding: GridWindowBinding(windowID: "w\(index)", processSession: "session"))
+    }
+    expectEqual(DesktopGrid.desktop(panes: [], in: bounds), .emptyDesktop)
+    let single = DesktopGrid.desktop(panes: [(slot(0), bounds)], in: bounds)
+    expectEqual(single.slots.count, 1)
+    expectEqual(single.frames(in: bounds), [bounds])
+    let sixFrames = Geometry.grid(count: 6, in: bounds, columns: 3, rows: 2, gap: 10)
+    let six = DesktopGrid.desktop(panes: sixFrames.enumerated().map { (slot($0.offset), $0.element) }, in: bounds)
+    expectEqual(six.slots.count, 6)
+    for (actual, expected) in zip(six.frames(in: bounds), sixFrames) { expect(Geometry.approximatelyEqual(actual, expected, tolerance: 0.001)) }
+    let unequalFrames = [CGRect(x: -1800, y: -400, width: 600, height: 1000), CGRect(x: -1190, y: -400, width: 1190, height: 1000)]
+    let unequal = DesktopGrid.desktop(panes: unequalFrames.enumerated().map { (slot($0.offset), $0.element) }, in: bounds)
+    for (actual, expected) in zip(unequal.frames(in: bounds), unequalFrames) { expect(Geometry.approximatelyEqual(actual, expected, tolerance: 0.001)) }
+    let overlapping = DesktopGrid.desktop(panes: [(slot(0), bounds), (slot(1), CGRect(x: -1500, y: -300, width: 700, height: 700))], in: bounds)
+    expectEqual(overlapping.slots.count, 2)
+    expect(overlapping.normalizedFrames[0].contains(overlapping.normalizedFrames[1]), "Overlaps are represented instead of silently rearranged")
+    for edge in PaneEdge.allCases {
+        var layout = single
+        let added = layout.split(0, toward: edge)!
+        expectEqual(added, 1)
+        expectEqual(layout.slots[0].binding, slot(0).binding)
+        expect(layout.slots[1].app == nil && layout.isValid)
+        let divider = layout.dividers.first!
+        layout.resizeDivider(divider, to: 0.7)
+        expect(layout.isValid)
+        expect(abs(layout.dividers.first!.position - 0.7) < 0.001)
+        layout.resizeDivider(layout.dividers.first!, to: 99)
+        expect(layout.isValid && layout.normalizedFrames.allSatisfy { $0.width >= 0.039 && $0.height >= 0.039 }, "Dragging past bounds clamps the pane size")
+        layout.removePane(1)
+        expectEqual(layout.slots, single.slots)
+        expect(Geometry.approximatelyEqual(layout.normalizedFrames[0], single.normalizedFrames[0], tolerance: 0.001))
+    }
+    var junction = single
+    _ = junction.split(0, toward: .right)
+    _ = junction.split(1, toward: .bottom)
+    junction.slots[1] = slot(1); junction.slots[2] = slot(2)
+    let vertical = junction.dividers.first { $0.vertical }!
+    junction.resizeDivider(vertical, to: 0.6)
+    expect(abs(junction.normalizedFrames[1].minX - junction.normalizedFrames[2].minX) < 0.001, "T junctions resize both adjacent panes")
+    expect(junction.isValid)
+    let beforeSwap = junction.normalizedFrames
+    junction.move(from: 0, to: 2, repeating: false)
+    expectEqual(junction.normalizedFrames, beforeSwap)
+    expectEqual(junction.slots[2].binding, slot(0).binding)
+    junction.removePane(0)
+    expectEqual(junction.slots.count, 2)
+    expect(junction.normalizedFrames.allSatisfy { abs($0.width - 1) < 0.001 }, "Removing a large pane expands its stacked neighbors")
+    expect(junction.template.slots.allSatisfy { $0.binding == nil })
+    expectEqual(junction.template.normalizedFrames, junction.normalizedFrames)
+    let decoded = try! JSONDecoder().decode(DesktopGrid.self, from: JSONEncoder().encode(junction))
+    expectEqual(decoded, junction)
+    let old = Data(#"{"columns":1,"rows":1,"slots":[{"app":{"bundleID":"chat.test","name":"Chat"}}]}"#.utf8)
+    expect((try! JSONDecoder().decode(DesktopGrid.self, from: old)).isValid, "Existing templates decode without new fields")
+    var requests = single
+    _ = requests.split(0, toward: .right)
+    requests.slots[1] = GridSlot(app: app, opensNewWindow: true)
+    expectEqual(requests.candidateIDs(bundleID: app.bundleID, session: "session", available: ["unrelated", "w0", "new"], initial: ["unrelated", "w0"]), ["w0", "new"])
+    expectEqual(requests.candidateIDs(bundleID: app.bundleID, session: "restarted", available: ["w0"], initial: ["w0"]), [])
+    let covered = DesktopGrid.visibleDesktop(panes: [(slot(0), bounds), (slot(1), bounds)], in: bounds)
+    expectEqual(covered.slots.count, 1)
+    expectEqual(covered.slots[0].binding, slot(0).binding)
+    let halves = [CGRect(x: bounds.minX, y: bounds.minY, width: bounds.width / 2, height: bounds.height),
+                  CGRect(x: bounds.midX, y: bounds.minY, width: bounds.width / 2, height: bounds.height)]
+    let unionCovered = DesktopGrid.visibleDesktop(panes: [(slot(0), halves[0]), (slot(1), halves[1]), (slot(2), bounds)], in: bounds)
+    expect(unionCovered.slots.count == 2, "Occlusion uses the union of front windows")
+    let partial = DesktopGrid.visibleDesktop(panes: [(slot(0), halves[0]), (slot(1), bounds)], in: bounds)
+    expect(partial.slots.count == 2, "Partially visible windows preserve their full geometry")
+    let eightFrames = Geometry.grid(count: 8, in: bounds, columns: 4, rows: 2, gap: 10)
+    var eight = DesktopGrid.desktop(panes: eightFrames.enumerated().map { (slot($0.offset), $0.element) }, in: bounds)
+    expectEqual(eight.mergeCandidates(7, toward: .top), [3])
+    expectEqual(eight.merge(7, toward: .top), 6)
+    expect(eight.isValid && eight.slots.count == 7 && eight.slots[6].binding == slot(7).binding)
+    expect(abs(eight.normalizedFrames[6].minY - eight.normalizedFrames[0].minY) < 0.001
+           && abs(eight.normalizedFrames[6].maxY - eight.normalizedFrames[4].maxY) < 0.001, "Merging a column spans its full height")
+    expect(eight.mergeCandidates(2, toward: .right).isEmpty, "A short pane can't absorb a taller neighbor")
+    var stacked = single
+    _ = stacked.split(0, toward: .right)
+    _ = stacked.split(1, toward: .bottom)
+    expect(stacked.mergeCandidates(1, toward: .left).isEmpty)
+    stacked.slots[0] = GridSlot()
+    stacked.slots[2] = slot(2)
+    expectEqual(Set(stacked.mergeCandidates(0, toward: .right)), [1, 2])
+    expectEqual(stacked.merge(0, toward: .right), 0)
+    expect(stacked.slots == [slot(2)] && abs(stacked.normalizedFrames[0].width - 1) < 0.001, "An empty pane takes an absorbed app")
+    var halves2 = single
+    _ = halves2.split(0, toward: .right)
+    let even = halves2.normalizedFrames
+    halves2.resizeDivider(halves2.dividers[0], to: 0.8)
+    halves2.resetDivider(halves2.dividers[0])
+    expect(zip(halves2.normalizedFrames, even).allSatisfy { Geometry.approximatelyEqual($0, $1, tolerance: 0.0001) }, "Reset restores an even split")
+    var threeColumns = DesktopGrid.desktop(panes: Geometry.grid(count: 6, in: bounds, columns: 3, rows: 2, gap: 10).enumerated()
+        .map { (slot($0.offset), $0.element) }, in: bounds)
+    let columnsBefore = threeColumns.normalizedFrames
+    let junctionDivider = threeColumns.dividers.first { $0.vertical && $0.before == 0 }!
+    threeColumns.resizeDivider(junctionDivider, to: 0.2)
+    threeColumns.resetDivider(threeColumns.dividers.first { $0.vertical && $0.before == 0 }!)
+    expect(zip(threeColumns.normalizedFrames, columnsBefore).allSatisfy { Geometry.approximatelyEqual($0, $1, tolerance: 0.0001) },
+           "Reset moves every pane sharing the boundary")
+    let start = Date()
+    var edit = six
+    for index in 0..<500 {
+        let divider = edit.dividers[index % edit.dividers.count]
+        edit.resizeDivider(divider, to: divider.position + (index.isMultiple(of: 2) ? 0.001 : -0.001))
+    }
+    let elapsed = Date().timeIntervalSince(start)
+    expect(elapsed < 1, "500 divider updates should fit within one second; got \(elapsed)")
+    print(String(format: "PASS: live pane geometry, empty/full/six-window desktops, unequal and overlapping windows, split/remove/T-junction resizing, column merges, divider reset, exact bindings, legacy templates, new-window isolation; 500 divider edits %.1f ms", elapsed * 1000))
+}
+
+@MainActor private func checkWindowSettling() async {
+    do {
+        var waits = 0
+        let ready: [String] = try await WindowSettling.finish(pending: { [] }, retry: { _ in fatalError("Ready windows must not be resized") }, wait: { waits += 1 })
+        expect(ready.isEmpty && waits == 0, "Already-settled windows finish without delay")
+        var retries = 0
+        let delayed = try await WindowSettling.finish(pending: { retries < 3 ? ["opening-window"] : [] }, retry: { _ in retries += 1 }, wait: { waits += 1 })
+        expect(delayed.isEmpty && retries == 3, "A window that ignores initial resizing during its opening transition is retried automatically")
+        waits = 0; retries = 0
+        let constrained = try await WindowSettling.finish(pending: { ["minimum-size"] }, retry: { _ in retries += 1 }, wait: { waits += 1 })
+        expect(constrained == ["minimum-size"] && waits == 16 && retries == 4, "Minimum-size failures stop after a bounded number of retries")
+        do {
+            _ = try await WindowSettling.finish(pending: { ["window"] }, retry: { _ in fatalError("Cancellation must stop retries") }, wait: { throw CancellationError() })
+            expect(false, "Cancellation must propagate")
+        } catch is CancellationError {} catch { expect(false, "Unexpected error") }
+        print("PASS: zero-delay settled placements, delayed opening transitions, bounded constraints, and cancellation")
+    } catch { fatalError("Unexpected settling failure: \(error)") }
 }

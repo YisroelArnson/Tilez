@@ -16,10 +16,17 @@ private final class GridPanel: NSPanel {
     private var previousApp: NSRunningApplication?
     var isShown: Bool { panel?.isVisible == true }
 
-    init(manager: WindowManager) {
-        model = GridEditorModel(manager: manager)
+    init(manager: WindowManager, defaults: UserDefaults = .standard) {
+        model = GridEditorModel(manager: manager, defaults: defaults)
         model.onDismiss = { [weak self] in self?.close() }
         model.onFinished = { [weak self] in self?.close(restoreFocus: false) }
+        model.onFocusGrid = { [weak self] in
+            DispatchQueue.main.async {
+                guard let self, self.isShown, !self.model.hasActiveLayer else { return }
+                self.panel?.makeKeyAndOrderFront(nil)
+                self.panel?.makeFirstResponder(nil)
+            }
+        }
         observers.append(NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.activeSpaceDidChangeNotification,
             object: nil, queue: .main) { [weak self] _ in
                 MainActor.assumeIsolated {
@@ -40,7 +47,7 @@ private final class GridPanel: NSPanel {
     func show(on screen: NSScreen? = nil) {
         if isShown { return }
         guard !model.busy else { return }
-        let target = screen ?? NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? NSScreen.main
+        let target = screen ?? keyboardScreen() ?? NSScreen.main ?? NSScreen.screens.first
         guard let display = Display.all.first(where: { $0.screen == target }) ?? Display.all.first else { return }
         previousApp = NSWorkspace.shared.frontmostApplication
         model.begin(on: display)
@@ -59,6 +66,7 @@ private final class GridPanel: NSPanel {
         panel?.setFrame(display.screen.visibleFrame, display: true)
         NSApp.activate(ignoringOtherApps: true)
         panel?.makeKeyAndOrderFront(nil)
+        panel?.makeFirstResponder(nil)
         installKeys()
         permissionTimer?.invalidate()
         permissionTimer = Timer.scheduledTimer(withTimeInterval: 0.75, repeats: true) { [weak self] _ in
@@ -70,8 +78,8 @@ private final class GridPanel: NSPanel {
         }
     }
     func close(restoreFocus: Bool = true) {
-        model.persist()
-        model.choosingApp = false; model.saving = false; model.showingSaved = false
+        model.endEditing()
+        model.closeLayers()
         panel?.orderOut(nil)
         permissionTimer?.invalidate(); permissionTimer = nil
         if let monitor { NSEvent.removeMonitor(monitor); self.monitor = nil }
@@ -79,36 +87,30 @@ private final class GridPanel: NSPanel {
             previousApp.activate(options: [])
         }
     }
+    /// WindowServer's front-to-back list locates the active app's foremost normal
+    /// window without waiting for AX IPC from an unresponsive app.
+    private func keyboardScreen() -> NSScreen? {
+        guard let pid = NSWorkspace.shared.frontmostApplication?.processIdentifier,
+              let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements],
+                                                       kCGNullWindowID) as? [[String: Any]] else { return nil }
+        for window in windows {
+            guard (window[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value == pid,
+                  (window[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,
+                  let bounds = window[kCGWindowBounds as String] as? NSDictionary,
+                  let rect = CGRect(dictionaryRepresentation: bounds), !rect.isEmpty else { continue }
+            return Display.containing(rect)?.screen
+        }
+        return nil
+    }
+
     private func installKeys() {
         if let monitor { NSEvent.removeMonitor(monitor) }
         monitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, self.isShown else { return event }
-            // Preserve normal editing inside search and save-name fields.
-            let typing = event.window?.firstResponder is NSTextView
-            let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
-            if event.keyCode == 53 { self.model.dismissLayer(); return nil }
-            if self.model.busy { return event }
-            if modifiers == .command {
-                if event.keyCode == 40 { self.model.addApp(); return nil }
-                if !typing && event.keyCode == 6 { self.model.undo(); return nil }
-                if !typing && event.keyCode == 45 { self.model.newGrid(); return nil }
-            }
-            if !typing && modifiers.isEmpty {
-                if event.keyCode == 36 && !self.model.choosingApp && !self.model.saving && !self.model.showingSaved {
-                    self.model.openGrid(); return nil
-                }
-                if let text = event.characters, let number = Int(text), (1...9).contains(number),
-                   self.model.grid.slots.indices.contains(number - 1) { self.model.choose(number - 1); return nil }
-                if event.keyCode == 51, let index = self.model.selectedCell { self.model.clear(index); return nil }
-                if [123, 124, 125, 126].contains(event.keyCode) && !self.model.choosingApp {
-                    let current = self.model.selectedCell ?? 0
-                    let delta = event.keyCode == 123 ? -1 : event.keyCode == 124 ? 1 : event.keyCode == 125 ? self.model.grid.columns : -self.model.grid.columns
-                    self.model.selectedCell = max(0, min(self.model.grid.slots.count - 1, current + delta))
-                    return nil
-                }
-                if event.keyCode == 49, let index = self.model.selectedCell { self.model.choose(index); return nil }
-            }
-            return event
+            let editor = event.window?.firstResponder as? NSTextView
+            // Let the input method finish or cancel composition before routing keys.
+            if editor?.hasMarkedText() == true { return event }
+            return self.model.handleKey(event, editingText: editor != nil) ? nil : event
         }
     }
 }

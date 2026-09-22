@@ -1,6 +1,6 @@
 import Foundation
 
-public struct GridApp: Codable, Equatable, Hashable {
+public struct GridApp: Codable, Equatable, Hashable, Sendable {
     public var bundleID: String
     public var name: String
     public init(bundleID: String, name: String) { self.bundleID = bundleID; self.name = name }
@@ -18,8 +18,11 @@ public struct GridWindowBinding: Codable, Equatable {
 public struct GridSlot: Codable, Equatable {
     public var app: GridApp?
     public var binding: GridWindowBinding?
-    public init(app: GridApp? = nil, binding: GridWindowBinding? = nil) {
+    public var opensNewWindow: Bool?
+    public var title: String?
+    public init(app: GridApp? = nil, binding: GridWindowBinding? = nil, opensNewWindow: Bool? = nil, title: String? = nil) {
         self.app = app; self.binding = binding
+        self.opensNewWindow = opensNewWindow; self.title = title
     }
 }
 
@@ -30,6 +33,9 @@ public struct DesktopGrid: Codable, Equatable {
     public private(set) var columns: Int
     public private(set) var rows: Int
     public var slots: [GridSlot]
+    public var windowsToClose: [GridWindowBinding]?
+    /// Exact normalized pane bounds. Nil keeps legacy equal-grid templates compatible.
+    public internal(set) var paneFrames: [CGRect]?
 
     public init(columns: Int = 2, rows: Int = 2, slots: [GridSlot] = []) {
         self.columns = min(Self.maxColumns, max(1, columns))
@@ -38,17 +44,33 @@ public struct DesktopGrid: Codable, Equatable {
         self.slots += Array(repeating: GridSlot(), count: self.columns * self.rows - self.slots.count)
     }
     public var isValid: Bool {
-        (1...Self.maxColumns).contains(columns) && (1...Self.maxRows).contains(rows)
+        if let paneFrames {
+            return !slots.isEmpty && paneFrames.count == slots.count
+                && paneFrames.allSatisfy { $0.minX.isFinite && $0.minY.isFinite && $0.width.isFinite && $0.height.isFinite
+                    && $0.width > 0 && $0.height > 0 && $0.minX >= 0 && $0.minY >= 0 && $0.maxX <= 1.001 && $0.maxY <= 1.001 }
+                && slots.allSatisfy { $0.app.map { !$0.bundleID.isEmpty } ?? ($0.binding == nil) }
+        }
+        return         (1...Self.maxColumns).contains(columns) && (1...Self.maxRows).contains(rows)
             && slots.count == columns * rows
             && slots.allSatisfy { $0.app.map { !$0.bundleID.isEmpty } ?? ($0.binding == nil) }
     }
     public var filledCount: Int { slots.filter { $0.app != nil }.count }
     public var template: DesktopGrid {
-        DesktopGrid(columns: columns, rows: rows, slots: slots.map { GridSlot(app: $0.app) })
+        var copy = self
+        copy.slots = slots.map { GridSlot(app: $0.app) }
+        copy.windowsToClose = nil
+        return copy
     }
 
     public mutating func resize(columns: Int, rows: Int) {
         var next = DesktopGrid(columns: columns, rows: rows)
+        next.windowsToClose = windowsToClose
+        if paneFrames != nil {
+            // Explicitly choosing a grid evenly redistributes the current panes.
+            for index in 0..<min(slots.count, next.slots.count) { next.slots[index] = slots[index] }
+            self = next
+            return
+        }
         for row in 0..<min(self.rows, next.rows) {
             for column in 0..<min(self.columns, next.columns) {
                 next.slots[row * next.columns + column] = slots[row * self.columns + column]
@@ -62,7 +84,7 @@ public struct DesktopGrid: Codable, Equatable {
         if repeating {
             guard let app = slots[source].app else { return }
             // Repeating an app must never bind two cells to the same live window.
-            slots[destination] = GridSlot(app: app)
+            slots[destination] = GridSlot(app: app, opensNewWindow: true)
         } else { slots.swapAt(source, destination) }
     }
 

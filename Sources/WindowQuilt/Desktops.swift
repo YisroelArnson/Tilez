@@ -84,7 +84,7 @@ enum Desktops {
         }
         return result
     }
-    static func current(displayID: String) -> Desktop? { all().first { $0.displayID == displayID && $0.isCurrent } }
+    static func current(displayID: String, includeFullScreen: Bool = false) -> Desktop? { all(includeFullScreen: includeFullScreen).first { $0.displayID == displayID && $0.isCurrent } }
 
     @MainActor static func resolve(_ selection: String, display: Display) async throws -> Desktop {
         if selection == "new" { return try await create(on: display) }

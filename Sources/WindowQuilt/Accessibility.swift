@@ -55,11 +55,51 @@ struct Display: Identifiable {
 }
 
 enum Accessibility {
+    // AX is synchronous IPC. Keep grid operations off the event loop and serialize
+    // them so a slow app cannot stall typing, dragging, or the Escape shortcut.
+    private static let workQueue = DispatchQueue(label: "com.local.windowquilt.accessibility", qos: .userInitiated)
+    private static let inventoryLock = NSLock()
+
+    static func perform<T>(_ operation: @escaping () -> T) async throws -> T {
+        try Task.checkCancellation()
+        let result = await withCheckedContinuation { continuation in
+            workQueue.async { continuation.resume(returning: operation()) }
+        }
+        try Task.checkCancellation()
+        return result
+    }
+
+    struct Snapshot {
+        let windows: [ManagedWindow]
+        let respondingPIDs: Set<pid_t>
+    }
+
+    @MainActor static func windows(for pids: Set<pid_t>) async throws -> [ManagedWindow] {
+        try await snapshot(for: pids).windows
+    }
+
+    @MainActor static func snapshot(for pids: Set<pid_t>) async throws -> Snapshot {
+        // Capture AppKit display/application state on the main thread. Only AX and
+        // WindowServer queries run on the worker, and only for the requested apps.
+        let running = NSWorkspace.shared.runningApplications.filter {
+            pids.contains($0.processIdentifier) && $0.activationPolicy == .regular && $0.processIdentifier != getpid()
+        }
+        let fullScreenSpaces = Set(Desktops.all(includeFullScreen: true).filter(\.isFullScreen).map(\.number))
+        return try await perform {
+            var responding: Set<pid_t> = []
+            let windows = scanWindows(running: running, fullScreenSpaces: fullScreenSpaces, scope: pids,
+                                      onResponse: { responding.insert($0) })
+            return Snapshot(windows: windows, respondingPIDs: responding)
+        }
+    }
+
     private static var confirmedClosedNumbers: [String: String] = UserDefaults.standard.dictionary(forKey: "confirmedClosedWindows") as? [String: String] ?? [:]
     private static func closeSession(_ app: NSRunningApplication) -> String? {
         app.launchDate.map { "\(app.processIdentifier)|\($0.timeIntervalSince1970)" }
     }
     static func markClosed(_ window: ManagedWindow) {
+        inventoryLock.lock()
+        defer { inventoryLock.unlock() }
         guard let number = window.number, let app = NSRunningApplication(processIdentifier: window.pid), let session = closeSession(app) else { return }
         confirmedClosedNumbers[String(number)] = session
         UserDefaults.standard.set(confirmedClosedNumbers, forKey: "confirmedClosedWindows")
@@ -90,14 +130,21 @@ enum Accessibility {
     }
 
     static func windows() -> [ManagedWindow] {
+        let running = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular && $0.processIdentifier != getpid() }
+        let fullScreenSpaces = Set(Desktops.all(includeFullScreen: true).filter(\.isFullScreen).map(\.number))
+        return scanWindows(running: running, fullScreenSpaces: fullScreenSpaces, scope: nil)
+    }
+
+    private static func scanWindows(running: [NSRunningApplication], fullScreenSpaces: Set<UInt64>, scope: Set<pid_t>?, onResponse: (pid_t) -> Void = { _ in }) -> [ManagedWindow] {
+        inventoryLock.lock()
+        defer { inventoryLock.unlock() }
         guard trusted else { return [] }
         AXUIElementSetMessagingTimeout(AXUIElementCreateSystemWide(), 0.15)
         var result: [ManagedWindow] = []
         var excludedNumbers: Set<UInt32> = []
         let records = CGWindowListCopyWindowInfo(.optionAll, kCGNullWindowID) as? [[String: Any]] ?? []
-        let fullScreenSpaces = Set(Desktops.all(includeFullScreen: true).filter(\.isFullScreen).map(\.number))
-        let running = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular && $0.processIdentifier != getpid() }
-        enabledAccessibility.formIntersection(Set(running.map(\.processIdentifier)))
+        let runningByPID = Dictionary(uniqueKeysWithValues: running.map { ($0.processIdentifier, $0) })
+        if scope == nil { enabledAccessibility.formIntersection(Set(runningByPID.keys)) }
         for app in running {
             let element = AXUIElementCreateApplication(app.processIdentifier)
             // An unresponsive app must not stall the entire menu for seconds.
@@ -110,7 +157,9 @@ enum Accessibility {
             }
             let raw = value(element, kAXWindowsAttribute) as? [AXUIElement]
             guard let windows = raw else { continue }
+            onResponse(app.processIdentifier)
             for window in windows {
+                AXUIElementSetMessagingTimeout(window, 0.12)
                 let minimized = value(window, kAXMinimizedAttribute) as? Bool == true
                 let isDocument = (value(window, kAXSubroleAttribute) as? String).map { $0 == kAXStandardWindowSubrole }
                 if WindowInventory.shouldExclude(isDocument: isDocument, modal: value(window, kAXModalAttribute) as? Bool, minimized: minimized) {
@@ -140,7 +189,7 @@ enum Accessibility {
         var existingSessions: [String: String] = [:]
         for record in records {
             guard let pid = (record[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value,
-                  let app = running.first(where: { $0.processIdentifier == pid }),
+                  let app = runningByPID[pid],
                   (record[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,
                   let number = (record[kCGWindowNumber as String] as? NSNumber)?.uint32Value,
                   let bounds = record[kCGWindowBounds as String] as? [String: Any],
@@ -162,12 +211,19 @@ enum Accessibility {
                 frame: frame, availability: state, serverNumber: number)
             otherDesktops.append(candidate)
         }
-        let confirmed = confirmedClosedNumbers.filter { existingSessions[$0.key] == $0.value && !discovered.contains(UInt32($0.key) ?? 0) }
+        let confirmed = confirmedClosedNumbers.filter { number, session in
+            // A scoped scan must not evict state belonging to a different app.
+            if let scope, let owner = session.split(separator: "|").first.flatMap({ Int32($0) }), !scope.contains(owner) { return true }
+            return existingSessions[number] == session && !discovered.contains(UInt32(number) ?? 0)
+        }
         if confirmed != confirmedClosedNumbers {
             confirmedClosedNumbers = confirmed
             UserDefaults.standard.set(confirmed, forKey: "confirmedClosedWindows")
         }
-        retainedWindows = retainedWindows.filter { existing.contains($0.key) }
+        retainedWindows = retainedWindows.filter { number, window in
+            if let scope, !scope.contains(window.pid) { return true }
+            return existing.contains(number)
+        }
         return WindowInventory.merge(accessible: result, otherDesktops: otherDesktops.filter { confirmedClosedNumbers[String($0.number ?? 0)] == nil })
     }
 
@@ -206,8 +262,18 @@ enum Accessibility {
 
     static func newWindowCommand(pid: pid_t) -> AXUIElement? {
         // A New Chat/Conversation command can replace the current chat instead of opening a window.
-        menuItem(pid: pid, labels: ["new window", "new finder window", "new chat window",
-            "new chatgpt window", "new codex window", "new task window", "new main window"])
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, 0.25)
+        guard let bar = value(app, kAXMenuBarAttribute), CFGetTypeID(bar) == AXUIElementGetTypeID() else { return nil }
+        return WindowMenuCommand.find(in: bar as! AXUIElement,
+            title: { value($0, kAXTitleAttribute) as? String ?? "" },
+            isItem: { value($0, kAXRoleAttribute) as? String == kAXMenuItemRole },
+            isEnabled: { value($0, kAXEnabledAttribute) as? Bool != false },
+            children: { value($0, kAXChildrenAttribute) as? [AXUIElement] ?? [] },
+            isDefault: {
+                (value($0, kAXMenuItemCmdCharAttribute) as? String)?.lowercased() == "n"
+                    && (value($0, kAXMenuItemCmdModifiersAttribute) as? NSNumber)?.intValue == 0
+            })
     }
 
     @MainActor static func reopen(_ app: NSRunningApplication) async throws {
@@ -244,7 +310,7 @@ enum Accessibility {
             let wantedID = window.id
             var found: ManagedWindow?
             for _ in 0..<30 {
-                if let live = windows().first(where: { $0.id == wantedID && $0.availability.accessible }) { found = live; break }
+                if let live = try await windows(for: [window.pid]).first(where: { $0.id == wantedID && $0.availability.accessible }) { found = live; break }
                 try await Task.sleep(nanoseconds: 100_000_000)
             }
             guard let live = found else { throw NewWindowError.transition(window.appName) }

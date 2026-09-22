@@ -59,12 +59,16 @@ final class WindowManager: ObservableObject {
     init(preferences: Preferences, backgroundArrangements: Bool = true) {
         self.preferences = preferences
         self.backgroundArrangements = backgroundArrangements
-        let t = Timer(timeInterval: 0.85, repeats: true) { [weak self] _ in self?.refresh() }
-        RunLoop.main.add(t, forMode: .common)
-        timer = t
+        if backgroundArrangements {
+            let t = Timer(timeInterval: 0.85, repeats: true) { [weak self] _ in self?.refresh() }
+            RunLoop.main.add(t, forMode: .common)
+            timer = t
+        }
         NotificationCenter.default.addObserver(self, selector: #selector(displaysChanged), name: NSApplication.didChangeScreenParametersNotification, object: nil)
-        refresh()
+        if backgroundArrangements { refresh() }
     }
+
+    deinit { timer?.invalidate() }
 
     func refresh() {
         let currentDesktops = Desktops.all()
@@ -96,6 +100,11 @@ final class WindowManager: ObservableObject {
                 tileWindows(windows.filter { $0.pid == pid && $0.availability.automatic }, label: "Watch app")
             }
         }
+    }
+
+    @MainActor func refresh(for pids: Set<pid_t>) async throws {
+        let live = try await Accessibility.windows(for: pids)
+        windows = windows.filter { !pids.contains($0.pid) } + live
     }
 
     func focused() -> ManagedWindow? {
@@ -159,6 +168,25 @@ final class WindowManager: ObservableObject {
                           frame: Accessibility.rect(old.element) ?? old.frame, availability: old.availability, serverNumber: old.number)
         }
         baseline = Dictionary(uniqueKeysWithValues: windows.map { ($0.id, WindowState(window: $0, frame: $0.frame)) })
+    }
+
+    /// Grid placement yields between windows so Escape and editor input remain responsive.
+    @MainActor func applyGrid(_ changes: [(ManagedWindow, CGRect)]) async throws {
+        trusted = Accessibility.trusted
+        guard trusted else { throw Accessibility.NewWindowError.failed }
+        // These frames come from the fresh scoped inventory immediately before placement.
+        let actual = changes.filter { !Geometry.approximatelyEqual($0.0.frame, $0.1) }
+        if !actual.isEmpty {
+            pushUndo("Open grid", states: actual.map { WindowState(window: $0.0, frame: $0.0.frame) })
+        }
+        pendingManual.removeAll()
+        suppressUntil = Date().addingTimeInterval(2)
+        for (window, target) in changes {
+            _ = try await Accessibility.perform {
+                if !Geometry.approximatelyEqual(window.frame, target) { _ = Accessibility.move(window, to: target) }
+                return AXUIElementPerformAction(window.element, kAXRaiseAction as CFString)
+            }
+        }
     }
 
     func openAndTile(pid: pid_t, count: Int, preferredIDs: Set<String> = [], setup: WindowSetup? = nil, activeLayoutID: UUID? = nil, allowedExistingIDs: Set<String>? = nil) {
@@ -541,7 +569,7 @@ final class WindowManager: ObservableObject {
     }
 
     @objc private func displaysChanged() {
-        guard backgroundArrangements else { refresh(); return }
+        guard backgroundArrangements else { return }
         displayWork?.cancel()
         let work = DispatchWorkItem { [weak self] in
             guard let self else { return }

@@ -2,17 +2,23 @@ import AppKit
 import Combine
 import QuiltCore
 
-struct GridAppChoice: Identifiable {
+struct GridAppChoice: Identifiable, Sendable {
     let app: GridApp
     let url: URL
     var id: String { app.bundleID }
 }
 
 @MainActor final class GridEditorModel: ObservableObject {
-    @Published var grid = DesktopGrid()
+    @Published var grid = DesktopGrid.emptyDesktop
     @Published var selectedCell: Int?
     @Published var choosingApp = false
-    @Published var search = ""
+    @Published var search = "" { didSet { selectedAppID = nil } }
+    @Published var selectedAppID: String?
+    @Published var savedSearch = "" { didSet { selectedSavedID = nil } }
+    @Published var selectedSavedID: UUID?
+    @Published var resizing = false
+    @Published var draftColumns = 2
+    @Published var draftRows = 2
     @Published var apps: [GridAppChoice] = []
     @Published var saved: [SavedGrid] = []
     @Published var showingSaved = false
@@ -25,42 +31,116 @@ struct GridAppChoice: Identifiable {
     @Published var trusted = Accessibility.trusted
     var onDismiss: (() -> Void)?
     var onFinished: (() -> Void)?
+    var onFocusGrid: (() -> Void)?
+    var hasActiveLayer: Bool { choosingApp || saving || showingSaved || resizing }
+    private var selections: [String: Int] = [:]
     private(set) var display: Display?
     private(set) var desktop: Desktop?
     private var locationKey = ""
-    private var sessions: [String: DesktopGrid]
+    private(set) var originalGrid = DesktopGrid.emptyDesktop
+    private var discoveryTask: Task<Void, Never>?
+    private var discoveryGeneration = UUID()
+    private var dividerDraft: DesktopGrid?
     private var task: Task<Void, Never>?
     private var undoDrafts: [DesktopGrid] = []
     private let defaults: UserDefaults
     let manager: WindowManager
     private var icons: [String: NSImage] = [:]
+    private var appLoadTask: Task<Void, Never>?
+    private var appsLoadedAt: Date?
+    @Published private(set) var loadingApps = false
 
     init(manager: WindowManager, defaults: UserDefaults = .standard) {
         self.manager = manager; self.defaults = defaults
-        sessions = defaults.data(forKey: "desktopGridsV2")
-            .flatMap { try? JSONDecoder().decode([String: DesktopGrid].self, from: $0) }?
-            .filter { $0.value.isValid } ?? [:]
         saved = defaults.data(forKey: "savedGridsV2")
             .flatMap { try? JSONDecoder().decode([SavedGrid].self, from: $0) }?
             .filter { $0.grid.isValid } ?? []
     }
 
-    func begin(on display: Display) {
+    func begin(on display: Display, snapshot: DesktopGrid? = nil) {
+        discoveryTask?.cancel()
+        let generation = UUID()
+        discoveryGeneration = generation
         self.display = display
-        desktop = Desktops.current(displayID: display.id)
+        desktop = Desktops.current(displayID: display.id, includeFullScreen: true)
         locationKey = desktop?.id ?? display.id
-        grid = sessions[locationKey] ?? DesktopGrid()
-        selectedCell = nil; choosingApp = false; showingSaved = false; saving = false
-        search = ""; message = ""; isError = false; undoDrafts = []
+        let captured = snapshot ?? desktop.map { captureDesktop(display: display, desktop: $0) } ?? .emptyDesktop
+        let capturedFrames = captured.frames(in: display.bounds)
+        grid = snapshot ?? DesktopGrid.visibleDesktop(panes: Array(zip(captured.slots, capturedFrames)), in: display.bounds)
+        originalGrid = grid
+        selectedCell = selections[locationKey].flatMap { grid.slots.indices.contains($0) ? $0 : nil } ?? 0
+        closeLayers()
+        search = ""; message = ""; isError = false; undoDrafts = []; dividerDraft = nil
         trusted = Accessibility.trusted
-        if desktop == nil { message = "Open a regular desktop to arrange a grid here."; isError = true }
+        if desktop == nil { message = "This desktop is unavailable."; isError = true }
         loadApps()
+        guard snapshot == nil, trusted, let desktop else { return }
+        let initial = grid
+        let pids = Set(captured.slots.compactMap { $0.binding?.windowID.split(separator: ":").first.flatMap { Int32($0) } })
+        guard !pids.isEmpty else { return }
+        discoveryTask = Task { [weak self] in
+            do {
+                let response = try await Accessibility.snapshot(for: pids)
+                let live = response.windows
+                guard let self, self.discoveryGeneration == generation, !self.busy,
+                      self.undoDrafts.isEmpty, self.grid == initial, !self.hasActiveLayer else { return }
+                // Ignore dialogs and panels when AX can identify them. A temporarily
+                // unresponsive app keeps its WindowServer preview instead of disappearing.
+                let byID = Dictionary(uniqueKeysWithValues: live.map { ($0.id, $0) })
+                let panes = captured.slots.enumerated().compactMap { index, slot -> (GridSlot, CGRect)? in
+                    guard let binding = slot.binding else { return nil }
+                    if let window = byID[binding.windowID] {
+                        guard window.availability.document, !window.availability.minimized, !window.availability.hidden else { return nil }
+                        var updated = slot; updated.title = window.title
+                        return (updated, window.availability.fullScreen ? display.bounds : window.frame)
+                    }
+                    let pid = binding.windowID.split(separator: ":").first.flatMap { Int32($0) }
+                    if let pid, response.respondingPIDs.contains(pid) { return nil }
+                    return (slot, capturedFrames[index])
+                }
+                guard Desktops.current(displayID: display.id, includeFullScreen: true)?.number == desktop.number else { return }
+                self.grid = DesktopGrid.visibleDesktop(panes: panes, in: display.bounds)
+                self.originalGrid = self.grid
+                self.selectedCell = min(self.selectedCell ?? 0, self.grid.slots.count - 1)
+            } catch { /* Preview remains usable if discovery is cancelled or unavailable. */ }
+        }
     }
 
+    private func captureDesktop(display: Display, desktop: Desktop) -> DesktopGrid {
+        let running = NSWorkspace.shared.runningApplications.filter {
+            $0.activationPolicy == .regular && !$0.isHidden && $0.processIdentifier != getpid()
+        }
+        let apps = Dictionary(uniqueKeysWithValues: running.map { ($0.processIdentifier, $0) })
+        let records = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
+        let panes = records.compactMap { record -> (GridSlot, CGRect)? in
+            guard (record[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,
+                  (record[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 1 > 0,
+                  let pid = (record[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value,
+                  let app = apps[pid], let bundleID = app.bundleIdentifier,
+                  let number = (record[kCGWindowNumber as String] as? NSNumber)?.uint32Value,
+                  let raw = record[kCGWindowBounds as String] as? NSDictionary,
+                  let frame = CGRect(dictionaryRepresentation: raw), frame.width > 100, frame.height > 80,
+                  Display.containing(frame)?.id == display.id,
+                  Desktops.spaces(for: number).contains(desktop.number),
+                  let session = manager.processSession(pid) else { return nil }
+            let binding = GridWindowBinding(windowID: "\(pid):window-\(number)", processSession: session)
+            return (GridSlot(app: GridApp(bundleID: bundleID, name: app.localizedName ?? "App"), binding: binding,
+                             title: record[kCGWindowName as String] as? String), frame)
+        }
+        return DesktopGrid.desktop(panes: panes, in: display.bounds)
+    }
+
+    // Only explicit saved templates persist. A new invocation always reads the desktop.
     func persist() {
         guard !locationKey.isEmpty else { return }
-        sessions[locationKey] = grid
-        defaults.set(try? JSONEncoder().encode(sessions), forKey: "desktopGridsV2")
+        selections[locationKey] = selectedCell
+    }
+
+    func endEditing() {
+        discoveryTask?.cancel()
+        discoveryGeneration = UUID()
+        dividerDraft = nil
+        persist()
     }
 
     private func edit(_ change: (inout DesktopGrid) -> Void) {
@@ -76,67 +156,216 @@ struct GridAppChoice: Identifiable {
     }
 
     func resize(columns: Int, rows: Int) {
-        choosingApp = false; selectedCell = nil
+        guard !busy else { return }
+        let column = (selectedCell ?? 0) % grid.columns
+        let row = (selectedCell ?? 0) / grid.columns
         edit { $0.resize(columns: columns, rows: rows) }
+        selectedCell = min(row, grid.rows - 1) * grid.columns + min(column, grid.columns - 1)
+        closeLayers()
+    }
+    func select(_ index: Int) {
+        guard grid.slots.indices.contains(index) else { return }
+        closeLayers()
+        selectedCell = index; persist()
     }
     func choose(_ index: Int) {
         guard !busy, grid.slots.indices.contains(index) else { return }
+        closeLayers()
         selectedCell = index; search = ""; choosingApp = true
-        showingSaved = false; saving = false
     }
     func addApp() {
         guard !busy else { return }
         var target: Int?
-        edit { target = $0.makeRoom() }
+        edit { draft in
+            if let empty = draft.slots.firstIndex(where: { $0.app == nil }) { target = empty }
+            else {
+                let index = selectedCell ?? 0
+                let frame = draft.normalizedFrames[index]
+                target = draft.split(index, toward: frame.width >= frame.height ? .right : .bottom)
+            }
+        }
         if let target { choose(target) }
         else { message = "This grid is full. Choose a cell to replace its app." }
     }
     func assign(_ app: GridApp) {
-        guard let index = selectedCell, grid.slots.indices.contains(index) else { return }
-        edit { $0.slots[index] = GridSlot(app: app) }
-        choosingApp = false; search = ""
+        guard !busy, let index = selectedCell, grid.slots.indices.contains(index) else { return }
+        edit { draft in
+            // Replacing a pane's app closes its window on Apply, the same as removing the pane.
+            if let binding = draft.slots[index].binding, draft.windowsToClose?.contains(binding) != true {
+                draft.windowsToClose = (draft.windowsToClose ?? []) + [binding]
+            }
+            draft.slots[index] = GridSlot(app: app, opensNewWindow: true)
+        }
+        closeLayers(); search = ""
     }
     func clear(_ index: Int) {
-        guard grid.slots.indices.contains(index) else { return }
+        guard !busy, grid.slots.indices.contains(index) else { return }
         edit { $0.slots[index] = GridSlot() }
-        choosingApp = false
+        closeLayers()
+    }
+    func split(_ index: Int, toward edge: PaneEdge) {
+        var added: Int?
+        let gap = CGSize(width: 10 / (display?.bounds.width ?? 1250), height: 10 / (display?.bounds.height ?? 1250))
+        edit { added = $0.split(index, toward: edge, gap: gap) }
+        if let added { choose(added) }
+    }
+    func removePane(_ index: Int) {
+        guard !busy, grid.slots.indices.contains(index) else { return }
+        edit { draft in
+            if let binding = draft.slots[index].binding {
+                draft.windowsToClose = (draft.windowsToClose ?? []) + [binding]
+            }
+            let closing = draft.windowsToClose
+            draft.removePane(index)
+            draft.windowsToClose = closing
+        }
+        selectedCell = min(index, grid.slots.count - 1); closeLayers()
+    }
+    func removeAllPanes() {
+        guard !busy else { return }
+        edit { draft in
+            var closing = draft.windowsToClose ?? []
+            for binding in draft.slots.compactMap(\.binding) where !closing.contains(binding) {
+                closing.append(binding)
+            }
+            draft = .emptyDesktop
+            draft.windowsToClose = closing.isEmpty ? nil : closing
+        }
+        selectedCell = 0; closeLayers()
+    }
+    func previewDivider(_ divider: PaneDivider, position: CGFloat) {
+        guard !busy else { return }
+        if dividerDraft == nil { dividerDraft = grid; closeLayers() }
+        guard var draft = dividerDraft else { return }
+        draft.resizeDivider(divider, to: position)
+        grid = draft
+    }
+    func finishDivider() {
+        guard let before = dividerDraft else { return }
+        dividerDraft = nil
+        if before != grid { undoDrafts.append(before); if undoDrafts.count > 40 { undoDrafts.removeFirst() } }
+    }
+    func resetDivider(_ divider: PaneDivider) {
+        edit { $0.resetDivider(divider) }
+        closeLayers()
+    }
+    /// Merging closes absorbed windows on Apply, the same as removing their panes.
+    func merge(_ index: Int, toward edge: PaneEdge) {
+        guard !busy, grid.slots.indices.contains(index) else { return }
+        guard !grid.mergeCandidates(index, toward: edge).isEmpty else {
+            message = "Those panes don’t line up. Drag a divider to match them first."; isError = false
+            return
+        }
+        var merged: Int?
+        edit { draft in
+            let before = draft.slots.compactMap(\.binding)
+            merged = draft.merge(index, toward: edge)
+            let kept = draft.slots.compactMap(\.binding)
+            let closing = before.filter { !kept.contains($0) }
+            if !closing.isEmpty { draft.windowsToClose = (draft.windowsToClose ?? []) + closing }
+        }
+        if let merged { selectedCell = merged }
+        closeLayers()
     }
     func move(from: Int, to: Int, repeating: Bool) {
-        edit { $0.move(from: from, to: to, repeating: repeating) }
-        selectedCell = to; choosingApp = false
+        guard !busy, grid.slots.indices.contains(from), grid.slots.indices.contains(to) else { return }
+        edit { draft in
+            // A repeat replaces the target's window, which closes on Apply like a removed pane.
+            let replaced = repeating ? draft.slots[to].binding : nil
+            draft.move(from: from, to: to, repeating: repeating)
+            if let replaced { draft.windowsToClose = (draft.windowsToClose ?? []) + [replaced] }
+        }
+        selectedCell = to; closeLayers()
     }
     func undo() {
         guard !busy, let previous = undoDrafts.popLast() else { return }
-        grid = previous; choosingApp = false; selectedCell = nil; persist()
+        grid = previous
+        selectedCell = min(selectedCell ?? 0, grid.slots.count - 1)
+        closeLayers(); persist()
     }
     func newGrid() {
         guard !busy else { return }
-        edit { $0 = DesktopGrid() }
-        selectedCell = nil; choosingApp = false; showingSaved = false
+        edit { $0 = .emptyDesktop }
+        selectedCell = 0; closeLayers()
     }
     func save() {
         let name = saveName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !name.isEmpty, grid.filledCount > 0 else { return }
+        guard !busy, !name.isEmpty, grid.filledCount > 0 else { return }
         saved.append(SavedGrid(name: name, grid: grid))
         defaults.set(try? JSONEncoder().encode(saved), forKey: "savedGridsV2")
-        saving = false; message = "Saved “\(name)”"
+        closeLayers(); message = "Saved “\(name)”"
     }
     func load(_ item: SavedGrid) {
+        guard !busy else { return }
         edit { $0 = item.grid.template }
-        showingSaved = false; selectedCell = nil; choosingApp = false
+        selectedCell = grid.slots.firstIndex(where: { $0.app == nil }) ?? 0
+        closeLayers()
     }
     func deleteSaved(_ id: UUID) {
+        guard !busy else { return }
         saved.removeAll { $0.id == id }
         defaults.set(try? JSONEncoder().encode(saved), forKey: "savedGridsV2")
     }
     func dismissLayer() {
         if busy { task?.cancel(); return }
-        if choosingApp { choosingApp = false }
-        else if saving { saving = false }
-        else if showingSaved { showingSaved = false }
+        if hasActiveLayer { closeLayers() }
         else { persist(); onDismiss?() }
     }
-    func cancel() { task?.cancel() }
+    func closeLayers() {
+        choosingApp = false; saving = false; showingSaved = false; resizing = false
+    }
+    func beginSave() {
+        guard !busy, grid.filledCount > 0 else { return }
+        closeLayers()
+        saveName = "\(grid.columns) × \(grid.rows) grid"
+        saving = true
+    }
+    func beginSaved() {
+        guard !busy else { return }
+        closeLayers(); savedSearch = ""; showingSaved = true
+    }
+    func beginResize() {
+        guard !busy else { return }
+        closeLayers()
+        draftColumns = grid.columns; draftRows = grid.rows; resizing = true
+    }
+    func confirmResize() { resize(columns: draftColumns, rows: draftRows) }
+    func repeatInEmptyCells(_ index: Int) {
+        guard !busy, grid.slots.indices.contains(index), let app = grid.slots[index].app else { return }
+        edit { draft in
+            for target in draft.slots.indices where draft.slots[target].app == nil {
+                draft.slots[target] = GridSlot(app: app, opensNewWindow: true)
+            }
+        }
+    }
+    var selectedAppChoice: GridAppChoice? {
+        filteredApps.first { $0.id == selectedAppID } ?? filteredApps.first
+    }
+    var filteredSaved: [SavedGrid] {
+        let query = savedSearch.trimmingCharacters(in: .whitespacesAndNewlines)
+        return query.isEmpty ? saved : saved.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    }
+    var selectedSavedGrid: SavedGrid? {
+        filteredSaved.first { $0.id == selectedSavedID } ?? filteredSaved.first
+    }
+    func moveSearchSelection(_ delta: Int) {
+        if choosingApp {
+            let results = filteredApps
+            guard !results.isEmpty else { return }
+            let index = results.firstIndex { $0.id == selectedAppChoice?.id } ?? 0
+            selectedAppID = results[max(0, min(results.count - 1, index + delta))].id
+        } else if showingSaved {
+            let results = filteredSaved
+            guard !results.isEmpty else { return }
+            let index = results.firstIndex { $0.id == selectedSavedGrid?.id } ?? 0
+            selectedSavedID = results[max(0, min(results.count - 1, index + delta))].id
+        }
+    }
+    func confirmSearchSelection() {
+        if choosingApp, let choice = selectedAppChoice { assign(choice.app) }
+        else if showingSaved, let item = selectedSavedGrid { load(item) }
+    }
+    func cancel() { task?.cancel(); discoveryTask?.cancel() }
     func icon(for app: GridApp) -> NSImage {
         if let icon = icons[app.bundleID] { return icon }
         let url = apps.first { $0.id == app.bundleID }?.url
@@ -153,9 +382,28 @@ struct GridAppChoice: Identifiable {
         }
     }
     private func loadApps() {
+        // Keep the last catalog usable while refreshing; opening the editor never waits on disk.
+        guard appLoadTask == nil,
+              appsLoadedAt.map({ Date().timeIntervalSince($0) >= 60 }) ?? true else { return }
         let running = NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }
+        let urls = running.compactMap(\.bundleURL)
         let runningIDs = Set(running.compactMap(\.bundleIdentifier))
-        var urls = running.compactMap(\.bundleURL)
+        let ownBundleID = Bundle.main.bundleIdentifier
+        loadingApps = true
+        appLoadTask = Task { [weak self] in
+            let choices = await Task.detached(priority: .userInitiated) {
+                Self.discoverApps(urls: urls, runningIDs: runningIDs, ownBundleID: ownBundleID)
+            }.value
+            guard let self else { return }
+            self.apps = choices
+            self.appsLoadedAt = Date()
+            self.loadingApps = false
+            self.appLoadTask = nil
+        }
+    }
+
+    nonisolated private static func discoverApps(urls: [URL], runningIDs: Set<String>, ownBundleID: String?) -> [GridAppChoice] {
+        var urls = urls
         // Walk only application directories; never descend into application bundles.
         for root in ["/Applications", "/System/Applications", NSHomeDirectory() + "/Applications"] {
             if let enumerator = FileManager.default.enumerator(at: URL(fileURLWithPath: root),
@@ -167,9 +415,9 @@ struct GridAppChoice: Identifiable {
             }
         }
         var seen = Set<String>()
-        apps = urls.compactMap { url in
+        return urls.compactMap { url in
             guard let bundle = Bundle(url: url), let id = bundle.bundleIdentifier,
-                  id != Bundle.main.bundleIdentifier, seen.insert(id).inserted,
+                  id != ownBundleID, seen.insert(id).inserted,
                   bundle.object(forInfoDictionaryKey: "LSUIElement") as? Bool != true,
                   bundle.object(forInfoDictionaryKey: "LSBackgroundOnly") as? Bool != true else { return nil }
             let name = bundle.object(forInfoDictionaryKey: "CFBundleDisplayName") as? String
@@ -183,10 +431,15 @@ struct GridAppChoice: Identifiable {
     }
 
     func openGrid() {
-        guard !busy, grid.filledCount > 0, let display, let desktop else { return }
+        guard !busy, grid.isValid, let display, let desktop,
+              grid.filledCount > 0 || originalGrid.filledCount > 0 else { return }
+        guard Desktops.current(displayID: display.id, includeFullScreen: true)?.number == desktop.number else {
+            message = "The desktop changed. Reopen Quilt on the desktop you want."; isError = true; return
+        }
+        discoveryTask?.cancel()
         trusted = Accessibility.trusted
         guard trusted else { Accessibility.requestPermission(); return }
-        choosingApp = false; saving = false; showingSaved = false
+        closeLayers()
         busy = true; isError = false; message = "Preparing your grid…"
         let request = grid
         task = Task { @MainActor [weak self] in
@@ -197,7 +450,10 @@ struct GridAppChoice: Identifiable {
             }
             do {
                 let result = try await GridLauncher.open(request, display: display, desktop: desktop,
-                    manager: self.manager, progress: { self.message = $0 },
+                    manager: self.manager, original: self.originalGrid,
+                    destinationChanged: { display, desktop in
+                        self.display = display; self.desktop = desktop; self.locationKey = desktop.id
+                    }, progress: { self.message = $0 },
                     prepared: { index, binding in
                         // Persist successful creation even if a later app cannot open a window.
                         self.grid.slots[index].binding = binding; self.persist()
@@ -213,7 +469,7 @@ struct GridAppChoice: Identifiable {
             } catch {
                 self.message = error.localizedDescription; self.isError = true
                 // Keep the error and editor on the requested desktop after an app opens elsewhere.
-                try? await Desktops.activate(desktop)
+                if let destination = self.desktop { try? await Desktops.activate(destination) }
             }
         }
     }
