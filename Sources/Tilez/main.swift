@@ -17,6 +17,7 @@ final class ActionItem: NSMenuItem {
     private var manager: WindowManager!
     private var overlay: GridOverlayController!
     private var hotkey: GridHotKey!
+    private var zoom: WindowZoom!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -28,7 +29,8 @@ final class ActionItem: NSMenuItem {
         statusItem.button?.toolTip = "Tilez · ⌃⌥Space"
         statusItem.button?.target = self
         statusItem.button?.action = #selector(toggleGrid)
-        hotkey = GridHotKey { [weak self] in self?.overlay.toggle() }
+        hotkey = GridHotKey { [weak self] in self?.showGrid() }
+        zoom = WindowZoom()
         configureMainMenu()
         // A small first-run introduction is the actual grid, with permission inline if needed.
         if !UserDefaults.standard.bool(forKey: "hasOpenedGridV2") || CommandLine.arguments.contains("--show-grid") {
@@ -37,6 +39,9 @@ final class ActionItem: NSMenuItem {
         }
         if !hotkey.registered {
             overlay.model.message = "⌃⌥Space is already in use. Open Tilez from its menu-bar icon."
+            overlay.model.isError = true
+        } else if !zoom.hotkey.registered {
+            overlay.model.message = "⌃⌥Return is already in use, so windows can’t be enlarged with it."
             overlay.model.isError = true
         }
     }
@@ -55,7 +60,14 @@ final class ActionItem: NSMenuItem {
         image.accessibilityDescription = "Tilez"
         return image
     }
-    @objc private func toggleGrid() { overlay.toggle(on: statusItem.button?.window?.screen) }
+    @objc private func toggleGrid() { showGrid(on: statusItem.button?.window?.screen) }
+    /// That screen's enlarged window returns to its pane first so the grid captures the real layout.
+    private func showGrid(on screen: NSScreen? = nil) {
+        let target = overlay.targetScreen(screen)
+        guard !overlay.isShown, let display = Display.all.first(where: { $0.screen == target }),
+              zoom.hasEnlarged(on: display) else { overlay.toggle(on: target); return }
+        Task { await zoom.restore(on: display); overlay.toggle(on: target) }
+    }
     private func configureMainMenu() {
         let bar = NSMenu()
         let app = NSMenuItem()
@@ -75,7 +87,10 @@ final class ActionItem: NSMenuItem {
     func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
         overlay.show(); return true
     }
-    func applicationWillTerminate(_ notification: Notification) { overlay.model.cancel(); overlay.model.persist() }
+    func applicationWillTerminate(_ notification: Notification) {
+        zoom.restoreBeforeQuit()
+        overlay.model.cancel(); overlay.model.persist()
+    }
 }
 
 let app = NSApplication.shared

@@ -235,6 +235,7 @@ struct DesktopGridView: View {
                     .disabled(model.manager.undoLabel == nil)
                 Divider()
                 Text("Show or hide Tilez: ⌃⌥Space")
+                Text("Enlarge a window, or put it back: ⌃⌥Return")
                 Button("Close", action: { model.onDismiss?() })
                 Button("Quit Tilez") { NSApp.terminate(nil) }
             } label: { Image(systemName: "ellipsis").frame(width: 16) }

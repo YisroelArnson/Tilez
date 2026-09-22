@@ -47,7 +47,7 @@ private final class GridPanel: NSPanel {
     func show(on screen: NSScreen? = nil) {
         if isShown { return }
         guard !model.busy else { return }
-        let target = screen ?? keyboardScreen() ?? NSScreen.main ?? NSScreen.screens.first
+        let target = targetScreen(screen)
         guard let display = Display.all.first(where: { $0.screen == target }) ?? Display.all.first else { return }
         previousApp = NSWorkspace.shared.frontmostApplication
         model.begin(on: display)
@@ -87,6 +87,11 @@ private final class GridPanel: NSPanel {
             previousApp.activate(options: [])
         }
     }
+    /// The screen the grid opens on: the one given, else the active app's foremost window's.
+    func targetScreen(_ screen: NSScreen? = nil) -> NSScreen? {
+        screen ?? keyboardScreen() ?? NSScreen.main ?? NSScreen.screens.first
+    }
+
     /// WindowServer's front-to-back list locates the active app's foremost normal
     /// window without waiting for AX IPC from an unresponsive app.
     private func keyboardScreen() -> NSScreen? {
@@ -115,27 +120,30 @@ private final class GridPanel: NSPanel {
     }
 }
 
-/// One global shortcut; registered without Accessibility or keyboard-monitoring permission.
+/// One global ⌃⌥ shortcut; registered without Accessibility or keyboard-monitoring permission.
+/// Each instance needs its own `id` so its handler ignores the other shortcuts.
 final class GridHotKey {
     private var reference: EventHotKeyRef?
     private var handler: EventHandlerRef?
+    private let id: UInt32
     var action: (() -> Void)?
     private(set) var registered = false
-    init(action: @escaping () -> Void) {
-        self.action = action
+    init(keyCode: Int = kVK_Space, id: UInt32 = 1, action: @escaping () -> Void) {
+        self.action = action; self.id = id
         var type = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
         let installed = InstallEventHandler(GetApplicationEventTarget(), { _, event, context in
             guard let event, let context else { return OSStatus(eventNotHandledErr) }
+            let hotkey = Unmanaged<GridHotKey>.fromOpaque(context).takeUnretainedValue()
             var id = EventHotKeyID()
             guard GetEventParameter(event, EventParamName(kEventParamDirectObject), EventParamType(typeEventHotKeyID),
                 nil, MemoryLayout<EventHotKeyID>.size, nil, &id) == noErr,
-                id.signature == 0x51475244 else { return OSStatus(eventNotHandledErr) }
-            Unmanaged<GridHotKey>.fromOpaque(context).takeUnretainedValue().action?()
+                id.signature == 0x51475244, id.id == hotkey.id else { return OSStatus(eventNotHandledErr) }
+            hotkey.action?()
             return noErr
         }, 1, &type, Unmanaged.passUnretained(self).toOpaque(), &handler)
         guard installed == noErr else { return }
-        registered = RegisterEventHotKey(UInt32(kVK_Space), UInt32(controlKey | optionKey),
-            EventHotKeyID(signature: 0x51475244, id: 1), GetApplicationEventTarget(), 0, &reference) == noErr
+        registered = RegisterEventHotKey(UInt32(keyCode), UInt32(controlKey | optionKey),
+            EventHotKeyID(signature: 0x51475244, id: id), GetApplicationEventTarget(), 0, &reference) == noErr
     }
     deinit {
         if let reference { UnregisterEventHotKey(reference) }

@@ -25,6 +25,10 @@ Press **Control–Option–Space** or click the grid icon in the menu bar. The p
 - **Save / ⌘S** names an optional reusable grid. **⌘O** or the chevron beside Save opens searchable saved grids: type, use ↑/↓, then Return to load a draft on any desktop. Saved grids contain app choices, not a fixed screen or desktop destination.
 - **Escape** closes the app picker first, then the overlay. While opening windows it stops the request; windows already created stay available.
 
+### Enlarge a window temporarily
+
+Press **Control–Option–Return** in any window to enlarge it over its neighbors, filling the screen with a 10-point margin. Nothing else moves. It stays enlarged while you click or switch to other windows. Each screen and desktop keeps its own enlarged window, so you can enlarge one window per monitor and per desktop without them affecting each other. Press the shortcut again on the same screen and desktop to return that window to exactly where it was. Opening the grid puts back only the enlarged window on the screen and desktop it opens on; quitting Tilez puts them all back. Only standard, resizable windows outside full screen can be enlarged; anything else beeps.
+
 ## Build and run
 
 Requires macOS 14 or later, Swift 5.9 or later, and Apple's Command Line Tools. Desktop movement uses the existing private macOS bridge and is available on supported macOS versions (currently gated at macOS 26.4+). Opening an app whose new windows inherit full screen needs that bridge to move the new windows back to the target desktop.

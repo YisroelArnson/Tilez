@@ -386,13 +386,18 @@ enum Accessibility {
     static func move(_ window: ManagedWindow, to target: CGRect) -> Bool {
         guard window.availability.accessible, value(window.element, "AXFullScreen") as? Bool != true,
               value(window.element, kAXMinimizedAttribute) as? Bool != true else { return false }
+        return setFrame(window.element, to: target)
+    }
+
+    @discardableResult
+    static func setFrame(_ element: AXUIElement, to target: CGRect) -> Bool {
         var origin = CGPoint(x: target.minX.rounded(), y: target.minY.rounded())
         var size = CGSize(width: target.width.rounded(), height: target.height.rounded())
         guard let positionValue = AXValueCreate(.cgPoint, &origin), let sizeValue = AXValueCreate(.cgSize, &size) else { return false }
         // Resize again after moving because apps can constrain size to the old display.
-        _ = AXUIElementSetAttributeValue(window.element, kAXSizeAttribute as CFString, sizeValue)
-        let moved = AXUIElementSetAttributeValue(window.element, kAXPositionAttribute as CFString, positionValue)
-        let resized = AXUIElementSetAttributeValue(window.element, kAXSizeAttribute as CFString, sizeValue)
+        _ = AXUIElementSetAttributeValue(element, kAXSizeAttribute as CFString, sizeValue)
+        let moved = AXUIElementSetAttributeValue(element, kAXPositionAttribute as CFString, positionValue)
+        let resized = AXUIElementSetAttributeValue(element, kAXSizeAttribute as CFString, sizeValue)
         return moved == .success && resized == .success
     }
 }
