@@ -407,7 +407,8 @@ struct DesktopGridView: View {
         let selected = model.selectedCell == index || dragTarget == index
         return ZStack {
             RoundedRectangle(cornerRadius: 14)
-                .fill(reduceTransparency ? Color(white: 0.25) : Color.white.opacity(hoveredCell == index ? 0.18 : 0.10))
+                // A dark tint keeps white icons and labels legible over light windows.
+                .fill(reduceTransparency ? Color(white: 0.25) : Color.black.opacity(hoveredCell == index ? 0.55 : 0.45))
             RoundedRectangle(cornerRadius: 14)
                 .strokeBorder(selected ? Color.white : .white.opacity(0.45), lineWidth: selected ? 3 : 1)
                 .shadow(color: .black.opacity(selected ? 0.75 : 0), radius: 2)
