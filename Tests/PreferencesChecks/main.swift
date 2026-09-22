@@ -1,5 +1,5 @@
 import Foundation
-import QuiltCore
+import TilezCore
 
 // No persistent domains or real user preferences are changed by these checks.
 final class MemoryDefaults: UserDefaults {

@@ -1,6 +1,6 @@
 import AppKit
 import Combine
-import QuiltCore
+import TilezCore
 
 struct AppGroup: Identifiable {
     let pid: pid_t
@@ -333,7 +333,7 @@ final class WindowManager: ObservableObject {
             } catch WindowCountError.windowDidNotAppear {
                 self.status = "\(name) did not open a new independent window within 10 seconds. Stopped; check the app for a dialog or open its windows manually."
             } catch WindowCountError.windowsKeepClosing {
-                self.status = "Windows kept closing while Quilt was opening them. Stopped; try again when the app is ready."
+                self.status = "Windows kept closing while Tilez was opening them. Stopped; try again when the app is ready."
             } catch {
                 self.status = error.localizedDescription
             }

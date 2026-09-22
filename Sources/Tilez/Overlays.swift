@@ -1,5 +1,5 @@
 import AppKit
-import QuiltCore
+import TilezCore
 
 private final class OverlayPanel: NSPanel {
     override var canBecomeKey: Bool { true }

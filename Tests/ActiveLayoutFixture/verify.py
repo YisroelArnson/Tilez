@@ -4,7 +4,7 @@ import json
 import pathlib
 import sys
 
-root = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else '/private/tmp/quilt-active-fixture')
+root = pathlib.Path(sys.argv[1] if len(sys.argv) > 1 else '/private/tmp/tilez-active-fixture')
 def read(name):
     return json.loads((root / name).read_text())
 def named(windows, predicate):
@@ -21,5 +21,5 @@ before = read('before-grow.json')
 after = read('after-grow.json')
 assert len(before) == 4 and len(after) == 6, 'Growth did not create two windows'
 assert named(before, lambda n: n in (3, 4)) == named(after, lambda n: n in (3, 4)), 'Growth changed a neighboring set'
-assert {w['title'] for w in after} - {w['title'] for w in before} == {'Quilt test window 5', 'Quilt test window 6'}, 'Growth borrowed an existing window'
+assert {w['title'] for w in after} - {w['title'] for w in before} == {'Tilez test window 5', 'Tilez test window 6'}, 'Growth borrowed an existing window'
 print('PASS: shrink, close-set, and growth isolation; other-set identities and frames unchanged.')

@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import QuiltCore
+import TilezCore
 
 struct SetupThumbnail: View {
     let setup: WindowSetup
@@ -56,7 +56,7 @@ struct SetupsView: View {
                     }
                     Spacer()
                     Button("New arrangement…", systemImage: "plus") { creating = true }
-                        .buttonStyle(QuiltButtonStyle(role: .primary)).disabled(manager.openingPID != nil)
+                        .buttonStyle(TilezButtonStyle(role: .primary)).disabled(manager.openingPID != nil)
                 }
                 ScrollView {
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 235), spacing: 16)], spacing: 16) {
@@ -88,7 +88,7 @@ struct SetupsView: View {
                                     } label: { Image(systemName: "ellipsis").frame(width: 32, height: 32) }
                                         .menuStyle(.borderlessButton).fixedSize().accessibilityLabel("Options for \(setup.name)")
                                 }
-                            }.quiltSurface()
+                            }.tilezSurface()
                         }
                     }.padding(2)
                 }
@@ -98,7 +98,7 @@ struct SetupsView: View {
             VStack(spacing: 16) {
                 QuickArrangementView(manager: manager, preferences: preferences)
                 Button("Done") { creating = false }.keyboardShortcut(.cancelAction)
-            }.padding(24).frame(width: 420, height: 630).tint(QuiltStyle.accent)
+            }.padding(24).frame(width: 420, height: 630).tint(TilezStyle.accent)
         }
         .sheet(item: $editing) { setup in
             SetupEditor(manager: manager, initial: setup) { manager.saveSetup($0); editing = nil }
@@ -121,6 +121,6 @@ struct SetupEditor: View {
             QuickArrangementView(manager: manager, preferences: manager.preferences, initial: initial, editing: true, onSave: onSave)
             Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
         }.padding(24).frame(width: 420, height: 630)
-            .buttonStyle(QuiltButtonStyle()).tint(QuiltStyle.accent)
+            .buttonStyle(TilezButtonStyle()).tint(TilezStyle.accent)
     }
 }

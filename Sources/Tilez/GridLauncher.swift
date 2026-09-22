@@ -1,6 +1,6 @@
 import AppKit
 import ApplicationServices
-import QuiltCore
+import TilezCore
 
 struct GridLaunchResult {
     let grid: DesktopGrid
@@ -12,7 +12,7 @@ enum GridLaunchError: LocalizedError {
     case changedDesktop, missingApp(String), windowMissing(String), timedOut(String)
     var errorDescription: String? {
         switch self {
-        case .changedDesktop: return "The desktop changed. Bring Quilt back on the desktop you want and try again."
+        case .changedDesktop: return "The desktop changed. Bring Tilez back on the desktop you want and try again."
         case .missingApp(let app): return "\(app) is not installed. Choose another app for its cell."
         case .windowMissing(let app): return "\(app)’s window is unavailable here. Open it on this desktop and try again."
         case .timedOut(let app): return "\(app) didn’t open another window. Check the app for a dialog, or choose a different app."

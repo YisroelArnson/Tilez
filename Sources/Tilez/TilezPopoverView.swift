@@ -1,10 +1,10 @@
 import AppKit
 import SwiftUI
 
-struct QuiltPopoverView: View {
+struct TilezPopoverView: View {
     @ObservedObject var manager: WindowManager
     @ObservedObject var preferences: Preferences
-    @ObservedObject var navigation: QuiltNavigation
+    @ObservedObject var navigation: TilezNavigation
     let openWindow: (Page) -> Void
     let arrangementChanged: (Bool) -> Void
     @State private var arranging: Bool
@@ -12,7 +12,7 @@ struct QuiltPopoverView: View {
 
     private var runningLayouts: [RunningLayout] { manager.runningLayouts }
 
-    init(manager: WindowManager, preferences: Preferences, navigation: QuiltNavigation,
+    init(manager: WindowManager, preferences: Preferences, navigation: TilezNavigation,
          openWindow: @escaping (Page) -> Void, arrangementChanged: @escaping (Bool) -> Void) {
         self.manager = manager
         self.preferences = preferences
@@ -25,7 +25,7 @@ struct QuiltPopoverView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             HStack {
-                Label("Window Quilt", systemImage: "square.grid.2x2.fill").font(.headline)
+                Label("Tilez", systemImage: "square.grid.2x2.fill").font(.headline)
                 Spacer()
                 Menu {
                     Button("Settings…") { openWindow(.settings) }
@@ -39,7 +39,7 @@ struct QuiltPopoverView: View {
                         }
                     }
                     Divider()
-                    Button("Quit Window Quilt") { NSApp.terminate(nil) }
+                    Button("Quit Tilez") { NSApp.terminate(nil) }
                 } label: { Image(systemName: "gearshape") }
                     .menuStyle(.borderlessButton).fixedSize().accessibilityLabel("Settings and tools")
             }
@@ -65,14 +65,14 @@ struct QuiltPopoverView: View {
                                     Button { manager.addPane(to: layout) } label: {
                                         Image(systemName: "plus")
                                     }
-                                    .buttonStyle(QuiltButtonStyle(iconOnly: true))
+                                    .buttonStyle(TilezButtonStyle(iconOnly: true))
                                     .accessibilityLabel("Add pane to \(layout.record.setup.name)")
                                     .help("Add one pane and rearrange this set")
                                     .disabled(layout.windows.count >= 40)
                                     Button { manager.closeAllPanes(in: layout) } label: {
                                         Image(systemName: "xmark")
                                     }
-                                    .buttonStyle(QuiltButtonStyle(role: .destructive, iconOnly: true))
+                                    .buttonStyle(TilezButtonStyle(role: .destructive, iconOnly: true))
                                     .accessibilityLabel("Close all panes in \(layout.record.setup.name)")
                                     .help("Close all \(layout.windows.count) panes in this set")
                                 }
@@ -91,7 +91,7 @@ struct QuiltPopoverView: View {
                                     Spacer(minLength: 0)
                                     Image(systemName: "arrow.up.right").foregroundStyle(.secondary)
                                 }.frame(maxWidth: .infinity, alignment: .leading)
-                            }.buttonStyle(QuiltButtonStyle(role: .quiet, isStatic: true))
+                            }.buttonStyle(TilezButtonStyle(role: .quiet, isStatic: true))
                                 .disabled(!manager.trusted || manager.openingPID != nil)
                         }
                         if preferences.setups.isEmpty {
@@ -103,7 +103,7 @@ struct QuiltPopoverView: View {
                     arrangementID = UUID()
                     arranging = true
                 } label: { Label("New arrangement…", systemImage: "plus").frame(maxWidth: .infinity) }
-                    .buttonStyle(QuiltButtonStyle(role: .primary)).disabled(manager.openingPID != nil)
+                    .buttonStyle(TilezButtonStyle(role: .primary)).disabled(manager.openingPID != nil)
                 if !manager.trusted {
                     Button("Grant Accessibility access…") { Accessibility.requestPermission(); openAccessibility() }
                 }
@@ -121,7 +121,7 @@ struct QuiltPopoverView: View {
             }
         }.padding(20).frame(maxWidth: .infinity, maxHeight: .infinity)
             .background(Color(nsColor: .windowBackgroundColor))
-            .buttonStyle(QuiltButtonStyle()).tint(QuiltStyle.accent)
+            .buttonStyle(TilezButtonStyle()).tint(TilezStyle.accent)
             .onChange(of: arranging) { _, value in arrangementChanged(value) }
             .onChange(of: preferences.setups.count) { _, _ in arrangementChanged(arranging) }
             .onChange(of: manager.trusted) { _, _ in arrangementChanged(arranging) }

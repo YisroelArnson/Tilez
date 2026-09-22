@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import QuiltCore
+import TilezCore
 
 private final class FixtureModel: ObservableObject {
     @Published var rows = 2
@@ -71,7 +71,7 @@ private final class Fixture: NSObject, NSApplicationDelegate {
     func finish(error: String?) {
         let report: [String: Any] = ["passed": error == nil, "error": error ?? "", "checks": reports]
         let data = try! JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys])
-        try! data.write(to: URL(fileURLWithPath: "/private/tmp/quilt-popover-check/native-regression.json"), options: .atomic)
+        try! data.write(to: URL(fileURLWithPath: "/private/tmp/tilez-popover-check/native-regression.json"), options: .atomic)
         controller?.close()
         anchorPanel?.orderOut(nil)
         controlWindow.contentView?.subviews.forEach { $0.removeFromSuperview() }

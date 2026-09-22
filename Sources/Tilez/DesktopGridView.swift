@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import QuiltCore
+import TilezCore
 
 private let gridBlue = Color(red: 0.02, green: 0.39, blue: 1)
 
@@ -157,9 +157,9 @@ struct DesktopGridView: View {
                 Button("Undo last window arrangement") { model.manager.undo() }
                     .disabled(model.manager.undoLabel == nil)
                 Divider()
-                Text("Show or hide Quilt: ⌃⌥Space")
+                Text("Show or hide Tilez: ⌃⌥Space")
                 Button("Close", action: { model.onDismiss?() })
-                Button("Quit Window Quilt") { NSApp.terminate(nil) }
+                Button("Quit Tilez") { NSApp.terminate(nil) }
             } label: { Image(systemName: "ellipsis").frame(width: 16) }
                 .menuStyle(.borderlessButton).fixedSize().help("More actions")
                 .disabled(model.busy)
@@ -514,7 +514,7 @@ struct DesktopGridView: View {
             if !model.trusted {
                 HStack(spacing: 12) {
                     Image(systemName: "hand.raised")
-                    Text("Allow Accessibility so Quilt can arrange your windows.")
+                    Text("Allow Accessibility so Tilez can arrange your windows.")
                     Button("Allow access") {
                         Accessibility.requestPermission()
                         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)

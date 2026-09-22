@@ -1,5 +1,5 @@
 import AppKit
-import QuiltCore
+import TilezCore
 
 struct Shortcut: Codable, Equatable {
     var key: UInt32

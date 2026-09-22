@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import QuiltCore
+import TilezCore
 
 struct ActiveLayoutsView: View {
     @ObservedObject var manager: WindowManager
@@ -22,7 +22,7 @@ struct ActiveLayoutsView: View {
             HStack {
                 TextField("Find an app or layout", text: $query).textFieldStyle(.roundedBorder)
                 Button { manager.refresh() } label: { Image(systemName: "arrow.clockwise") }
-                    .buttonStyle(QuiltButtonStyle(role: .quiet, iconOnly: true)).accessibilityLabel("Refresh active layouts")
+                    .buttonStyle(TilezButtonStyle(role: .quiet, iconOnly: true)).accessibilityLabel("Refresh active layouts")
             }
             if manager.openingPID != nil {
                 HStack {
@@ -30,7 +30,7 @@ struct ActiveLayoutsView: View {
                     Text(manager.status).font(.callout).lineLimit(2)
                     Spacer()
                     Button("Stop") { manager.cancelOpening() }
-                }.padding(12).background(QuiltStyle.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
+                }.padding(12).background(TilezStyle.accent.opacity(0.06), in: RoundedRectangle(cornerRadius: 8))
             }
             ScrollView {
                 LazyVStack(spacing: 14) {
@@ -44,8 +44,8 @@ struct ActiveLayoutsView: View {
                                 VStack(spacing: 0) {
                                     Text("\(layout.windows.count)").font(.system(size: 26, weight: .semibold, design: .rounded)).monospacedDigit()
                                     Text(layout.windows.count == 1 ? "window" : "windows").font(.caption2)
-                                }.foregroundStyle(QuiltStyle.accent).frame(width: 68, height: 60)
-                                    .background(QuiltStyle.accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 8))
+                                }.foregroundStyle(TilezStyle.accent).frame(width: 68, height: 60)
+                                    .background(TilezStyle.accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 8))
                                 VStack(alignment: .leading, spacing: 5) {
                                     Text(layout.record.setup.name).font(.headline).lineLimit(1)
                                     Text(layout.location).font(.callout).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
@@ -61,10 +61,10 @@ struct ActiveLayoutsView: View {
                                 Button("Edit…", systemImage: "slider.horizontal.3") { editing = layout }
                                     .accessibilityIdentifier("edit-\(layout.id)")
                                 Button("Close set…", systemImage: "xmark") { closing = layout }
-                                    .buttonStyle(QuiltButtonStyle(role: .destructive))
+                                    .buttonStyle(TilezButtonStyle(role: .destructive))
                                     .accessibilityIdentifier("close-\(layout.id)")
                             }.disabled(manager.openingPID != nil || !manager.trusted)
-                        }.quiltSurface()
+                        }.tilezSurface()
                     }
                 }.padding(2)
             }
@@ -86,7 +86,7 @@ struct ActiveLayoutsView: View {
             }
         } message: {
             if let layout = closing {
-                Text("\(layout.record.setup.name) · \(layout.location)\n\nOnly these \(layout.windows.count) windows will close. This cannot be undone by Quilt. Any save prompt will stop the operation; other sets stay open.")
+                Text("\(layout.record.setup.name) · \(layout.location)\n\nOnly these \(layout.windows.count) windows will close. This cannot be undone by Tilez. Any save prompt will stop the operation; other sets stay open.")
             }
         }
     }
@@ -130,13 +130,13 @@ private struct ActiveLayoutEditor: View {
                     Toggle("Keep full-screen windows in full screen", isOn: Binding(get: { draft.keepsFullScreen }, set: { draft.preserveFullScreen = $0 }))
                     GridPreview(count: draft.count, columns: draft.columns, rows: draft.rows, gap: draft.gap,
                         displayBounds: Display.all.first { $0.id == draft.displayID }?.bounds ?? CGRect(x: 0, y: 0, width: 1920, height: 1080))
-                        .frame(height: 90).background(QuiltStyle.accent.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
+                        .frame(height: 90).background(TilezStyle.accent.opacity(0.04), in: RoundedRectangle(cornerRadius: 8))
                     Divider()
                     Text("Windows to keep · \(keeping.count) selected").font(.headline)
                     Text(draft.count < layout.windows.count ? "Uncheck windows to close and select the ones you want to keep. Choose exactly \(draft.count)." : "Existing members stay in this set. Increasing the count opens new windows without borrowing from another layout.")
                         .font(.caption).foregroundStyle(.secondary)
                     ForEach(layout.windows) { window in
-                        QuiltWindowRow(window: window, selected: Binding(get: { keeping.contains(window.id) }, set: { keep in
+                        TilezWindowRow(window: window, selected: Binding(get: { keeping.contains(window.id) }, set: { keep in
                             if keep { keeping.insert(window.id) } else { keeping.remove(window.id) }
                         })).disabled(draft.count >= layout.windows.count)
                     }
@@ -150,16 +150,16 @@ private struct ActiveLayoutEditor: View {
                     .font(.caption).foregroundStyle(.secondary)
                 Button(toClose > 0 ? "Review changes…" : "Apply changes") {
                     if toClose > 0 { confirmReduction = true } else { onApply(draft, keeping) }
-                }.buttonStyle(QuiltButtonStyle(role: .primary)).disabled(!valid || manager.openingPID != nil)
+                }.buttonStyle(TilezButtonStyle(role: .primary)).disabled(!valid || manager.openingPID != nil)
             }
         }.padding(24).frame(width: 570, height: 690)
-            .buttonStyle(QuiltButtonStyle()).tint(QuiltStyle.accent)
+            .buttonStyle(TilezButtonStyle()).tint(TilezStyle.accent)
             .onChange(of: draft.count) { _, count in keeping = Set(layout.record.windowIDs.prefix(count)) }
             .alert("Close \(toClose) windows and rearrange?", isPresented: $confirmReduction) {
                 Button("Cancel", role: .cancel) {}
                 Button("Close \(toClose) and apply", role: .destructive) { onApply(draft, keeping) }
             } message: {
-                Text("The unchecked windows will close. Quilt cannot undo closing windows, and will stop if an app asks to save. Your other layouts stay open.")
+                Text("The unchecked windows will close. Tilez cannot undo closing windows, and will stop if an app asks to save. Your other layouts stay open.")
             }
     }
 }

@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import QuiltCore
+import TilezCore
 
 
 struct ArrangementGrid: View {
@@ -12,7 +12,7 @@ struct ArrangementGrid: View {
         let bounds = Display.all.first { $0.id == draft.displayID }?.bounds
             ?? Display.all.first { $0.screen == NSScreen.main }?.bounds
             ?? CGRect(x: 0, y: 0, width: 1920, height: 1080)
-        let frames = QuiltCore.Geometry.grid(count: draft.count, in: bounds, columns: draft.columns, rows: draft.rows, gap: draft.gap)
+        let frames = TilezCore.Geometry.grid(count: draft.count, in: bounds, columns: draft.columns, rows: draft.rows, gap: draft.gap)
         return (Set(frames.map(\.minX)).count, Set(frames.map(\.minY)).count)
     }
 
@@ -28,10 +28,10 @@ struct ArrangementGrid: View {
                             && (row - 1) * grid.columns + column <= draft.count
                         Button { select(column: column, row: row) } label: {
                             RoundedRectangle(cornerRadius: 6)
-                                .fill(selected ? QuiltStyle.accent.opacity(0.18) : Color.primary.opacity(0.035))
-                                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(selected ? QuiltStyle.accent : Color.primary.opacity(0.14), lineWidth: selected ? 2 : 1))
+                                .fill(selected ? TilezStyle.accent.opacity(0.18) : Color.primary.opacity(0.035))
+                                .overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(selected ? TilezStyle.accent : Color.primary.opacity(0.14), lineWidth: selected ? 2 : 1))
                                 .overlay {
-                                    if selected { Image(systemName: "circle.fill").font(.system(size: 4)).foregroundStyle(QuiltStyle.accent) }
+                                    if selected { Image(systemName: "circle.fill").font(.system(size: 4)).foregroundStyle(TilezStyle.accent) }
                                 }
                                 .frame(height: 38)
                         }.buttonStyle(.plain)
@@ -236,7 +236,7 @@ struct QuickArrangementView: View {
                     else { step = 1 }
                 } label: {
                     Text(editing ? "Save changes" : "Choose app →").frame(maxWidth: .infinity)
-                }.buttonStyle(QuiltButtonStyle(role: .primary))
+                }.buttonStyle(TilezButtonStyle(role: .primary))
                     .disabled(busy || (editing && !draft.isValid) || (!editing && unavailableDestination))
             } else if step == 1 {
                 HStack {
@@ -256,7 +256,7 @@ struct QuickArrangementView: View {
                                     Spacer()
                                     Image(systemName: editing ? "chevron.right" : "arrow.up.right").foregroundStyle(.secondary)
                                 }.padding(.vertical, 6).frame(maxWidth: .infinity)
-                            }.buttonStyle(QuiltButtonStyle(role: .quiet, isStatic: true))
+                            }.buttonStyle(TilezButtonStyle(role: .quiet, isStatic: true))
                                 .disabled(busy || (!editing && !manager.trusted))
                         }
                         if filteredApps.isEmpty { Text("No matching apps").foregroundStyle(.secondary).padding() }
@@ -278,7 +278,7 @@ struct QuickArrangementView: View {
                     manager.saveSetup(draft)
                     saved = true
                 } label: { Text(saved ? "Saved to your setups" : "Save this setup").frame(maxWidth: .infinity) }
-                    .buttonStyle(QuiltButtonStyle(role: .primary)).disabled(saved || busy)
+                    .buttonStyle(TilezButtonStyle(role: .primary)).disabled(saved || busy)
                 HStack {
                     Button("Adjust…") { step = 0 }.disabled(busy)
                     Spacer()
@@ -286,7 +286,7 @@ struct QuickArrangementView: View {
                 }
             }
             if !manager.trusted {
-                Button("Allow Window Quilt to move windows…") { Accessibility.requestPermission(); openAccessibility() }
+                Button("Allow Tilez to move windows…") { Accessibility.requestPermission(); openAccessibility() }
             }
         }.onAppear { loadApps() }
             .onChange(of: draft) { _, _ in saved = false }

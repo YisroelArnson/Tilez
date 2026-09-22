@@ -24,8 +24,8 @@ final class ActionItem: NSMenuItem {
         manager = WindowManager(preferences: Preferences(), backgroundArrangements: false)
         overlay = GridOverlayController(manager: manager)
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "square.grid.2x2", accessibilityDescription: "Window Quilt")
-        statusItem.button?.toolTip = "Window Quilt · ⌃⌥Space"
+        statusItem.button?.image = NSImage(systemSymbolName: "square.grid.2x2", accessibilityDescription: "Tilez")
+        statusItem.button?.toolTip = "Tilez · ⌃⌥Space"
         statusItem.button?.target = self
         statusItem.button?.action = #selector(toggleGrid)
         hotkey = GridHotKey { [weak self] in self?.overlay.toggle() }
@@ -36,7 +36,7 @@ final class ActionItem: NSMenuItem {
             UserDefaults.standard.set(true, forKey: "hasOpenedGridV2")
         }
         if !hotkey.registered {
-            overlay.model.message = "⌃⌥Space is already in use. Open Quilt from its menu-bar icon."
+            overlay.model.message = "⌃⌥Space is already in use. Open Tilez from its menu-bar icon."
             overlay.model.isError = true
         }
     }
@@ -45,8 +45,8 @@ final class ActionItem: NSMenuItem {
         let bar = NSMenu()
         let app = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(ActionItem("Show Window Quilt") { [weak self] in self?.overlay.toggle() })
-        appMenu.addItem(NSMenuItem(title: "Quit Window Quilt", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        appMenu.addItem(ActionItem("Show Tilez") { [weak self] in self?.overlay.toggle() })
+        appMenu.addItem(NSMenuItem(title: "Quit Tilez", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         app.submenu = appMenu; bar.addItem(app)
         let edit = NSMenuItem(title: "Edit", action: nil, keyEquivalent: "")
         let menu = NSMenu(title: "Edit")

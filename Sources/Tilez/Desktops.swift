@@ -1,6 +1,6 @@
 import AppKit
 import ApplicationServices
-import QuiltSpacesBridge
+import TilezSpacesBridge
 
 struct Desktop: Identifiable, Equatable {
     let number: UInt64
@@ -21,10 +21,10 @@ enum DesktopError: LocalizedError {
         switch self {
         case .unavailable: return "Desktop control is unavailable on this macOS version. Your existing windows have not been moved."
         case .missingDesktop: return "The saved desktop no longer exists. Edit this setup and choose another desktop."
-        case .missionControl: return "Quilt could not access Mission Control. Close Mission Control and try again."
+        case .missionControl: return "Tilez could not access Mission Control. Close Mission Control and try again."
         case .creationFailed: return "macOS did not create a desktop. You may have reached its desktop limit."
-        case .moveFailed: return "macOS did not move every window to the requested desktop. Quilt stopped before tiling."
-        case .switchFailed: return "Quilt could not confirm the desktop switch. Open Mission Control to select the desktop."
+        case .moveFailed: return "macOS did not move every window to the requested desktop. Tilez stopped before tiling."
+        case .switchFailed: return "Tilez could not confirm the desktop switch. Open Mission Control to select the desktop."
         case .missingDisplay: return "The setup’s display is disconnected. Edit the setup to choose an available display."
         }
     }
@@ -44,7 +44,7 @@ enum Desktops {
     }
     private static var connection: Int32? { symbol("SLSMainConnectionID", Connection.self)?() }
     static var canMove: Bool {
-        ProcessInfo.processInfo.isOperatingSystemAtLeast(OperatingSystemVersion(majorVersion: 26, minorVersion: 4, patchVersion: 0)) && QuiltCanMoveToSpace()
+        ProcessInfo.processInfo.isOperatingSystemAtLeast(OperatingSystemVersion(majorVersion: 26, minorVersion: 4, patchVersion: 0)) && TilezCanMoveToSpace()
     }
     static func windowNumber(_ window: AXUIElement) -> UInt32? {
         guard let handle = processLibrary, let pointer = dlsym(handle, "_AXUIElementGetWindow") else { return nil }
@@ -174,7 +174,7 @@ enum Desktops {
         guard numbers.count == windows.count else { throw DesktopError.moveFailed }
         let needingMove = numbers.filter { !spaces(for: $0).contains(desktop.number) }
         if needingMove.isEmpty { return }
-        guard canMove, QuiltMoveToSpace(needingMove.map { NSNumber(value: $0) } as CFArray, desktop.number) else { throw DesktopError.unavailable }
+        guard canMove, TilezMoveToSpace(needingMove.map { NSNumber(value: $0) } as CFArray, desktop.number) else { throw DesktopError.unavailable }
         for _ in 0..<40 {
             try await Task.sleep(nanoseconds: 100_000_000)
             if numbers.allSatisfy({ spaces(for: $0).contains(desktop.number) }) { return }

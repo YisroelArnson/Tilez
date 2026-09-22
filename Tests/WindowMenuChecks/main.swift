@@ -1,5 +1,5 @@
 import AppKit
-import QuiltCore
+import TilezCore
 
 // A disposable AppKit app with Terminal's nested New Window menu shape.
 // It opens plain test windows, never a shell or a user's document.
@@ -33,7 +33,7 @@ import QuiltCore
         let window = NSWindow(contentRect: CGRect(x: 80 + windows.count * 40, y: 80, width: 320, height: 180),
                               styleMask: [.titled, .closable, .resizable], backing: .buffered, defer: false)
         window.isReleasedWhenClosed = false
-        window.title = "Window Quilt menu test \(windows.count + 1)"
+        window.title = "Tilez menu test \(windows.count + 1)"
         windows.append(window)
         window.orderFront(nil)
     }

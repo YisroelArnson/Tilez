@@ -1,6 +1,6 @@
 import Foundation
 import CoreGraphics
-import QuiltCore
+import TilezCore
 
 final class GeometryTests {
     func testAutomaticGridsFitWithoutOverlapAcrossDisplayShapes() {
@@ -287,7 +287,7 @@ private func checkActiveLayouts() {
     var updated = first
     updated.windowIDs = Array(first.windowIDs.prefix(6))
     expectEqual(ActiveLayouts.recording(updated, in: [first, second]).map(\.id), [first.id, second.id])
-    // Persistence preserves session, order, settings, and identity across Quilt restarts.
+    // Persistence preserves session, order, settings, and identity across Tilez restarts.
     let roundTrip = try! JSONDecoder().decode([ActiveLayout].self, from: JSONEncoder().encode([first, second]))
     expectEqual(roundTrip, [first, second])
     expectEqual(ActiveLayouts.reconcile(roundTrip, live: ["launch-1": all]), [first, second])

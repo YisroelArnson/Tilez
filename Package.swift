@@ -2,13 +2,13 @@
 import PackageDescription
 
 let package = Package(
-    name: "WindowQuilt",
+    name: "Tilez",
     platforms: [.macOS(.v14)],
-    products: [.executable(name: "WindowQuilt", targets: ["WindowQuilt"])],
+    products: [.executable(name: "Tilez", targets: ["Tilez"])],
     targets: [
-        .target(name: "QuiltCore"),
-        .target(name: "QuiltSpacesBridge", cSettings: [.unsafeFlags(["-fobjc-arc"])]),
-        .executableTarget(name: "WindowQuilt", dependencies: ["QuiltCore", "QuiltSpacesBridge"]),
-        .executableTarget(name: "QuiltCoreChecks", dependencies: ["QuiltCore"], path: "Tests/QuiltCoreTests")
+        .target(name: "TilezCore"),
+        .target(name: "TilezSpacesBridge", cSettings: [.unsafeFlags(["-fobjc-arc"])]),
+        .executableTarget(name: "Tilez", dependencies: ["TilezCore", "TilezSpacesBridge"]),
+        .executableTarget(name: "TilezCoreChecks", dependencies: ["TilezCore"], path: "Tests/TilezCoreTests")
     ]
 )

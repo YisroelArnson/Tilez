@@ -1,6 +1,6 @@
 import AppKit
 import ApplicationServices
-import QuiltCore
+import TilezCore
 
 struct RunningLayout: Identifiable {
     let id: String
@@ -17,7 +17,7 @@ enum ActiveLayoutError: LocalizedError {
         switch self {
         case .changed: return "This set has changed or its app has restarted. Refresh Active layouts and try again."
         case .cannotClose(let title): return "Could not close “\(title)”. Check the app for a save or confirmation dialog. Stopped; the remaining windows stay open."
-        case .needsAttention(let title): return "“\(title)” is still open. Resolve any save or confirmation dialog in the app, then try again. Quilt has stopped closing windows."
+        case .needsAttention(let title): return "“\(title)” is still open. Resolve any save or confirmation dialog in the app, then try again. Tilez has stopped closing windows."
         }
     }
 }
@@ -36,7 +36,7 @@ extension WindowManager {
 
     func processSession(_ pid: pid_t) -> String? {
         guard let app = NSRunningApplication(processIdentifier: pid), let launch = app.launchDate else { return nil }
-        // System boot + process launch are stable across Quilt restarts, but not PID reuse.
+        // System boot + process launch are stable across Tilez restarts, but not PID reuse.
         return "\(pid)|\(launch.timeIntervalSince1970)|\(app.bundleIdentifier ?? "")"
     }
 

@@ -1,7 +1,7 @@
 import AppKit
 import Combine
 import SwiftUI
-import QuiltCore
+import TilezCore
 
 // Render the production toolbar preview, not a separate geometry approximation.
 MainActor.assumeIsolated {

@@ -1,6 +1,6 @@
 import AppKit
 import Combine
-import QuiltCore
+import TilezCore
 
 // Uses the production overlay and key routing with isolated, in-memory drafts.
 final class KeyboardFixtureDefaults: UserDefaults {

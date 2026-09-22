@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Check the native fixture's own telemetry after running a setup through Quilt's UI."""
+"""Check the native fixture's own telemetry after running a setup through Tilez's UI."""
 import argparse
 import json
 from pathlib import Path

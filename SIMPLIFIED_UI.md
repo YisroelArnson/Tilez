@@ -1,4 +1,4 @@
-# Window Quilt 1.7 — simpler arrangement flow
+# Tilez 1.7 — simpler arrangement flow
 
 The primary flow is now **choose a grid → choose an app**. Saved setups are visual cards in the main window and directly accessible from the menu-bar popover. There is no sidebar. Existing setup serialization and the window-management engine are retained.
 
@@ -18,7 +18,7 @@ The primary flow is now **choose a grid → choose an app**. Saved setups are vi
 - Release builds passed; core checks passed **30 scenarios / 39,569 assertions** covering geometry, matching, creation, visibility, setup persistence, and active-layout ownership.
 - Focused in-memory preference checks passed: draft edits do not persist, explicit defaults round-trip into a new Preferences instance, and saved setups retain their original values. The checks never modify real user defaults.
 - Native dark-mode inspection: setup library, creation sheet, selected six-window grid, collapsed/expanded options, scrolling with the main action pinned, app icons, and app search.
-- Saved a temporary fixture setup, edited its name and grid without running it, restarted Quilt, and verified the changes persisted. Delete/Undo restored it; the temporary setup was then removed. The two original saved setups were retained.
+- Saved a temporary fixture setup, edited its name and grid without running it, restarted Tilez, and verified the changes persisted. Delete/Undo restored it; the temporary setup was then removed. The two original saved setups were retained.
 - The new app-picker action reached the existing creation/tiling engine using the blank-window fixture. It selected six windows on the configured destination and left two windows on another desktop open, consistent with the existing desktop-scoped reuse policy.
 - **Live placement check failed:** fixture telemetry showed overlapping windows after the engine reported size constraints, on both external-display and built-in-display trials. This does not establish correct end-to-end placement. No changes were made to Accessibility, geometry, desktop control, window creation, or active-layout ownership in this UI pass.
 - Grid click selection was verified live. Dragging, the full menu-bar popover flow, keyboard-only navigation, light appearance, and explicit default persistence were inspected in code but not completely verified live; computer-use calls intermittently returned `noWindowsAvailable`, timeouts, or external-state changes. Do not interpret the passing core checks as coverage of these paths.
@@ -27,6 +27,6 @@ The primary flow is now **choose a grid → choose an app**. Saved setups are vi
 
 - New arrangements inherit the user's existing preferences. No migration resets their defaults or saved setups.
 - Grid selection supports up to 5 × 4 directly. Options → Custom window count and grid preserves the 1–40 count and 0–20 row/column ranges; zero remains automatic.
-- App discovery checks standard installation folders and running apps, with an explicit file picker for applications elsewhere. Recent apps are remembered locally. The menu captures the previously focused app before activating Quilt.
+- App discovery checks standard installation folders and running apps, with an explicit file picker for applications elsewhere. Recent apps are remembered locally. The menu captures the previously focused app before activating Tilez.
 - Saving the result saves the recipe; the engine's actual status is shown without inventing a success state. Stop remains available during creation. Undo restores placements; newly opened windows remain open.
 - Saved setups with disconnected destinations remain editable. New arrangements require an available destination before proceeding.

@@ -6,26 +6,26 @@ Implemented with the better-ui skill, retaining SwiftUI/AppKit, the teal palette
 
 | Severity | Location | Before | After | Why |
 | --- | --- | --- | --- | --- |
-| MEDIUM | Sources/WindowQuilt/QuiltStyle.swift:88 | Secondary buttons used a flat primary-color outline, unlike the surrounding cards. | Neutral edge ring and two transparent shadow layers in light mode; a white ring in dark mode. Disabled buttons lose elevation. Focus retains its explicit accent outline. | Consistent elevation separates actions from their surfaces without competing with focus or selection. Applies to all QuiltButtonStyle secondary buttons. |
+| MEDIUM | Sources/Tilez/TilezStyle.swift:88 | Secondary buttons used a flat primary-color outline, unlike the surrounding cards. | Neutral edge ring and two transparent shadow layers in light mode; a white ring in dark mode. Disabled buttons lose elevation. Focus retains its explicit accent outline. | Consistent elevation separates actions from their surfaces without competing with focus or selection. Applies to all TilezButtonStyle secondary buttons. |
 
 **Concentric corners and surface ownership**
 
 | Severity | Location | Before | After | Why |
 | --- | --- | --- | --- | --- |
-| MEDIUM | Sources/WindowQuilt/QuiltStyle.swift:139; Sources/WindowQuilt/Views.swift:37 | Navigation nested a padded selected background inside a separately padded hover/focus button surface. | One full-width 38-point navigation surface owns selected, pressed, hover, and focus states. | A single surface keeps corners and feedback aligned as the user moves between pages. |
-| MEDIUM | Sources/WindowQuilt/Views.swift:381; Sources/WindowQuilt/Views.swift:273; Sources/WindowQuilt/SetupsView.swift:61; Sources/WindowQuilt/SetupsView.swift:183 | Tiles floated in a wide wash with no visible display boundary; preview math subtracted two extra points from every tile and only centered horizontally. Background styling was repeated at call sites. | A centered display bezel frames proportional tiles, using a 3-point tile radius plus 6-point bezel for a 9-point outer radius. The shared preview owns its background. Grid gaps are scaled directly from geometry, and labels disappear when tiles cannot fit them. | A clear display surface makes the arrangement easier to interpret, preserves real spacing, and fits the editor's narrower preview area. The asymmetric outer preview area retains its established 8-point token. |
+| MEDIUM | Sources/Tilez/TilezStyle.swift:139; Sources/Tilez/Views.swift:37 | Navigation nested a padded selected background inside a separately padded hover/focus button surface. | One full-width 38-point navigation surface owns selected, pressed, hover, and focus states. | A single surface keeps corners and feedback aligned as the user moves between pages. |
+| MEDIUM | Sources/Tilez/Views.swift:381; Sources/Tilez/Views.swift:273; Sources/Tilez/SetupsView.swift:61; Sources/Tilez/SetupsView.swift:183 | Tiles floated in a wide wash with no visible display boundary; preview math subtracted two extra points from every tile and only centered horizontally. Background styling was repeated at call sites. | A centered display bezel frames proportional tiles, using a 3-point tile radius plus 6-point bezel for a 9-point outer radius. The shared preview owns its background. Grid gaps are scaled directly from geometry, and labels disappear when tiles cannot fit them. | A clear display surface makes the arrangement easier to interpret, preserves real spacing, and fits the editor's narrower preview area. The asymmetric outer preview area retains its established 8-point token. |
 
 **Icon alignment and weight**
 
 | Severity | Location | Before | After | Why |
 | --- | --- | --- | --- | --- |
-| LOW | Sources/WindowQuilt/QuiltStyle.swift:129; Sources/WindowQuilt/QuiltStyle.swift:194; Sources/WindowQuilt/Views.swift:486 | Label icons lacked a shared alignment column; selected window icons became heavier than their adjacent text; snapshot delete used the generic button treatment. | Action labels share a 16-point icon column and 8-point gap. Window symbols retain regular weight, with color and checkbox state communicating selection. Snapshot restore/delete use the same SF Symbol and destructive treatment as saved setups. | Matching symbol weight and alignment reduces small visual jumps and makes action roles consistent. |
+| LOW | Sources/Tilez/TilezStyle.swift:129; Sources/Tilez/TilezStyle.swift:194; Sources/Tilez/Views.swift:486 | Label icons lacked a shared alignment column; selected window icons became heavier than their adjacent text; snapshot delete used the generic button treatment. | Action labels share a 16-point icon column and 8-point gap. Window symbols retain regular weight, with color and checkbox state communicating selection. Snapshot restore/delete use the same SF Symbol and destructive treatment as saved setups. | Matching symbol weight and alignment reduces small visual jumps and makes action roles consistent. |
 
 **Motion restraint and press feedback**
 
 | Severity | Location | Before | After | Why |
 | --- | --- | --- | --- | --- |
-| LOW | Sources/WindowQuilt/QuiltStyle.swift:10; Sources/WindowQuilt/QuiltStyle.swift:122; Sources/WindowQuilt/QuiltStyle.swift:209 | Press timing used a custom curve instead of the prescribed ease-out; unselected window rows had no pointer feedback. | Exactly 0.96 press scale with 150 ms ease-out, retaining static, keyboard, and reduced-motion opt-outs. Window-row hover and navigation feedback are immediate. | Frequent interactions stay quiet; selection remains visible through checkbox, color, and outline without animation. |
+| LOW | Sources/Tilez/TilezStyle.swift:10; Sources/Tilez/TilezStyle.swift:122; Sources/Tilez/TilezStyle.swift:209 | Press timing used a custom curve instead of the prescribed ease-out; unselected window rows had no pointer feedback. | Exactly 0.96 press scale with 150 ms ease-out, retaining static, keyboard, and reduced-motion opt-outs. Window-row hover and navigation feedback are immediate. | Frequent interactions stay quiet; selection remains visible through checkbox, color, and outline without animation. |
 
 **Verification**
 

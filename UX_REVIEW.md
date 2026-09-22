@@ -1,4 +1,4 @@
-# Window Quilt 1.5 — design engineering pass
+# Tilez 1.5 — design engineering pass
 
 Applied the emil-design-eng skill to the frequent Arrange workflow and saved-setup recovery. The design retains native controls, teal surfaces, and the existing window-management engine.
 
@@ -25,7 +25,7 @@ Applied the emil-design-eng skill to the frequent Arrange workflow and saved-set
 
 ## Files
 
-- `Sources/WindowQuilt/Views.swift`: Arrange workflow, pinned actions, configured setup editor entry, accessible preview.
-- `Sources/WindowQuilt/SetupsView.swift`: setup deletion recovery and shared editor.
-- `Sources/WindowQuilt/QuiltStyle.swift`: pointer-only press feedback.
+- `Sources/Tilez/Views.swift`: Arrange workflow, pinned actions, configured setup editor entry, accessible preview.
+- `Sources/Tilez/SetupsView.swift`: setup deletion recovery and shared editor.
+- `Sources/Tilez/TilezStyle.swift`: pointer-only press feedback.
 - `scripts/build.sh`: version 1.5, build 6.

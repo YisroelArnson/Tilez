@@ -1,4 +1,4 @@
-import QuiltCore
+import TilezCore
 import AppKit
 import SwiftUI
 import ServiceManagement
@@ -18,15 +18,15 @@ enum Page: String, CaseIterable, Identifiable {
     }
 }
 
-final class QuiltNavigation: ObservableObject {
+final class TilezNavigation: ObservableObject {
     @Published var page: Page = .layouts
     @Published var preferredApp: String?
 }
 
-struct QuiltView: View {
+struct TilezView: View {
     @ObservedObject var manager: WindowManager
     @ObservedObject var preferences: Preferences
-    @ObservedObject var navigation: QuiltNavigation
+    @ObservedObject var navigation: TilezNavigation
     let hotkeys: HotKeyCenter
 
     var body: some View {
@@ -35,7 +35,7 @@ struct QuiltView: View {
                 if navigation.page != .layouts {
                     Button { navigation.page = .layouts } label: { Label("Setups", systemImage: "chevron.left") }
                 } else {
-                    Label("Window Quilt", systemImage: "square.grid.2x2.fill").font(.headline).foregroundStyle(QuiltStyle.accent)
+                    Label("Tilez", systemImage: "square.grid.2x2.fill").font(.headline).foregroundStyle(TilezStyle.accent)
                 }
                 Spacer()
                 Menu {
@@ -53,7 +53,7 @@ struct QuiltView: View {
             Divider()
             if !manager.trusted {
                 HStack(spacing: 12) {
-                    Label("Allow Window Quilt to move windows", systemImage: "hand.raised")
+                    Label("Allow Tilez to move windows", systemImage: "hand.raised")
                     Spacer()
                     Button("Grant Access") { Accessibility.requestPermission(); openAccessibility() }
                 }.padding(16).background(.orange.opacity(0.08))
@@ -83,7 +83,7 @@ struct QuiltView: View {
             }.padding(.horizontal, 20).padding(.vertical, 10)
         }.frame(minWidth: 650, minHeight: 620)
             .background(Color(nsColor: .windowBackgroundColor))
-            .buttonStyle(QuiltButtonStyle()).tint(QuiltStyle.accent)
+            .buttonStyle(TilezButtonStyle()).tint(TilezStyle.accent)
     }
 }
 
@@ -174,7 +174,7 @@ private struct ArrangeView: View {
             }
             Button("Open app…", systemImage: "plus.app") { chooseApp() }
             Button { manager.refresh(); updateCapability() } label: { Image(systemName: "arrow.clockwise") }
-                .buttonStyle(QuiltButtonStyle(role: .quiet, iconOnly: true))
+                .buttonStyle(TilezButtonStyle(role: .quiet, iconOnly: true))
                 .accessibilityLabel("Refresh windows").help("Refresh windows")
         }.disabled(busy)
     }
@@ -182,7 +182,7 @@ private struct ArrangeView: View {
     private func configuration(_ group: AppGroup) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                QuiltSectionLabel(title: "HOW MANY WINDOWS?", symbol: "macwindow.badge.plus")
+                TilezSectionLabel(title: "HOW MANY WINDOWS?", symbol: "macwindow.badge.plus")
                 Spacer()
                 Stepper(value: $preferences.desiredWindows, in: 1...40) {
                     Text("\(preferences.desiredWindows)").font(.title2.weight(.semibold)).monospacedDigit()
@@ -192,7 +192,7 @@ private struct ArrangeView: View {
                 ForEach([1, 2, 4, 6, 8], id: \.self) { count in
                     Button { preferences.desiredWindows = count } label: {
                         Text("\(count)").monospacedDigit().frame(maxWidth: .infinity)
-                    }.buttonStyle(QuiltButtonStyle(role: preferences.desiredWindows == count ? .primary : .secondary, isStatic: true))
+                    }.buttonStyle(TilezButtonStyle(role: preferences.desiredWindows == count ? .primary : .secondary, isStatic: true))
                         .accessibilityLabel("\(count) \(count == 1 ? "window" : "windows")")
                         .accessibilityAddTraits(preferences.desiredWindows == count ? .isSelected : [])
                 }
@@ -238,13 +238,13 @@ private struct ArrangeView: View {
                     Button("Use \(max(1, group.windows.count)) available") { preferences.desiredWindows = max(1, group.windows.count) }
                 }
             }
-        }.quiltSurface(tinted: true).disabled(busy)
+        }.tilezSurface(tinted: true).disabled(busy)
     }
 
     private var gridControls: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                QuiltSectionLabel(title: "ARRANGEMENT", symbol: "square.grid.3x2")
+                TilezSectionLabel(title: "ARRANGEMENT", symbol: "square.grid.3x2")
                 Spacer()
                 Picker("Grid", selection: $customGrid) {
                     Text("Automatic").tag(false)
@@ -256,12 +256,12 @@ private struct ArrangeView: View {
                     Stepper("Columns: \(preferences.columns == 0 ? "Auto" : String(preferences.columns))", value: $preferences.columns, in: 0...20)
                     Stepper("Rows: \(preferences.rows == 0 ? "Auto" : String(preferences.rows))", value: $preferences.rows, in: 0...20)
                 }
-                Text("Rows expand to fit. Zero lets Quilt choose.").font(.caption).foregroundStyle(.secondary)
+                Text("Rows expand to fit. Zero lets Tilez choose.").font(.caption).foregroundStyle(.secondary)
             }
             GridPreview(count: preferences.desiredWindows, columns: preferences.columns, rows: preferences.rows,
                         gap: preferences.gap, displayBounds: previewBounds)
                 .frame(height: 108)
-                .background(QuiltStyle.accent.opacity(0.045), in: RoundedRectangle(cornerRadius: QuiltStyle.innerRadius))
+                .background(TilezStyle.accent.opacity(0.045), in: RoundedRectangle(cornerRadius: TilezStyle.innerRadius))
                 .accessibilityElement(children: .ignore)
                 .accessibilityLabel("Preview of \(preferences.desiredWindows) windows, \(customGrid ? "custom" : "automatic") arrangement")
             HStack {
@@ -269,7 +269,7 @@ private struct ArrangeView: View {
                 Slider(value: $preferences.gap, in: 0...32, step: 1).accessibilityLabel("Window spacing")
                 Text("\(Int(preferences.gap)) pt").monospacedDigit().frame(width: 42)
             }
-        }.quiltSurface().disabled(busy)
+        }.tilezSurface().disabled(busy)
     }
 
     private func windowSelection(_ group: AppGroup) -> some View {
@@ -280,15 +280,15 @@ private struct ArrangeView: View {
                     Text("\(selectedWindows.count) of \(group.windows.count) selected").font(.caption).foregroundStyle(.secondary)
                 }
                 Spacer()
-                Button("All") { selectAll() }.buttonStyle(QuiltButtonStyle(role: .quiet, isStatic: true))
-                Button("None") { selected = [] }.buttonStyle(QuiltButtonStyle(role: .quiet, isStatic: true))
+                Button("All") { selectAll() }.buttonStyle(TilezButtonStyle(role: .quiet, isStatic: true))
+                Button("None") { selected = [] }.buttonStyle(TilezButtonStyle(role: .quiet, isStatic: true))
             }
             if group.windows.isEmpty {
                 Label("No windows yet. Open & Tile will try to open them.", systemImage: "macwindow.badge.plus")
                     .foregroundStyle(.secondary).padding(.vertical, 16)
             }
             ForEach(group.windows) { window in
-                QuiltWindowRow(window: window, selected: Binding(get: { selected.contains(window.id) }, set: { value in
+                TilezWindowRow(window: window, selected: Binding(get: { selected.contains(window.id) }, set: { value in
                     if value { selected.insert(window.id) } else { selected.remove(window.id) }
                 }))
             }
@@ -302,10 +302,10 @@ private struct ArrangeView: View {
                 Divider()
                 Toggle("Keep arranged as windows open or close", isOn: Binding(get: { manager.watched.contains(group.pid) }, set: { _ in manager.toggleWatch(group.pid) }))
                     .toggleStyle(.switch).font(.callout)
-                Text("Watch includes all visible windows outside full screen. Resets when the app or Quilt quits.")
+                Text("Watch includes all visible windows outside full screen. Resets when the app or Tilez quits.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-        }.quiltSurface().disabled(busy)
+        }.tilezSurface().disabled(busy)
     }
 
     private func actionBar(_ group: AppGroup) -> some View {
@@ -327,7 +327,7 @@ private struct ArrangeView: View {
                         else { Image(systemName: "square.grid.3x2") }
                         Text(manager.openingPID == group.pid ? "Cancel opening" : "Open & Tile")
                     }.frame(minWidth: 120)
-                }.buttonStyle(QuiltButtonStyle(role: manager.openingPID == group.pid ? .secondary : .primary, isStatic: manager.openingPID == group.pid))
+                }.buttonStyle(TilezButtonStyle(role: manager.openingPID == group.pid ? .secondary : .primary, isStatic: manager.openingPID == group.pid))
                     .disabled(!manager.trusted || (busy && manager.openingPID != group.pid))
             }.padding(.horizontal, 24).padding(.vertical, 14)
         }.background(Color(nsColor: .controlBackgroundColor))
@@ -372,7 +372,7 @@ struct GridPreview: View {
     let displayBounds: CGRect
     private func frames(in size: CGSize) -> [CGRect] {
         let scale: CGFloat = min(size.width / displayBounds.width, size.height / displayBounds.height)
-        let frames = QuiltCore.Geometry.grid(count: count, in: CGRect(origin: .zero, size: displayBounds.size), columns: columns, rows: rows, gap: gap)
+        let frames = TilezCore.Geometry.grid(count: count, in: CGRect(origin: .zero, size: displayBounds.size), columns: columns, rows: rows, gap: gap)
         let offsetX: CGFloat = (size.width - displayBounds.width * scale) / 2
         return frames.map { rect in
             CGRect(x: offsetX + rect.minX * scale, y: rect.minY * scale,
@@ -394,9 +394,9 @@ private struct PreviewTile: View {
     let index: Int
     let rect: CGRect
     var body: some View {
-        RoundedRectangle(cornerRadius: 5).fill(QuiltStyle.accent.opacity(0.10))
-            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(QuiltStyle.accent.opacity(0.35)))
-            .overlay(Text("\(index + 1)").font(Font.caption.weight(.medium)).foregroundStyle(QuiltStyle.accent))
+        RoundedRectangle(cornerRadius: 5).fill(TilezStyle.accent.opacity(0.10))
+            .overlay(RoundedRectangle(cornerRadius: 5).strokeBorder(TilezStyle.accent.opacity(0.35)))
+            .overlay(Text("\(index + 1)").font(Font.caption.weight(.medium)).foregroundStyle(TilezStyle.accent))
             .frame(width: rect.width, height: rect.height)
             .offset(x: rect.minX, y: rect.minY)
     }
@@ -414,7 +414,7 @@ struct SnapshotsView: View {
                 HStack {
                     TextField("Layout name, e.g. Six Codex windows", text: $name).textFieldStyle(.roundedBorder)
                         .onSubmit { save() }
-                    Button("Save Desktop") { save() }.buttonStyle(QuiltButtonStyle(role: .primary)).disabled(!manager.trusted)
+                    Button("Save Desktop") { save() }.buttonStyle(TilezButtonStyle(role: .primary)).disabled(!manager.trusted)
                 }
                 if preferences.layouts.isEmpty {
                     ContentUnavailableView("No saved layouts yet", systemImage: "square.stack.3d.up", description: Text("Arrange your windows, then save your desktop here."))
@@ -435,7 +435,7 @@ struct SnapshotsView: View {
                                isOn: Binding(get: { preferences.layouts.first { $0.id == layout.id }?.autoRestore ?? false },
                                              set: { manager.pinLayout(layout.id, enabled: $0) }))
                             .font(.caption)
-                    }.quiltSurface()
+                    }.tilezSurface()
                 }
                 Text("Restore matches open windows by app and title, then by position in the app’s window list. It does not launch apps or reopen documents. Identical titles may be matched in a different order after an app restarts.")
                     .font(.caption).foregroundStyle(.secondary)
@@ -505,10 +505,10 @@ private struct SettingsView: View {
                     }
                 }
                 Toggle("Remember manual moves for Undo", isOn: $preferences.undoManual)
-                Text("Keeps up to 50 recent arrangements in memory. Undo is cleared when Quilt quits.").font(.caption).foregroundStyle(.secondary)
+                Text("Keeps up to 50 recent arrangements in memory. Undo is cleared when Tilez quits.").font(.caption).foregroundStyle(.secondary)
             }
             Section("Startup") {
-                Toggle("Launch Window Quilt at login", isOn: $loginEnabled)
+                Toggle("Launch Tilez at login", isOn: $loginEnabled)
                     .onChange(of: loginEnabled) { _, enabled in
                         do {
                             if enabled { try SMAppService.mainApp.register() } else { try SMAppService.mainApp.unregister() }
@@ -524,10 +524,10 @@ private struct SettingsView: View {
                     Spacer()
                     Button("Open System Settings") { openAccessibility() }
                 }
-                Text("Window Quilt works entirely on your Mac. No accounts, analytics, network requests, or screen recording. Saved layouts keep app identifiers, window titles, and positions locally.")
+                Text("Tilez works entirely on your Mac. No accounts, analytics, network requests, or screen recording. Saved layouts keep app identifiers, window titles, and positions locally.")
                     .font(.caption).foregroundStyle(.secondary)
             }
-            Section("Window Quilt 1.7.1") {
+            Section("Tilez 1.7.1") {
                 Text("A native window manager, built for your workspace.").foregroundStyle(.secondary)
             }
         }.formStyle(.grouped)
@@ -536,17 +536,17 @@ private struct SettingsView: View {
 
 private struct GuideView: View {
     private let sections: [(String, String, String)] = [
-        ("square.grid.2x2", "One click to tile", "Click the Quilt icon in your menu bar. Open a saved setup, or choose New arrangement, click or drag a grid, and choose an app. The same flow is available in the main window."),
-        ("macwindow.badge.plus", "Choose how many windows", "A 3 × 2 grid requests six windows. Quilt reuses eligible windows on the destination desktop and opens any missing ones. Extra windows stay open. Choose from installed apps using the searchable icon list. Apps without a New Window command may require you to open additional windows manually."),
+        ("square.grid.2x2", "One click to tile", "Click the Tilez icon in your menu bar. Open a saved setup, or choose New arrangement, click or drag a grid, and choose an app. The same flow is available in the main window."),
+        ("macwindow.badge.plus", "Choose how many windows", "A 3 × 2 grid requests six windows. Tilez reuses eligible windows on the destination desktop and opens any missing ones. Extra windows stay open. Choose from installed apps using the searchable icon list. Apps without a New Window command may require you to open additional windows manually."),
         ("rectangle.on.rectangle", "Separate desktops and saved setups", "Expand Options to choose a desktop, display, spacing, or window behavior. New desktop opens a separate set. Use as defaults remembers these choices for future arrangements; saved setups keep their own options. Desktop control is experimental and needs macOS 26.4 or later for cross-desktop moves; Mission Control may appear briefly."),
-        ("eye", "Keep it in order", "In Tools → Arrange selected windows, enable Watch for an app. Quilt retiles when its eligible windows open, close, minimize, or return. Watch applies to all its eligible windows and resets when the app or Quilt quits."),
+        ("eye", "Keep it in order", "In Tools → Arrange selected windows, enable Watch for an app. Tilez retiles when its eligible windows open, close, minimize, or return. Watch applies to all its eligible windows and resets when the app or Tilez quits."),
         ("command", "Snap with your keyboard", "Control–Option–arrow snaps a window. Repeat within two seconds to cycle half, one third, and two thirds. U/I/J/K select corners; D/F/G select thirds. Return maximizes; C centers. All shortcuts are editable."),
         ("hand.draw", "Draw your own space", "Press Control–Option–Space while a window is focused. Draw on the display under your pointer, then release. The rectangle snaps to a 24 × 16 guide. Escape cancels."),
         ("arrow.up.left.and.arrow.down.right", "Drag or swipe", "Drag a window to a screen edge and release when you see the preview. Optional two-finger title-bar swipes snap left/right, maximize upward, and center downward."),
         ("display.2", "Move between displays", "Control–Option–] and [ move the focused window to the next or previous display while preserving its relative size and position."),
         ("square.stack.3d.up", "Save a workspace", "After arranging, choose Save this setup for a reusable app arrangement. Setup cards run with one click; their menu contains Edit, Duplicate, and Delete. Tools → Desktop snapshots captures existing window positions across apps. Snapshots require those apps and documents to be open."),
-        ("arrow.uturn.backward", "Change your mind", "Control–Option–Z undoes a grid, snap, restore, or a manual window move observed while Quilt is running."),
-        ("info.circle", "A few practical details", "Quilt lists normal, minimized, hidden, full-screen, and fixed-size app windows. Dialogs are excluded. Tiling restores selected windows and waits for full-screen exit; enable Keep full-screen windows to preserve their Spaces. Watch only arranges visible, resizable windows outside full screen. Some apps expose windows from other Spaces. App minimum sizes can prevent a dense grid from fitting; Quilt reports this in its status bar.")
+        ("arrow.uturn.backward", "Change your mind", "Control–Option–Z undoes a grid, snap, restore, or a manual window move observed while Tilez is running."),
+        ("info.circle", "A few practical details", "Tilez lists normal, minimized, hidden, full-screen, and fixed-size app windows. Dialogs are excluded. Tiling restores selected windows and waits for full-screen exit; enable Keep full-screen windows to preserve their Spaces. Watch only arranges visible, resizable windows outside full screen. Some apps expose windows from other Spaces. App minimum sizes can prevent a dense grid from fitting; Tilez reports this in its status bar.")
     ]
     var body: some View {
         ScrollView {
@@ -554,7 +554,7 @@ private struct GuideView: View {
                 Text("Meet your new workspace.").font(.system(size: 26, weight: .bold, design: .rounded))
                 ForEach(sections, id: \.0) { symbol, title, detail in
                     HStack(alignment: .top, spacing: 16) {
-                        Image(systemName: symbol).font(.title2).foregroundStyle(QuiltStyle.accent).frame(width: 30)
+                        Image(systemName: symbol).font(.title2).foregroundStyle(TilezStyle.accent).frame(width: 30)
                         VStack(alignment: .leading, spacing: 6) {
                             Text(title).font(.headline)
                             Text(detail).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)

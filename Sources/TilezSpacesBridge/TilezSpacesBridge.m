@@ -1,4 +1,4 @@
-#import "QuiltSpacesBridge.h"
+#import "TilezSpacesBridge.h"
 #import <objc/message.h>
 #import <dlfcn.h>
 
@@ -7,13 +7,13 @@ static Class operationClass(void) {
     if (!library) library = dlopen("/System/Library/PrivateFrameworks/SkyLight.framework/SkyLight", RTLD_LAZY);
     return library ? NSClassFromString(@"SLSBridgedMoveWindowsToManagedSpaceOperation") : Nil;
 }
-bool QuiltCanMoveToSpace(void) {
+bool TilezCanMoveToSpace(void) {
     Class cls = operationClass();
     return cls && [cls instancesRespondToSelector:NSSelectorFromString(@"initWithWindows:spaceID:")]
         && [cls instancesRespondToSelector:NSSelectorFromString(@"performWithWMBridgeDelegate")];
 }
-bool QuiltMoveToSpace(CFArrayRef windows, uint64_t space) {
-    if (!QuiltCanMoveToSpace()) return false;
+bool TilezMoveToSpace(CFArrayRef windows, uint64_t space) {
+    if (!TilezCanMoveToSpace()) return false;
     @try {
         id instance = [operationClass() alloc];
         SEL initializer = NSSelectorFromString(@"initWithWindows:spaceID:");

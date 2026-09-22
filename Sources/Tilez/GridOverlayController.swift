@@ -54,7 +54,7 @@ private final class GridPanel: NSPanel {
         if panel == nil {
             let panel = GridPanel(contentRect: display.screen.visibleFrame,
                                   styleMask: [.borderless], backing: .buffered, defer: false)
-            panel.title = "Window Quilt — Desktop Grid"
+            panel.title = "Tilez — Desktop Grid"
             panel.identifier = NSUserInterfaceItemIdentifier("desktop-grid")
             panel.isOpaque = false; panel.backgroundColor = .clear; panel.hasShadow = false
             panel.level = .floating; panel.hidesOnDeactivate = false

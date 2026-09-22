@@ -1,6 +1,6 @@
 import AppKit
 import Combine
-import QuiltCore
+import TilezCore
 
 struct GridAppChoice: Identifiable, Sendable {
     let app: GridApp
@@ -434,7 +434,7 @@ struct GridAppChoice: Identifiable, Sendable {
         guard !busy, grid.isValid, let display, let desktop,
               grid.filledCount > 0 || originalGrid.filledCount > 0 else { return }
         guard Desktops.current(displayID: display.id, includeFullScreen: true)?.number == desktop.number else {
-            message = "The desktop changed. Reopen Quilt on the desktop you want."; isError = true; return
+            message = "The desktop changed. Reopen Tilez on the desktop you want."; isError = true; return
         }
         discoveryTask?.cancel()
         trusted = Accessibility.trusted

@@ -1,5 +1,5 @@
 import AppKit
-import QuiltCore
+import TilezCore
 
 enum GridDirection {
     case left, right, up, down
@@ -56,7 +56,7 @@ enum GridDirection {
         } else { selectedCell = target }
     }
 
-    private static let appPasteboardType = NSPasteboard.PasteboardType("com.local.windowquilt.grid-app")
+    private static let appPasteboardType = NSPasteboard.PasteboardType("com.local.tilez.grid-app")
 
     func copySelectedApp() {
         guard let index = selectedCell, grid.slots.indices.contains(index),
@@ -79,7 +79,7 @@ enum GridDirection {
         assign(app)
     }
 
-    /// Return true only when Quilt consumed the event. Text fields keep standard
+    /// Return true only when Tilez consumed the event. Text fields keep standard
     /// editing shortcuts, including Shift–Arrow and Command–Shift–Arrow selection.
     func handleKey(_ event: NSEvent, editingText: Bool) -> Bool {
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])

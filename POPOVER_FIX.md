@@ -2,7 +2,7 @@
 
 The screenshot's cut-off header was reproduced in the real app. The popover occupied `(3076, 2563, 416, 686)` on a visible display at `(822, 1243, 3008, 1662)`: its top extended **344 points above** the visible display.
 
-The original repro command was `python3 /private/tmp/quilt-popover-check/verify.py`, against temporary measurements from the actual menu-bar opening path. It failed with `panel header extends above the visible display`.
+The original repro command was `python3 /private/tmp/tilez-popover-check/verify.py`, against temporary measurements from the actual menu-bar opening path. It failed with `panel header extends above the visible display`.
 
 Setting `NSPopover.contentSize` alone did not fix the failure. Disabling `NSHostingController` automatic sizing and laying out the hosting view before presentation removed the large late resize/offset. The final controller also anchors the actual native window below the status item's own screen-space rectangle, with an inset from that display's visible edges. This includes native border and arrow dimensions.
 
@@ -17,4 +17,4 @@ The view fills the size assigned by AppKit. It no longer derives a fixed 660-poi
 - Synthetic geometry checks include the user's vertically offset monitor, a negative-origin monitor, a 500-point-tall display, many saved setups, and anchors at both horizontal edges.
 - Temporary production telemetry was removed. No window-arrangement or desktop-switching engine changes were required for this fix.
 
-To repeat the native regression, build `./scripts/build-popover-check.sh`, open `.build/Quilt Popover Check.app`, click **Run native popover checks**, then run `python3 Tests/PopoverFixture/verify.py`. The fixture only manipulates its own test UI. Its report is written to `/private/tmp/quilt-popover-check/native-regression.json`.
+To repeat the native regression, build `./scripts/build-popover-check.sh`, open `.build/Tilez Popover Check.app`, click **Run native popover checks**, then run `python3 Tests/PopoverFixture/verify.py`. The fixture only manipulates its own test UI. Its report is written to `/private/tmp/tilez-popover-check/native-regression.json`.

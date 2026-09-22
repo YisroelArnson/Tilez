@@ -1,4 +1,4 @@
-import QuiltCore
+import TilezCore
 
 func checkWindowMenus() {
     struct Item {

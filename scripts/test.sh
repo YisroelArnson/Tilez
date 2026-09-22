@@ -1,12 +1,12 @@
 #!/bin/bash
 set -euo pipefail
-QUILT_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$QUILT_ROOT"
+TILEZ_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$TILEZ_ROOT"
 mkdir -p .build/module-cache
-export CLANG_MODULE_CACHE_PATH="$QUILT_ROOT/.build/module-cache"
-swift run --disable-sandbox QuiltCoreChecks
-QUILT_BIN="$(swift build --show-bin-path --disable-sandbox)"
-swiftc -module-cache-path "$QUILT_ROOT/.build/module-cache" -I "$QUILT_BIN/Modules" \
-  "$QUILT_ROOT/Sources/WindowQuilt/Preferences.swift" "$QUILT_ROOT/Tests/PreferencesChecks/main.swift" \
-  "$QUILT_BIN/QuiltCore.build/"*.swift.o -o "$QUILT_ROOT/.build/preferences-checks"
-"$QUILT_ROOT/.build/preferences-checks"
+export CLANG_MODULE_CACHE_PATH="$TILEZ_ROOT/.build/module-cache"
+swift run --disable-sandbox TilezCoreChecks
+TILEZ_BIN="$(swift build --show-bin-path --disable-sandbox)"
+swiftc -module-cache-path "$TILEZ_ROOT/.build/module-cache" -I "$TILEZ_BIN/Modules" \
+  "$TILEZ_ROOT/Sources/Tilez/Preferences.swift" "$TILEZ_ROOT/Tests/PreferencesChecks/main.swift" \
+  "$TILEZ_BIN/TilezCore.build/"*.swift.o -o "$TILEZ_ROOT/.build/preferences-checks"
+"$TILEZ_ROOT/.build/preferences-checks"

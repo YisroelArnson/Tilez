@@ -1,6 +1,6 @@
 import AppKit
 import ApplicationServices
-import QuiltCore
+import TilezCore
 
 struct ManagedWindow: Identifiable {
     let element: AXUIElement
@@ -57,7 +57,7 @@ struct Display: Identifiable {
 enum Accessibility {
     // AX is synchronous IPC. Keep grid operations off the event loop and serialize
     // them so a slow app cannot stall typing, dragging, or the Escape shortcut.
-    private static let workQueue = DispatchQueue(label: "com.local.windowquilt.accessibility", qos: .userInitiated)
+    private static let workQueue = DispatchQueue(label: "com.local.tilez.accessibility", qos: .userInitiated)
     private static let inventoryLock = NSLock()
 
     static func perform<T>(_ operation: @escaping () -> T) async throws -> T {
@@ -232,7 +232,7 @@ enum Accessibility {
         var errorDescription: String? {
             switch self {
             case .appClosed: return "The selected app is no longer running."
-            case .unavailable(let name): return "\(name) has no enabled New Window command. Quilt can reopen and arrange its existing window, but cannot create extra independent windows."
+            case .unavailable(let name): return "\(name) has no enabled New Window command. Tilez can reopen and arrange its existing window, but cannot create extra independent windows."
             case .failed: return "The app did not accept its New Window command."
             case .transition(let name): return "\(name) did not finish leaving full screen or restoring its window. No grid was applied; try again after its animation or dialog finishes."
             }

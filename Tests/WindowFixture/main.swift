@@ -11,7 +11,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
         let bar = NSMenu()
         let appItem = NSMenuItem()
         let appMenu = NSMenu()
-        appMenu.addItem(NSMenuItem(title: "Quit Quilt Window Test", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
+        appMenu.addItem(NSMenuItem(title: "Quit Tilez Window Test", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q"))
         appItem.submenu = appMenu; bar.addItem(appItem)
         let fileItem = NSMenuItem(title: "File", action: nil, keyEquivalent: "")
         let file = NSMenu(title: "File")
@@ -30,7 +30,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
                          styleMask: [.titled, .closable, .miniaturizable, .resizable], backing: .buffered, defer: false)
         w.tabbingMode = .disallowed
         w.collectionBehavior.insert(.fullScreenPrimary)
-        w.title = "Quilt test window \(nextID)"
+        w.title = "Tilez test window \(nextID)"
         w.minSize = CGSize(width: 100, height: 100)
         w.isReleasedWhenClosed = false
         w.delegate = self
@@ -58,7 +58,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSWindowDelegate {
                     "x": window.frame.minX, "y": window.frame.minY, "w": window.frame.width, "h": window.frame.height]
         }
         let data = try! JSONSerialization.data(withJSONObject: frames, options: [.prettyPrinted, .sortedKeys])
-        try? data.write(to: URL(fileURLWithPath: "/private/tmp/quilt-window-fixture/windows.json"), options: .atomic)
+        try? data.write(to: URL(fileURLWithPath: "/private/tmp/tilez-window-fixture/windows.json"), options: .atomic)
     }
 }
 let app = NSApplication.shared

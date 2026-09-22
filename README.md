@@ -1,4 +1,6 @@
-# Window Quilt
+# Tilez
+
+*Formerly Window Quilt.*
 
 A native macOS pane editor for the screen and desktop you are using. The overlay starts from the windows that are actually visible, including uneven sizes and overlapping arrangements. An empty desktop starts with one empty pane.
 
@@ -8,7 +10,7 @@ Press **Control–Option–Space** or click the grid icon in the menu bar. The p
 - Drag across the little grid in the bar to explicitly redistribute the current panes into up to **6 columns × 4 rows**.
 - Click a pane to select it. **Double-click** it, or click its app icon, to search for an installed app and select it. Hovering a pane shows its edge controls, so you can split or merge without selecting it first. Mix apps or choose the same app more than once.
 - **Drag a cell onto another to swap** their apps and existing window assignments. **Shift-drag to repeat an app**, creating a separate window when the grid opens. Right-click a cell to repeat its app into every empty cell.
-- **Apply / Return** commits the preview. New panes open independent windows on the desktop where you invoked Quilt. Existing windows on other desktops are not borrowed.
+- **Apply / Return** commits the preview. New panes open independent windows on the desktop where you invoked Tilez. Existing windows on other desktops are not borrowed.
 - **Remove pane / Delete** expands a neighboring pane where possible and closes the removed window on Apply. Undo restores the pane before applying; Escape cancels the draft. Native save dialogs remain under the app’s control.
 - **⌘Shift–Delete** removes all panes from the current draft, leaving one empty cell. Press **Return / Apply** to close their windows, or **⌘Z** to restore the entire layout in one step. Also available under **… → Close all panes on Apply**.
 - Invoke the same shortcut again to edit the current desktop's grid, then choose **Apply**.
@@ -29,22 +31,22 @@ Requires macOS 14 or later, Swift 5.9 or later, and Apple's Command Line Tools. 
 
 ```bash
 bash scripts/build.sh
-open "dist/Window Quilt.app"
+open "dist/Tilez.app"
 ```
 
-The built app is version **2.0.0**, bundle ID `com.local.windowquilt`. Grant it Accessibility access when the inline prompt appears. No Input Monitoring permission is needed for the grid shortcut.
+The built app is version **2.0.0**, bundle ID `com.local.tilez`. Grant it Accessibility access when the inline prompt appears. No Input Monitoring permission is needed for the grid shortcut.
 
 Only one copy should run at a time. The app in `dist/` and an installed copy use the same bundle identity and preferences.
 
 ## Window behavior
 
-The invocation captures a particular display and desktop. Quilt reuses eligible windows there and opens independent windows for remaining cells. New windows can inherit an app's full-screen Space; Quilt identifies those new windows, waits for their transitions, restores them, and moves them back before applying the grid. Existing windows on unrelated desktops are not gathered. A window's identity includes its owning process launch, preventing stale IDs from matching after an app restart.
+The invocation captures a particular display and desktop. Tilez reuses eligible windows there and opens independent windows for remaining cells. New windows can inherit an app's full-screen Space; Tilez identifies those new windows, waits for their transitions, restores them, and moves them back before applying the grid. Existing windows on unrelated desktops are not gathered. A window's identity includes its owning process launch, preventing stale IDs from matching after an app restart.
 
 Each invocation takes a fresh WindowServer snapshot of the visible desktop. Fully covered windows are omitted; partially visible windows retain their actual bounds. Accessibility refinement runs off the UI thread and never overwrites a draft once editing starts. Escape discards the draft. Only explicitly saved templates persist; they include unequal pane geometry but no live window identities. The editor does not run legacy all-app polling or auto-restore monitors.
 
 A native macOS full-screen window appears as one pane. Applying it unchanged keeps it full screen. Applying edits first restores that exact window to its regular desktop on the same display, re-reads the usable display bounds, and opens any added panes there. The overlay explains this transition before Apply. Switching desktops while editing dismisses the overlay.
 
-Apps must support independent windows to occupy multiple cells. Quilt uses their enabled New Window command, not New Chat or New Conversation actions that might replace existing content. If an app cannot create a window, is showing a dialog, or imposes a minimum size, the overlay reports the problem. AX bounds are checked after the app has time to settle, with bounded retries for only the windows that have not settled. Windows already in place finish immediately.
+Apps must support independent windows to occupy multiple cells. Tilez uses their enabled New Window command, not New Chat or New Conversation actions that might replace existing content. If an app cannot create a window, is showing a dialog, or imposes a minimum size, the overlay reports the problem. AX bounds are checked after the app has time to settle, with bounded retries for only the windows that have not settled. Windows already in place finish immediately.
 
 New Window submenus are resolved to an enabled action, preferring the default profile's Command-N item. This supports Terminal-style profile menus without pressing the submenu heading or choosing an arbitrary profile. Menu traversal remains bounded and runs on the Accessibility worker during grid application.
 
@@ -67,10 +69,10 @@ Native UI checks include invoking the menu and shortcut, positioning the overlay
 
 ## Preserved original
 
-Before the redesign, the complete original source and built app were archived to:
+Before the redesign, the complete original Window Quilt source and built app were archived to:
 
 `backups/WindowQuilt-before-grid-2026-09-14.tar.gz`
 
-The Git commit `d59a1f5` on `main` and `backup/pre-grid-2026-09-14` preserves version 1.7.1. The new work is on `feature/desktop-grid`. The archive includes the original app bundle and distribution zip; disposable Swift build caches are excluded. Old preferences and saved setups are left intact, while saved templates remain under `savedGridsV2`. Legacy `desktopGridsV2` drafts are left intact but no longer override the live desktop.
+The Git commit `d59a1f5` on `main` and `backup/pre-grid-2026-09-14` preserves Window Quilt version 1.7.1. The desktop grid redesign is merged into `main`. The archive includes the original app bundle and distribution zip; disposable Swift build caches are excluded. Old preferences and saved setups are left intact (under the former `com.local.windowquilt` bundle ID), while saved templates remain under `savedGridsV2`. Legacy `desktopGridsV2` drafts are left intact but no longer override the live desktop.
 
 Historical `*_UX_*.md`, `UI_POLISH*.md`, `ACTIVE_LAYOUTS.md`, `SIMPLIFIED_UI.md`, and `POPOVER_FIX.md` describe the preserved 1.x interface, not the new entry point.

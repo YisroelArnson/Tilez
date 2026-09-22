@@ -2,7 +2,7 @@ import AppKit
 import SwiftUI
 
 /// Shared surface and interaction values for the native interface.
-enum QuiltStyle {
+enum TilezStyle {
     static let inset: CGFloat = 16
     static let innerRadius: CGFloat = 8
     static let outerRadius: CGFloat = innerRadius + inset
@@ -16,23 +16,23 @@ enum QuiltStyle {
     static let primaryFill = Color(red: 0.0, green: 0.40, blue: 0.43)
 }
 
-private struct QuiltSurface: ViewModifier {
+private struct TilezSurface: ViewModifier {
     var tinted = false
     @Environment(\.colorScheme) private var scheme
     func body(content: Content) -> some View {
-        content.padding(QuiltStyle.inset)
+        content.padding(TilezStyle.inset)
             .background {
-                RoundedRectangle(cornerRadius: QuiltStyle.outerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: TilezStyle.outerRadius, style: .continuous)
                     .fill(Color(nsColor: .controlBackgroundColor))
                     .overlay {
                         if tinted {
-                            RoundedRectangle(cornerRadius: QuiltStyle.outerRadius, style: .continuous)
-                                .fill(QuiltStyle.accent.opacity(scheme == .dark ? 0.07 : 0.035))
+                            RoundedRectangle(cornerRadius: TilezStyle.outerRadius, style: .continuous)
+                                .fill(TilezStyle.accent.opacity(scheme == .dark ? 0.07 : 0.035))
                         }
                     }
                     // Native equivalent of the neutral ring + two transparent shadow layers.
                     .overlay {
-                        RoundedRectangle(cornerRadius: QuiltStyle.outerRadius, style: .continuous)
+                        RoundedRectangle(cornerRadius: TilezStyle.outerRadius, style: .continuous)
                             .strokeBorder(scheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.06), lineWidth: 1)
                     }
                     .shadow(color: .black.opacity(scheme == .dark ? 0 : 0.06), radius: 1, x: 0, y: 1)
@@ -42,23 +42,23 @@ private struct QuiltSurface: ViewModifier {
 }
 
 extension View {
-    func quiltSurface(tinted: Bool = false) -> some View { modifier(QuiltSurface(tinted: tinted)) }
+    func tilezSurface(tinted: Bool = false) -> some View { modifier(TilezSurface(tinted: tinted)) }
 }
 
-enum QuiltButtonRole { case primary, secondary, quiet, destructive }
+enum TilezButtonRole { case primary, secondary, quiet, destructive }
 
-struct QuiltButtonStyle: ButtonStyle {
-    var role: QuiltButtonRole = .secondary
+struct TilezButtonStyle: ButtonStyle {
+    var role: TilezButtonRole = .secondary
     var isStatic = false
     var iconOnly = false
     func makeBody(configuration: Configuration) -> some View {
-        QuiltButtonBody(configuration: configuration, role: role, isStatic: isStatic, iconOnly: iconOnly)
+        TilezButtonBody(configuration: configuration, role: role, isStatic: isStatic, iconOnly: iconOnly)
     }
 }
 
-private struct QuiltButtonBody: View {
+private struct TilezButtonBody: View {
     let configuration: ButtonStyleConfiguration
-    let role: QuiltButtonRole
+    let role: TilezButtonRole
     let isStatic: Bool
     let iconOnly: Bool
     @Environment(\.isEnabled) private var enabled
@@ -73,7 +73,7 @@ private struct QuiltButtonBody: View {
     private var fill: Color {
         if !enabled { return Color.primary.opacity(0.045) }
         switch role {
-        case .primary: return QuiltStyle.primaryFill
+        case .primary: return TilezStyle.primaryFill
         case .secondary: return Color(nsColor: .controlBackgroundColor)
         case .quiet, .destructive: return Color.primary.opacity(hovered ? 0.06 : 0)
         }
@@ -91,25 +91,25 @@ private struct QuiltButtonBody: View {
             .foregroundStyle(ink)
             .padding(.horizontal, iconOnly ? 0 : 12)
             .frame(minWidth: 32, minHeight: 32)
-            .background(fill, in: RoundedRectangle(cornerRadius: QuiltStyle.innerRadius, style: .continuous))
+            .background(fill, in: RoundedRectangle(cornerRadius: TilezStyle.innerRadius, style: .continuous))
             .overlay {
-                RoundedRectangle(cornerRadius: QuiltStyle.innerRadius, style: .continuous)
-                    .strokeBorder(focused ? QuiltStyle.accent : (role == .secondary ? Color.primary.opacity(0.10) : .clear), lineWidth: focused ? 2 : 1)
+                RoundedRectangle(cornerRadius: TilezStyle.innerRadius, style: .continuous)
+                    .strokeBorder(focused ? TilezStyle.accent : (role == .secondary ? Color.primary.opacity(0.10) : .clear), lineWidth: focused ? 2 : 1)
             }
             .overlay {
-                RoundedRectangle(cornerRadius: QuiltStyle.innerRadius, style: .continuous)
+                RoundedRectangle(cornerRadius: TilezStyle.innerRadius, style: .continuous)
                     .fill(Color.primary.opacity(enabled && (configuration.isPressed || hovered) ? (role == .primary ? 0.10 : 0.035) : 0))
                     .allowsHitTesting(false)
             }
-            .contentShape(RoundedRectangle(cornerRadius: QuiltStyle.innerRadius))
-            .scaleEffect(enabled && configuration.isPressed && !isStatic && !reduceMotion && pointerEvent ? QuiltStyle.pressScale : 1)
+            .contentShape(RoundedRectangle(cornerRadius: TilezStyle.innerRadius))
+            .scaleEffect(enabled && configuration.isPressed && !isStatic && !reduceMotion && pointerEvent ? TilezStyle.pressScale : 1)
             // Scoped to the press state; page loads and appearance changes never animate.
-            .animation(enabled && !isStatic && !reduceMotion && pointerEvent ? QuiltStyle.pressAnimation : nil, value: configuration.isPressed)
+            .animation(enabled && !isStatic && !reduceMotion && pointerEvent ? TilezStyle.pressAnimation : nil, value: configuration.isPressed)
             .onHover { hovered = $0 }
     }
 }
 
-struct QuiltSectionLabel: View {
+struct TilezSectionLabel: View {
     let title: String
     let symbol: String
     var body: some View {
@@ -119,7 +119,7 @@ struct QuiltSectionLabel: View {
     }
 }
 
-struct QuiltWindowRow: View {
+struct TilezWindowRow: View {
     let window: ManagedWindow
     @Binding var selected: Bool
     @Environment(\.isEnabled) private var enabled
@@ -128,7 +128,7 @@ struct QuiltWindowRow: View {
             HStack(spacing: 10) {
                 Image(systemName: "macwindow")
                     .font(.system(size: 14, weight: selected ? .semibold : .regular))
-                    .foregroundStyle(selected ? QuiltStyle.accent : .secondary)
+                    .foregroundStyle(selected ? TilezStyle.accent : .secondary)
                     .frame(width: 18)
                 Text(window.title.isEmpty ? "Untitled window" : window.title).lineLimit(1)
                 Spacer(minLength: 8)
@@ -142,9 +142,9 @@ struct QuiltWindowRow: View {
         .toggleStyle(.checkbox)
         .padding(.horizontal, 10).padding(.vertical, 9)
         .frame(minHeight: 36)
-        .background(selected ? QuiltStyle.accent.opacity(0.065) : .clear, in: RoundedRectangle(cornerRadius: 8))
+        .background(selected ? TilezStyle.accent.opacity(0.065) : .clear, in: RoundedRectangle(cornerRadius: 8))
         .overlay {
-            RoundedRectangle(cornerRadius: 8).strokeBorder(selected ? QuiltStyle.accent.opacity(0.22) : .clear, lineWidth: 1)
+            RoundedRectangle(cornerRadius: 8).strokeBorder(selected ? TilezStyle.accent.opacity(0.22) : .clear, lineWidth: 1)
         }
         .opacity(enabled ? 1 : 0.55)
     }

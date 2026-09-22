@@ -1,6 +1,6 @@
 import AppKit
 import SwiftUI
-import QuiltCore
+import TilezCore
 
 /// AppKit owns the popover size; the SwiftUI view fills that size without resizing
 /// the window after AppKit has positioned it against the status item.
