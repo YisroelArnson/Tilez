@@ -34,6 +34,13 @@ bash scripts/build.sh
 open "dist/Tilez.app"
 ```
 
+The app uses a black-and-white three-pane icon and monochrome interface accents. The approved icon artwork lives in `Resources/AppIcon.png`. To regenerate the macOS icon sizes and `.icns` bundle after replacing the artwork:
+
+```bash
+swift -module-cache-path .build/module-cache scripts/icon.swift Resources
+bash scripts/build.sh
+```
+
 The built app is version **2.0.0**, bundle ID `com.local.tilez`. Grant it Accessibility access when the inline prompt appears. No Input Monitoring permission is needed for the grid shortcut.
 
 Only one copy should run at a time. The app in `dist/` and an installed copy use the same bundle identity and preferences.

@@ -2,7 +2,8 @@ import AppKit
 import SwiftUI
 import TilezCore
 
-private let gridBlue = Color(red: 0.02, green: 0.39, blue: 1)
+// Light control surfaces use black; desktop selections use white for contrast.
+private let gridAccent = Color.black
 
 struct GridGlass: NSViewRepresentable {
     var material: NSVisualEffectView.Material = .hudWindow
@@ -25,7 +26,7 @@ private struct GridButtonStyle: ButtonStyle {
             .font(.system(size: 13, weight: .medium))
             .foregroundStyle(primary ? Color.white : Color.primary)
             .padding(.horizontal, 12).frame(minHeight: 34)
-            .background(primary ? gridBlue : Color.white.opacity(configuration.isPressed ? 0.75 : 0.4),
+            .background(primary ? gridAccent : Color.white.opacity(configuration.isPressed ? 0.75 : 0.4),
                         in: RoundedRectangle(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(primary ? Color.clear : Color.white.opacity(0.6)))
             .opacity(enabled ? 1 : 0.4)
@@ -77,7 +78,7 @@ struct DesktopGridView: View {
             }
             .frame(width: canvas.width, height: canvas.height)
         }
-        .tint(gridBlue)
+        .tint(gridAccent)
         .preferredColorScheme(.light)
         .onChange(of: model.saving) { _, showing in nameFocused = showing }
         .onChange(of: model.hasActiveLayer) { _, active in
@@ -215,7 +216,7 @@ struct DesktopGridView: View {
                 HStack(spacing: 10) {
                     Image(nsImage: model.icon(for: app)).resizable().frame(width: 36, height: 36)
                     Text(app.name).font(.system(size: 15, weight: .medium))
-                    if repeatDrag { Image(systemName: "plus.circle.fill").foregroundStyle(gridBlue) }
+                    if repeatDrag { Image(systemName: "plus.circle.fill").foregroundStyle(gridAccent) }
                 }.padding(12).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
                     .shadow(radius: 12, y: 5)
                     .position(x: frames[source].midX + dragTranslation.width, y: frames[source].midY + dragTranslation.height)
@@ -255,7 +256,8 @@ struct DesktopGridView: View {
         let x = (divider.vertical ? divider.position : (divider.lower + divider.upper) / 2) * width
         let y = (divider.vertical ? (divider.lower + divider.upper) / 2 : divider.position) * height
         return RoundedRectangle(cornerRadius: 3)
-            .fill(activeDivider?.id == divider.id ? gridBlue : Color.white.opacity(0.65))
+            .fill(activeDivider?.id == divider.id ? Color.white : Color.white.opacity(0.65))
+            .shadow(color: .black.opacity(0.65), radius: activeDivider?.id == divider.id ? 2 : 0)
             .frame(width: divider.vertical ? 3 : max(16, length - 28), height: divider.vertical ? max(16, length - 28) : 3)
             .frame(width: handleWidth, height: handleHeight)
             .contentShape(Rectangle()).position(x: x, y: y)
@@ -306,7 +308,7 @@ struct DesktopGridView: View {
     private func edgeButton(_ symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol).font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(gridBlue).frame(width: 24, height: 24)
+                .foregroundStyle(gridAccent).frame(width: 24, height: 24)
                 .background(.white, in: Circle()).shadow(color: .black.opacity(0.15), radius: 3, y: 1)
                 .frame(width: 32, height: 32).contentShape(Circle())
         }.buttonStyle(.plain)
@@ -325,7 +327,8 @@ struct DesktopGridView: View {
             RoundedRectangle(cornerRadius: 14)
                 .fill(reduceTransparency ? Color(white: 0.25) : Color.white.opacity(hoveredCell == index ? 0.18 : 0.10))
             RoundedRectangle(cornerRadius: 14)
-                .strokeBorder(selected ? gridBlue : .white.opacity(0.65), lineWidth: selected ? 2.5 : 1)
+                .strokeBorder(selected ? Color.white : .white.opacity(0.45), lineWidth: selected ? 3 : 1)
+                .shadow(color: .black.opacity(selected ? 0.75 : 0), radius: 2)
             // Clicking a pane only selects it; double-click or its center opens the chooser.
             Color.clear.contentShape(Rectangle())
                 .gesture(TapGesture(count: 2).onEnded { if canClickCell { model.choose(index) } })
@@ -416,7 +419,7 @@ struct DesktopGridView: View {
                                     Image(nsImage: model.icon(for: choice.app)).resizable().frame(width: 30, height: 30)
                                     Text(choice.app.name).font(.system(size: 14)).lineLimit(1)
                                     Spacer()
-                                    if currentApp == choice.app { Image(systemName: "checkmark").foregroundStyle(gridBlue) }
+                                    if currentApp == choice.app { Image(systemName: "checkmark").foregroundStyle(gridAccent) }
                                 }.padding(.horizontal, 8).padding(.vertical, 7).contentShape(Rectangle())
                             }.buttonStyle(AppRowStyle(selected: model.selectedAppChoice?.id == choice.id))
                                 .id(choice.id)
@@ -467,7 +470,7 @@ struct DesktopGridView: View {
                             HStack {
                                 Button { model.load(item) } label: {
                                     HStack {
-                                        Image(systemName: "square.grid.2x2").foregroundStyle(gridBlue)
+                                        Image(systemName: "square.grid.2x2").foregroundStyle(gridAccent)
                                         VStack(alignment: .leading, spacing: 3) {
                                             Text(item.name).lineLimit(1)
                                             Text("\(item.grid.columns) × \(item.grid.rows) · \(item.grid.filledCount) apps")
@@ -630,7 +633,7 @@ private struct AppRowStyle: ButtonStyle {
         @State private var hovered = false
         var body: some View {
             configuration.label.foregroundStyle(.primary)
-                .background(gridBlue.opacity(configuration.isPressed ? 0.22 : selected ? 0.14 : hovered ? 0.07 : 0), in: RoundedRectangle(cornerRadius: 8))
+                .background(gridAccent.opacity(configuration.isPressed ? 0.22 : selected ? 0.14 : hovered ? 0.07 : 0), in: RoundedRectangle(cornerRadius: 8))
                 .onHover { hovered = $0 }
         }
     }
@@ -648,10 +651,10 @@ struct GridLayoutPreview: View {
                 ForEach(grid.slots.indices.reversed(), id: \.self) { index in
                     let frame = frames[index]
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(grid.slots[index].app == nil ? Color.black.opacity(0.10) : gridBlue.opacity(0.55))
+                        .fill(grid.slots[index].app == nil ? Color.black.opacity(0.10) : gridAccent.opacity(0.55))
                         .overlay {
                             RoundedRectangle(cornerRadius: 2)
-                                .strokeBorder(selectedCell == index ? gridBlue : Color.white.opacity(0.7), lineWidth: 1)
+                                .strokeBorder(selectedCell == index ? gridAccent : Color.white.opacity(0.7), lineWidth: 1)
                         }
                         .frame(width: max(0, frame.width), height: max(0, frame.height))
                         .offset(x: frame.minX, y: frame.minY)
@@ -677,14 +680,14 @@ private struct GridSizePicker: View {
                 HStack(spacing: 3) {
                     ForEach(0..<DesktopGrid.maxColumns, id: \.self) { column in
                         RoundedRectangle(cornerRadius: 2)
-                            .fill(column < columns && row < rows ? gridBlue : Color.black.opacity(0.12))
+                            .fill(column < columns && row < rows ? gridAccent : Color.black.opacity(0.12))
                             .frame(width: 10, height: 10)
                     }
                 }
             }
         }
         .padding(5).background(.white.opacity(0.45), in: RoundedRectangle(cornerRadius: 9))
-        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(gridBlue.opacity(0.5)))
+        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(gridAccent.opacity(0.5)))
         .contentShape(Rectangle())
         .onContinuousHover { phase in
             if case .active(let point) = phase {

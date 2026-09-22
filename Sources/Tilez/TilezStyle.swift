@@ -10,10 +10,13 @@ enum TilezStyle {
     static let pressAnimation = Animation.timingCurve(0.23, 1, 0.32, 1, duration: 0.15)
     static let accent = Color(nsColor: NSColor(name: nil) { appearance in
         appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua
-            ? NSColor(srgbRed: 0.34, green: 0.80, blue: 0.77, alpha: 1)
-            : NSColor(srgbRed: 0.0, green: 0.40, blue: 0.43, alpha: 1)
+            ? NSColor.white
+            : NSColor.black
     })
-    static let primaryFill = Color(red: 0.0, green: 0.40, blue: 0.43)
+    static let primaryFill = accent
+    static let primaryInk = Color(nsColor: NSColor(name: nil) { appearance in
+        appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? .black : .white
+    })
 }
 
 private struct TilezSurface: ViewModifier {
@@ -80,7 +83,7 @@ private struct TilezButtonBody: View {
     }
     private var ink: Color {
         if !enabled { return .secondary }
-        if role == .primary { return .white }
+        if role == .primary { return TilezStyle.primaryInk }
         if role == .destructive { return .red }
         return .primary
     }

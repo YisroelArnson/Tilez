@@ -19,8 +19,8 @@ MainActor.assumeIsolated {
         let bitmap = NSBitmapImageRep(cgImage: image)
         for (index, frame) in grid.frames(in: CGRect(x: 5, y: 5, width: 75, height: 49), gap: 2).enumerated() {
             let color = bitmap.colorAt(x: Int(frame.midX * 3), y: Int(frame.midY * 3))!.usingColorSpace(.deviceRGB)!
-            let isBlue = color.blueComponent - color.redComponent > 0.15
-            assert(isBlue == (grid.slots[index].app != nil), "Preview must draw actual pane positions: \(stage), pane \(index)")
+            let isFilled = color.redComponent < 0.5
+            assert(isFilled == (grid.slots[index].app != nil), "Preview must draw actual pane positions: \(stage), pane \(index)")
         }
     }
     print("PASS: rendered toolbar preview matches six panes, uneven splits, removal, and an empty desktop")

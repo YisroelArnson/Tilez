@@ -149,8 +149,8 @@ final class OverlayController {
 private final class PreviewView: NSView {
     override func draw(_ dirtyRect: NSRect) {
         let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 2, dy: 2), xRadius: 12, yRadius: 12)
-        NSColor.controlAccentColor.withAlphaComponent(0.23).setFill(); path.fill()
-        NSColor.controlAccentColor.withAlphaComponent(0.9).setStroke(); path.lineWidth = 3; path.stroke()
+        NSColor.white.withAlphaComponent(0.23).setFill(); path.fill()
+        NSColor.white.withAlphaComponent(0.9).setStroke(); path.lineWidth = 3; path.stroke()
     }
 }
 
@@ -190,7 +190,7 @@ private final class DrawView: NSView {
         NSColor.white.withAlphaComponent(0.10).setStroke(); grid.lineWidth = 0.5; grid.stroke()
         if let rect = selection {
             let path = NSBezierPath(roundedRect: rect, xRadius: 10, yRadius: 10)
-            NSColor.controlAccentColor.withAlphaComponent(0.35).setFill(); path.fill()
+            NSColor.white.withAlphaComponent(0.35).setFill(); path.fill()
             NSColor.white.withAlphaComponent(0.85).setStroke(); path.lineWidth = 2; path.stroke()
             let text = "\(Int(rect.width)) × \(Int(rect.height))"
             (text as NSString).draw(at: CGPoint(x: rect.minX + 12, y: rect.minY + 12),

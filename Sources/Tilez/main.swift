@@ -24,7 +24,7 @@ final class ActionItem: NSMenuItem {
         manager = WindowManager(preferences: Preferences(), backgroundArrangements: false)
         overlay = GridOverlayController(manager: manager)
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        statusItem.button?.image = NSImage(systemSymbolName: "square.grid.2x2", accessibilityDescription: "Tilez")
+        statusItem.button?.image = Self.menuBarIcon()
         statusItem.button?.toolTip = "Tilez · ⌃⌥Space"
         statusItem.button?.target = self
         statusItem.button?.action = #selector(toggleGrid)
@@ -39,6 +39,21 @@ final class ActionItem: NSMenuItem {
             overlay.model.message = "⌃⌥Space is already in use. Open Tilez from its menu-bar icon."
             overlay.model.isError = true
         }
+    }
+    /// Template artwork follows the app icon's three panes and adapts to the menu bar.
+    private static func menuBarIcon() -> NSImage {
+        let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
+            NSColor.black.setFill()
+            for rect in [NSRect(x: 1, y: 12, width: 16, height: 5),
+                         NSRect(x: 1, y: 1, width: 7, height: 9),
+                         NSRect(x: 10, y: 1, width: 7, height: 9)] {
+                NSBezierPath(roundedRect: rect, xRadius: 1.2, yRadius: 1.2).fill()
+            }
+            return true
+        }
+        image.isTemplate = true
+        image.accessibilityDescription = "Tilez"
+        return image
     }
     @objc private func toggleGrid() { overlay.toggle(on: statusItem.button?.window?.screen) }
     private func configureMainMenu() {
