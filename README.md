@@ -45,6 +45,47 @@ The built app is version **2.0.0**, bundle ID `com.local.tilez`. Grant it Access
 
 Only one copy should run at a time. The app in `dist/` and an installed copy use the same bundle identity and preferences.
 
+## Install on another Mac
+
+### First-time setup
+
+1. Install Apple's Command Line Tools, which include Swift and git:
+
+   ```bash
+   xcode-select --install
+   ```
+
+2. Install the GitHub CLI and sign in. The repo is private, so this Mac needs your GitHub account. If Homebrew isn't installed yet, get it from [brew.sh](https://brew.sh) first:
+
+   ```bash
+   brew install gh
+   gh auth login
+   ```
+
+3. Clone the repo and run the update script. On a first run it builds the app, installs it into `/Applications`, and launches it:
+
+   ```bash
+   mkdir -p ~/Developer/tools && cd ~/Developer/tools
+   gh repo clone YisroelArnson/Tilez
+   cd Tilez
+   bash scripts/update.sh
+   ```
+
+4. When Tilez asks, allow Accessibility access in **System Settings → Privacy & Security → Accessibility**.
+
+5. Optional: turn on **Launch Tilez at login** in the app.
+
+### Updating
+
+After pushing changes from your main Mac, run this on the other Mac:
+
+```bash
+cd ~/Developer/tools/Tilez
+bash scripts/update.sh
+```
+
+The script pulls the latest `main`, rebuilds, quits the running copy, replaces `/Applications/Tilez.app`, and relaunches it. Accessibility access carries over between updates because the app is signed against its bundle ID. The script stops without changing anything if that copy has uncommitted changes, so make edits on your main Mac and push them. To install somewhere other than `/Applications`, set `TILEZ_INSTALL_DIR`.
+
 ## Window behavior
 
 The invocation captures a particular display and desktop. Tilez reuses eligible windows there and opens independent windows for remaining cells. New windows can inherit an app's full-screen Space; Tilez identifies those new windows, waits for their transitions, restores them, and moves them back before applying the grid. Existing windows on unrelated desktops are not gathered. A window's identity includes its owning process launch, preventing stale IDs from matching after an app restart.
