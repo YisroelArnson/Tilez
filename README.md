@@ -22,7 +22,7 @@ Press **Control–Option–Space** or click the grid icon in the menu bar. The p
 - **G** turns the toolbar's layout preview into a size picker. Hover or use **←/→** (columns) and **↑/↓** (rows), then click or press **Return** to confirm. **Escape** or **G** again cancels.
 - **⌘K** uses an empty pane or splits the selected pane to make room. **⌘C / ⌘V** copies an app assignment into an empty cell, without sharing its live window binding.
 - **⌘Z** undoes a grid edit. The bar's **…** menu also includes Undo last window arrangement, New empty grid, Close, and Quit.
-- **Save / ⌘S** names an optional reusable grid. **⌘O** or the bookmark button opens searchable saved grids: type, use ↑/↓, then Return to load a draft on any desktop. Saved grids contain app choices, not a fixed screen or desktop destination.
+- **Save / ⌘S** names an optional reusable grid. **⌘O** or the chevron beside Save opens searchable saved grids: type, use ↑/↓, then Return to load a draft on any desktop. Saved grids contain app choices, not a fixed screen or desktop destination.
 - **Escape** closes the app picker first, then the overlay. While opening windows it stops the request; windows already created stay available.
 
 ## Build and run

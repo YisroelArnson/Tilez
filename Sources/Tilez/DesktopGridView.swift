@@ -17,6 +17,28 @@ struct GridGlass: NSViewRepresentable {
     func updateNSView(_ view: NSVisualEffectView, context: Context) { view.material = material }
 }
 
+/// The overlay's pointer, polled by `PointerTracker` in the `gridRootSpace` coordinate space.
+/// SwiftUI's own hover never fires in the overlay panel, so controls read this instead.
+private struct GridPointerKey: EnvironmentKey { static let defaultValue: CGPoint? = nil }
+private extension EnvironmentValues {
+    var gridPointer: CGPoint? {
+        get { self[GridPointerKey.self] }
+        set { self[GridPointerKey.self] = newValue }
+    }
+}
+private let gridRootSpace = "gridRoot"
+
+/// Renders `content(hovered)` in the space it is given, e.g. as a control's background.
+private struct PointerHover<Content: View>: View {
+    @ViewBuilder let content: (Bool) -> Content
+    @Environment(\.gridPointer) private var pointer
+    var body: some View {
+        GeometryReader { proxy in
+            content(pointer.map { proxy.frame(in: .named(gridRootSpace)).contains($0) } ?? false)
+        }
+    }
+}
+
 private struct GridButtonStyle: ButtonStyle {
     var primary = false
     @Environment(\.isEnabled) private var enabled
@@ -26,11 +48,39 @@ private struct GridButtonStyle: ButtonStyle {
             .font(.system(size: 13, weight: .medium))
             .foregroundStyle(primary ? Color.white : Color.primary)
             .padding(.horizontal, 12).frame(minHeight: 34)
-            .background(primary ? gridAccent : Color.white.opacity(configuration.isPressed ? 0.75 : 0.4),
-                        in: RoundedRectangle(cornerRadius: 10))
+            .background {
+                PointerHover { hovered in
+                    let hovered = hovered && enabled
+                    RoundedRectangle(cornerRadius: 10).fill(primary
+                        ? gridAccent.opacity(configuration.isPressed ? 0.7 : hovered ? 0.8 : 1)
+                        : Color.white.opacity(configuration.isPressed ? 0.95 : hovered ? 0.8 : 0.4))
+                }
+            }
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(primary ? Color.clear : Color.white.opacity(0.6)))
             .opacity(enabled ? 1 : 0.4)
             .scaleEffect(configuration.isPressed && !reduceMotion && NSEvent.pressedMouseButtons != 0 ? 0.96 : 1)
+    }
+}
+
+/// Half of a split button. The container draws the resting fill; each half adds hover and
+/// press on top so the whole control matches `GridButtonStyle` (40% → 80% → 95% white).
+private struct SplitHalfStyle: ButtonStyle {
+    var horizontalPadding: CGFloat = 12
+    @Environment(\.isEnabled) private var enabled
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(Color.primary)
+            .padding(.horizontal, horizontalPadding).frame(minHeight: 34)
+            .background {
+                PointerHover { hovered in
+                    Rectangle().fill(Color.white.opacity(configuration.isPressed ? 0.92 : hovered && enabled ? 0.67 : 0))
+                }
+            }
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .opacity(enabled ? 1 : 0.4)
+            .contentShape(Rectangle())
     }
 }
 
@@ -43,6 +93,7 @@ struct DesktopGridView: View {
     @State private var suppressCellClick = false
     @State private var hoveredCell: Int?
     @State private var overDivider = false
+    @State private var pointer: CGPoint?
     @State private var activeDivider: PaneDivider?
     @FocusState private var nameFocused: Bool
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
@@ -77,6 +128,16 @@ struct DesktopGridView: View {
                 }.padding(.bottom, 20).padding(.horizontal, 24).zIndex(3)
             }
             .frame(width: canvas.width, height: canvas.height)
+            .coordinateSpace(name: gridRootSpace)
+            .background(PointerTracker { pointer = $0 })
+            .environment(\.gridPointer, pointer)
+            .onChange(of: pointer) { _, point in
+                // The grid is centered horizontally below the toolbar.
+                let origin = CGPoint(x: (canvas.width - width) / 2, y: gridTop)
+                pointerMoved(point.map { CGPoint(x: $0.x - origin.x, y: $0.y - origin.y) },
+                             frames: model.grid.frames(in: CGRect(x: 0, y: 0, width: width, height: gridHeight)),
+                             width: width, height: gridHeight)
+            }
         }
         .tint(gridAccent)
         .preferredColorScheme(.light)
@@ -119,6 +180,11 @@ struct DesktopGridView: View {
                 } else {
                     Button(action: model.beginResize) {
                         GridLayoutPreview(grid: model.grid, selectedCell: model.selectedCell)
+                            .overlay {
+                                PointerHover { hovered in
+                                    RoundedRectangle(cornerRadius: 9).strokeBorder(Color.black.opacity(hovered && !model.busy ? 0.25 : 0))
+                                }
+                            }
                     }.buttonStyle(.plain).help("Grid size (G)").disabled(model.busy)
                         .accessibilityLabel("Current layout, \(model.grid.slots.count) panes. Choose grid size")
                 }
@@ -131,15 +197,25 @@ struct DesktopGridView: View {
                     if !compact { keycap("⌘K") }
                 }
             }.help("Add app (⌘K)").disabled(model.busy)
-            Button(action: model.beginSave) { Label("Save", systemImage: "bookmark") }
-                .help("Save grid (⌘S)")
-                .disabled(model.grid.filledCount == 0 || model.busy)
-                .popover(isPresented: $model.saving, arrowEdge: .bottom) { savePopover }
-            Button(action: model.beginSaved) {
-                Image(systemName: "bookmark.fill").accessibilityLabel("Saved grids")
+            // One control: save on the left, saved grids from the chevron.
+            HStack(spacing: 0) {
+                Button(action: model.beginSave) { Label("Save", systemImage: "bookmark") }
+                    .buttonStyle(SplitHalfStyle())
+                    .help("Save grid (⌘S)")
+                    .disabled(model.grid.filledCount == 0 || model.busy)
+                    .popover(isPresented: $model.saving, arrowEdge: .bottom) { savePopover }
+                Rectangle().fill(.black.opacity(0.10)).frame(width: 1, height: 18)
+                Button(action: model.beginSaved) {
+                    Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold))
+                        .accessibilityLabel("Saved grids")
+                }
+                .buttonStyle(SplitHalfStyle(horizontalPadding: 9))
+                .help("Saved grids (⌘O)").disabled(model.busy)
+                .popover(isPresented: $model.showingSaved, arrowEdge: .bottom) { savedPopover }
             }
-            .help("Saved grids (⌘O)").disabled(model.busy)
-            .popover(isPresented: $model.showingSaved, arrowEdge: .bottom) { savedPopover }
+            .background(Color.white.opacity(0.4), in: RoundedRectangle(cornerRadius: 10))
+            .clipShape(RoundedRectangle(cornerRadius: 10))
+            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.white.opacity(0.6)))
             if model.busy {
                 Button("Stop", action: model.cancel)
             } else {
@@ -163,6 +239,12 @@ struct DesktopGridView: View {
                 Button("Quit Tilez") { NSApp.terminate(nil) }
             } label: { Image(systemName: "ellipsis").frame(width: 16) }
                 .menuStyle(.borderlessButton).fixedSize().help("More actions")
+                .padding(.horizontal, 8).frame(minHeight: 34)
+                .background {
+                    PointerHover { hovered in
+                        RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(hovered && !model.busy ? 0.8 : 0))
+                    }
+                }
                 .disabled(model.busy)
         }
         .buttonStyle(GridButtonStyle())
@@ -223,7 +305,6 @@ struct DesktopGridView: View {
                     .allowsHitTesting(false).zIndex(1000)
             }
         }.frame(width: width, height: height, alignment: .topLeading).coordinateSpace(name: "grid")
-            .background(PointerTracker { point in pointerMoved(point, frames: frames, width: width, height: height) })
     }
 
     /// Hover comes from polling the pointer: SwiftUI's hover never reached the panes in this panel.
@@ -443,6 +524,7 @@ struct DesktopGridView: View {
                     .help("Closes this window when you apply the layout")
             }
         }.padding(12).frame(width: 280).preferredColorScheme(.light)
+            .environment(\.gridPointer, nil)
             .onDisappear { model.onFocusGrid?() }
     }
 
@@ -455,6 +537,7 @@ struct DesktopGridView: View {
             Button("Save", action: model.save).buttonStyle(GridButtonStyle(primary: true))
                 .disabled(model.saveName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         }.padding(18).frame(width: 280).preferredColorScheme(.light).onAppear { nameFocused = true }
+            .environment(\.gridPointer, nil)
     }
 
     private var savedPopover: some View {
@@ -496,6 +579,7 @@ struct DesktopGridView: View {
             }
             searchHints
         }.padding(16).frame(width: 310).preferredColorScheme(.light)
+            .environment(\.gridPointer, nil)
             .onDisappear { model.onFocusGrid?() }
     }
 
@@ -650,11 +734,14 @@ struct GridLayoutPreview: View {
             ZStack(alignment: .topLeading) {
                 ForEach(grid.slots.indices.reversed(), id: \.self) { index in
                     let frame = frames[index]
+                    // The selected pane is darker rather than outlined.
+                    let selected = selectedCell == index
                     RoundedRectangle(cornerRadius: 2)
-                        .fill(grid.slots[index].app == nil ? Color.black.opacity(0.10) : gridAccent.opacity(0.55))
+                        .fill(grid.slots[index].app == nil ? Color.black.opacity(selected ? 0.22 : 0.10)
+                                                           : gridAccent.opacity(selected ? 0.85 : 0.55))
                         .overlay {
-                            RoundedRectangle(cornerRadius: 2)
-                                .strokeBorder(selectedCell == index ? gridAccent : Color.white.opacity(0.7), lineWidth: 1)
+                            // A light inner edge keeps the margin between panes.
+                            RoundedRectangle(cornerRadius: 2).strokeBorder(Color.white.opacity(0.7), lineWidth: 1)
                         }
                         .frame(width: max(0, frame.width), height: max(0, frame.height))
                         .offset(x: frame.minX, y: frame.minY)
