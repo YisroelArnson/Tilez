@@ -33,6 +33,8 @@ Drag a window by its title bar and pause over another window. A frosted outline 
 
 Press **Control–Option–Return** in any window, or **Control–Option–click** it, to enlarge it over its neighbors, filling the screen with a 10-point margin. Nothing else moves. It stays enlarged while you click or switch to other windows. Each screen and desktop keeps its own enlarged window, so you can enlarge one window per monitor and per desktop without them affecting each other. Press the shortcut again on the same screen and desktop, or Control–Option–click the enlarged window, to return it to exactly where it was. Control–Option–clicking a different window puts back the one enlarged on that screen and desktop and enlarges the clicked one. Tilez consumes Control–Option–clicks so apps don't also treat them as right-clicks; ordinary clicks and Control-clicks are untouched. Opening the grid puts back only the enlarged window on the screen and desktop it opens on; quitting Tilez puts them all back. Only standard, resizable windows outside full screen can be enlarged; anything else beeps.
 
+The website lives in `docs/index.html` and is served by GitHub Pages at https://yisroelarnson.github.io/Tilez/. It's one self-contained file; push to `main` to update it.
+
 ## Build and run
 
 Requires macOS 14 or later, Swift 5.9 or later, and Apple's Command Line Tools. Desktop movement uses the existing private macOS bridge and is available on supported macOS versions (currently gated at macOS 26.4+). Opening an app whose new windows inherit full screen needs that bridge to move the new windows back to the target desktop.

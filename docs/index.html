@@ -1,0 +1,1136 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="description" content="Tilez is an open-source macOS tile manager: split, merge, resize, swap, and enlarge windows from your keyboard.">
+<title>Tilez</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23000'/%3E%3Crect x='11.8' y='11.5' width='40.4' height='14.4' rx='2' fill='%23fff'/%3E%3Crect x='11.8' y='28.5' width='18.8' height='24.5' rx='2' fill='%23fff'/%3E%3Crect x='33.4' y='28.5' width='18.8' height='24.5' rx='2' fill='%23fff'/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400..700&family=Geist:wght@400..700&family=Geist+Mono:wght@400..600&display=swap">
+<style>
+[hidden] { display: none !important; }
+html { -webkit-text-size-adjust: 100%; }
+:root {
+  color-scheme: dark;
+  --bg: #000;
+  --ink: #fff;
+  --ink-2: #a1a1a8;
+  --ink-3: #6e6e75;
+  --line: rgba(255, 255, 255, .1);
+  --tile-1: #0e0e10;
+  --tile-2: #161618;
+  --tile-3: #1e1e21;
+  --display: "DM Sans", "Helvetica Neue", Arial, sans-serif;
+  --body: "Geist", ui-sans-serif, system-ui, -apple-system, "Helvetica Neue", sans-serif;
+  --mono: "Geist Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  --gutter: max(16px, 4vw);
+  --ease: cubic-bezier(.2, .8, .2, 1);
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font: 16px/1.55 var(--body); -webkit-font-smoothing: antialiased; }
+a { color: inherit; }
+.wrap { padding-inline: var(--gutter); }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+:focus-visible { outline: 2px solid #fff; outline-offset: 3px; }
+
+/* ---------- frosted surfaces ---------- */
+.glass {
+  background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.025));
+  border: 1px solid rgba(255,255,255,.1);
+  -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px);
+  transition: background .15s, border-color .15s, transform .14s var(--ease);
+}
+
+/* ---------- load animation ---------- */
+.intro-tiles { position: fixed; inset: 0; z-index: 1000; background: #000; overflow: hidden; cursor: pointer;
+  animation: veil-out 240ms ease-out var(--reveal, 1600ms) both; }
+@keyframes veil-out { to { background: transparent; } }
+.intro-tiles i {
+  position: absolute; display: block; border-radius: var(--tr, 12px); --l: 5;
+  background: linear-gradient(160deg, rgba(255,255,255,.045), rgba(255,255,255,.012)) hsl(240 4% calc(var(--l) * 1%));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.08);
+  animation: tile-in 260ms var(--ease) var(--d) both, tile-out 260ms cubic-bezier(.5,0,.75,0) var(--x) forwards;
+}
+/* The light passing over lifts each tile's fill and edge a little. */
+.intro-tiles i::after {
+  content: ""; position: absolute; inset: 0; border-radius: inherit; opacity: 0;
+  background: rgba(255,255,255,.05); box-shadow: inset 0 0 0 1px rgba(255,255,255,.16);
+  animation: lift 560ms ease-in-out var(--s) both;
+}
+/* The word's tiles lift further and hold a beat longer, so TILEZ surfaces in the fade. */
+.intro-tiles i.letter::after {
+  background: rgba(255,255,255,.15); box-shadow: inset 0 0 0 1px rgba(255,255,255,.34);
+  animation: surface 880ms ease-in-out var(--s) both;
+}
+@keyframes tile-in { from { opacity: 0; transform: scale(.94); } to { opacity: 1; transform: none; } }
+@keyframes tile-out { to { opacity: 0; transform: scale(.97); } }
+@keyframes lift { 0% { opacity: 0; } 45% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes surface { 0% { opacity: 0; } 30% { opacity: 1; } 68% { opacity: 1; } 100% { opacity: 0; } }
+
+/* ---------- hero ---------- */
+.hero { position: relative; padding-block: clamp(120px, 15vw, 190px) 0; text-align: center; }
+.nav { position: absolute; inset: 0 0 auto 0; z-index: 3; display: flex; align-items: center; justify-content: space-between; height: 64px; }
+.brand { display: inline-flex; align-items: center; gap: 10px; font: 700 18px/1 var(--display); text-decoration: none; letter-spacing: -.02em; }
+.brand svg { width: 20px; height: 20px; }
+.links { display: flex; gap: clamp(14px, 3vw, 28px); font-size: 14px; color: var(--ink-2); }
+.links a { text-decoration: none; transition: color .15s; }
+.links a:hover { color: var(--ink); }
+
+.headline {
+  margin: 0 auto;
+  font: 600 clamp(38px, 5.6vw, 104px)/1.04 var(--display);
+  letter-spacing: -.045em; text-wrap: balance;
+}
+.hero.enter .headline, .hero.enter + .intro { animation: rise 520ms var(--ease) both; }
+.hero.enter + .intro { animation-delay: 90ms; }
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+.intro { text-align: center; padding-block: 34px 104px; display: grid; justify-items: center; gap: 26px; }
+.lede { margin: 0; font: 500 clamp(19px, 2vw, 26px)/1.3 var(--display); letter-spacing: -.02em; color: var(--ink-2); text-wrap: balance; }
+.cta { display: flex; flex-wrap: wrap; gap: 12px; justify-content: center; }
+.btn { display: inline-flex; align-items: center; gap: 10px; min-height: 50px; padding: 0 24px; border-radius: 999px; font: 600 15px/1 var(--body); text-decoration: none; transition: transform .15s var(--ease), filter .15s; }
+.btn:active { transform: scale(.97); }
+.btn.primary {
+  color: #000; background: #fff; transition: transform .15s var(--ease), background .15s;
+}
+.btn.primary:hover { background: #e6e6e9; }
+.btn.ghost:hover { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.18); }
+.btn svg { width: 18px; height: 18px; }
+.fine { margin: -8px 0 0; font-size: 13px; color: var(--ink-3); }
+
+/* ---------- sections ---------- */
+.section-head { max-width: 1080px; margin: 0 auto 52px; text-align: center; }
+h2 { margin: 0; font: 600 clamp(28px, 3.7vw, 52px)/1.12 var(--display); letter-spacing: -.035em; color: #74747b; text-wrap: balance; }
+h2 b { color: var(--ink); font-weight: inherit; }
+
+/* ---------- demo desktop ---------- */
+.try { padding-block: 40px 110px; }
+.mac {
+  position: relative; max-width: 1280px; margin: 0 auto; aspect-ratio: 16 / 10;
+  border-radius: 24px; overflow: hidden; outline: none; user-select: none; -webkit-user-select: none;
+  background:
+    radial-gradient(90% 70% at 18% 0%, rgba(255,255,255,.05), transparent 60%),
+    #070708;
+  border: 1px solid rgba(255,255,255,.1);
+  transition: box-shadow .2s;
+}
+.mac.armed { box-shadow: 0 0 0 1px rgba(255,255,255,.35); }
+.menubar {
+  position: absolute; inset: 0 0 auto 0; height: 26px; z-index: 60;
+  display: flex; align-items: center; gap: 18px; padding: 0 14px; white-space: nowrap; overflow: hidden;
+  font: 500 12px/1 var(--body); color: #e4e4e8;
+  background: rgba(255,255,255,.07); border-bottom: 1px solid rgba(255,255,255,.06);
+  -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
+}
+.menubar .app { font-weight: 700; }
+.menubar .spacer { flex: 1; }
+.menubar .muted { color: #b9b9be; }
+.menubar svg { width: 15px; height: 15px; display: block; }
+.area { position: absolute; inset: 38px 12px 12px 12px; }
+.win {
+  position: absolute; border-radius: 14px; overflow: hidden;
+  background: #0c0c0e;
+  border: 1px solid rgba(255,255,255,.1);
+  box-shadow: 0 12px 30px rgba(0,0,0,.6);
+  transition: left 300ms var(--ease), top 300ms var(--ease), width 300ms var(--ease), height 300ms var(--ease),
+              box-shadow .18s, opacity .2s, transform .22s var(--ease);
+}
+.live .win { transition: box-shadow .18s, opacity .2s; }
+.win.opening { opacity: 0; transform: scale(.94); }
+.win.closing { opacity: 0; transform: scale(.94); pointer-events: none; }
+.win.selected { border-color: rgba(255,255,255,.85); box-shadow: 0 0 0 1px rgba(255,255,255,.85), 0 16px 40px rgba(0,0,0,.7); z-index: 5; }
+.win.zoomed { z-index: 40; }
+.win.dragging { z-index: 50; opacity: .82; transition: box-shadow .18s, opacity .2s; }
+.win.target { box-shadow: 0 0 0 2px rgba(255,255,255,.55), 0 0 0 6px rgba(255,255,255,.12); }
+.titlebar {
+  position: absolute; inset: 0 0 auto 0; height: 26px; display: flex; align-items: center; gap: 8px; padding: 0 10px;
+  background: rgba(255,255,255,.035);
+  border-bottom: 1px solid rgba(255,255,255,.07);
+  font: 600 11.5px/1 var(--body); color: #dcdce1;
+}
+.lights { display: flex; gap: 6px; flex: none; }
+.lights i { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,.14); box-shadow: inset 0 0 0 1px rgba(255,255,255,.12); }
+.wtitle { flex: 1; min-width: 0; display: flex; align-items: center; justify-content: center; gap: 6px; padding-right: 42px; overflow: hidden; }
+.wtitle span:last-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ico { flex: none; display: grid; place-items: center; width: 15px; height: 15px; border-radius: 4px; color: #fff;
+  background: rgba(255,255,255,.08); box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); }
+.ico svg { width: 72%; height: 72%; fill: none; stroke: currentColor; stroke-width: 2.4; stroke-linecap: round; stroke-linejoin: round; }
+.ico.lg { width: 40px; height: 40px; border-radius: 11px; }
+.ico.lg svg { stroke-width: 2; width: 58%; height: 58%; }
+.wbody { position: absolute; inset: 26px 0 0 0; container-type: size; }
+.c { position: absolute; inset: 0; padding: 12px; display: flex; flex-direction: column; gap: 8px; font-size: 11px; line-height: 1.45; color: #c7c7cc; overflow: hidden; }
+.c i { display: block; height: 6px; border-radius: 3px; background: rgba(255,255,255,.12); flex: none; }
+.mini { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; gap: 8px; font-weight: 600; font-size: 12px; color: #e8e8ec; }
+@container (max-width: 200px) or (max-height: 120px) { .c { display: none; } .mini { display: flex; } }
+@container (max-height: 80px) { .mini .ico.lg { width: 26px; height: 26px; border-radius: 7px; } }
+.chat .me { align-self: flex-end; width: 52%; height: 24px; border-radius: 12px; background: rgba(255,255,255,.1); flex: none; }
+.chat .me.short { width: 34%; }
+.chat .ai { display: grid; gap: 6px; }
+.chat .ai p { margin: 0; color: #ececf0; }
+.compose { margin-top: auto; flex: none; border: 1px solid rgba(255,255,255,.14); border-radius: 12px; padding: 8px 10px; color: #6f6f76; background: rgba(255,255,255,.03); }
+.term { font: 10.5px/1.65 var(--mono); color: #dadade; gap: 0; }
+.term .p { color: #7e7e85; }
+.term .cursor { display: inline-block; width: .6em; height: 1.1em; vertical-align: -.2em; background: #e6e6ea; animation: blink 1.1s steps(1) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.web .url { align-self: center; width: min(78%, 280px); text-align: center; border-radius: 7px; background: rgba(255,255,255,.08); padding: 4px 8px; color: #a3a3aa; font-size: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; flex: none; }
+.web .hbar { height: 18px; width: 62%; border-radius: 5px; background: rgba(255,255,255,.22); flex: none; margin-top: 6px; }
+.web .imgs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; flex: none; }
+.web .imgs span { aspect-ratio: 4 / 3; border-radius: 6px; background: rgba(255,255,255,.05); box-shadow: inset 0 0 0 1px rgba(255,255,255,.07); }
+.code { font: 10.5px/1.6 var(--mono); color: #9d9da4; gap: 0; white-space: pre; }
+.code b { color: #fff; font-weight: 600; }
+.code em { font-style: normal; display: inline-block; width: 2ch; margin-right: 12px; text-align: right; color: #4c4c52; }
+.notes h4 { margin: 0 0 2px; font: 700 14px/1.2 var(--body); color: #f1f1f4; }
+.notes .li { display: flex; align-items: center; gap: 8px; }
+.notes .li::before { content: ""; width: 11px; height: 11px; border-radius: 3px; border: 1.5px solid rgba(255,255,255,.35); flex: none; }
+.notes .li.done { color: #6f6f76; text-decoration: line-through; }
+.notes .li.done::before { background: #fff; border-color: #fff; }
+.list .ch { display: flex; align-items: center; gap: 8px; color: #a8a8ae; }
+.list .ch b { color: #fff; }
+.files .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(70px, 1fr)); gap: 12px; }
+.files .f { display: grid; justify-items: center; gap: 6px; font-size: 10px; color: #bcbcc2; }
+.files .f span { width: 38px; height: 28px; border-radius: 5px; background: rgba(255,255,255,.1); box-shadow: inset 0 0 0 1px rgba(255,255,255,.14); }
+.mail .row { display: grid; gap: 5px; padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.mail .row b { color: #eeeef2; font-size: 11px; }
+.cal .days { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+.cal .days span { aspect-ratio: 1; border-radius: 4px; background: rgba(255,255,255,.06); }
+.cal .days span.on { background: #fff; }
+.pane-card { position: absolute; inset: 0; z-index: 3; display: none; place-content: center; justify-items: center; gap: 10px;
+  background: rgba(0,0,0,.55); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); font-weight: 600; font-size: 13px; }
+.pane-card .num { position: absolute; top: 10px; left: 12px; font: 500 12px/1 var(--mono); color: #cfcfd4; }
+.mac.editing .pane-card { display: grid; }
+.mac.editing .win { border-color: rgba(255,255,255,.4); }
+.editor-hint { position: absolute; left: 50%; top: 42px; z-index: 70; transform: translate(-50%, -6px); opacity: 0; pointer-events: none;
+  padding: 7px 14px; border-radius: 999px; font: 500 12px/1 var(--body); white-space: nowrap; transition: opacity .18s, transform .18s var(--ease); }
+.mac.editing .editor-hint { opacity: 1; transform: translate(-50%, 0); }
+.hud { position: absolute; left: 50%; bottom: 22px; z-index: 80; max-width: calc(100% - 40px); transform: translate(-50%, 8px); opacity: 0; pointer-events: none;
+  padding: 9px 16px; border-radius: 999px; font: 500 13px/1.3 var(--body); text-align: center; transition: opacity .18s, transform .18s var(--ease); }
+.hud.show { opacity: 1; transform: translate(-50%, 0); }
+.empty { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; color: var(--ink-2); font-size: 14px; }
+
+/* ---------- shortcut buttons ---------- */
+.keys { max-width: 1280px; margin: 20px auto 0; display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.key-btn { display: grid; justify-items: center; gap: 7px; min-width: 104px; padding: 13px 18px 12px; border-radius: 18px; color: var(--ink); font: inherit; cursor: pointer; }
+.key-btn:hover { background: rgba(255,255,255,.065); border-color: rgba(255,255,255,.18); }
+.key-btn.pressed, .key-btn:active { transform: scale(.96); background: rgba(255,255,255,.11); border-color: rgba(255,255,255,.3); }
+.key-btn .klabel { font: 600 15px/1 var(--display); letter-spacing: -.01em; }
+.key-btn .kcombo { font: 500 12px/1 var(--mono); color: #8a8a91; white-space: nowrap; }
+
+/* ---------- features: full-width tiles ---------- */
+.features { padding-block: 40px 120px; }
+.bento { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px; }
+.card {
+  grid-column: span var(--span, 4); min-width: 0; min-height: 360px; position: relative; overflow: hidden;
+  display: flex; flex-direction: column; gap: 26px; padding: clamp(22px, 2.4vw, 34px);
+  border-radius: 34px; border: 1px solid rgba(255,255,255,.08);
+  background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015));
+  transition: border-color .2s, background .2s;
+}
+.card:hover { border-color: rgba(255,255,255,.15); background: linear-gradient(180deg, rgba(255,255,255,.06), rgba(255,255,255,.02)); }
+.card .vis {
+  flex: 1; min-height: 170px; position: relative; overflow: hidden; display: grid; place-items: center; padding: 20px;
+  border-radius: 24px; background: rgba(0,0,0,.4); border: 1px solid rgba(255,255,255,.06);
+}
+.card .copy { display: grid; gap: 10px; }
+.card h3 { margin: 0; font: 600 clamp(22px, 2vw, 28px)/1.15 var(--display); letter-spacing: -.03em; text-wrap: balance; }
+.card p { margin: 0; color: var(--ink-2); max-width: 48ch; text-wrap: pretty; }
+.chip { justify-self: start; font: 500 11.5px/1 var(--mono); letter-spacing: .06em; color: #dcdce0; padding: 7px 11px; border-radius: 999px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.1); }
+.fp { border-radius: 14px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.1); display: flex; align-items: center; justify-content: center; gap: 8px; font: 600 13px/1 var(--body); color: #e2e2e6; min-width: 0; overflow: hidden; }
+.fp.on { background: rgba(255,255,255,.12); border-color: rgba(255,255,255,.45); color: #fff; }
+.fp .ico { width: 20px; height: 20px; border-radius: 6px; }
+.v-desk { width: 100%; height: 100%; min-height: 200px; display: grid; gap: 8px; grid-template-columns: 1.1fr 1fr 1fr; grid-template-rows: 1fr 1fr; }
+.v-desk .fp:first-child { grid-row: span 2; }
+.v-desk .fp:last-child { grid-column: span 2; }
+.v-zoom { width: 100%; height: 100%; min-height: 200px; display: grid; gap: 8px; grid-template-columns: repeat(3, 1fr); grid-template-rows: 1fr 1fr; }
+.v-zoom .fp { opacity: .45; }
+.v-zoom .big { position: absolute; inset: 20%; opacity: 1; border-radius: 18px; background: rgba(30,30,34,.94); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); box-shadow: 0 20px 50px rgba(0,0,0,.7); }
+.v-split { width: 100%; height: 100%; min-height: 170px; display: grid; gap: 14px; grid-template-columns: 1fr 1.4fr; grid-template-rows: 1fr 1fr; position: relative; }
+.v-split .fp:first-child { grid-row: span 2; }
+.v-split .bar { position: absolute; left: calc(41.6% - 2px); top: 18%; bottom: 18%; width: 4px; border-radius: 2px; background: #fff; box-shadow: 0 0 0 4px rgba(255,255,255,.12); }
+.v-swap { display: grid; gap: 12px; justify-items: center; }
+.v-swap .fp { width: 180px; height: 54px; }
+.v-swap .old { opacity: .5; border-style: dashed; text-decoration: line-through; }
+.v-swap .arrow { color: var(--ink-3); font: 500 18px/1 var(--mono); }
+.v-lock { display: grid; justify-items: center; gap: 18px; }
+.v-lock .ring { width: 86px; height: 86px; border-radius: 28px; display: grid; place-items: center; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.16); }
+.v-lock svg { width: 36px; height: 36px; fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.v-lock .nos { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+.v-saved { width: 100%; display: grid; gap: 8px; }
+.v-saved .item { display: grid; grid-template-columns: 58px 1fr auto; align-items: center; gap: 14px; padding: 10px 14px 10px 10px; border-radius: 16px; background: rgba(255,255,255,.035); border: 1px solid rgba(255,255,255,.08); }
+.v-saved .item.on { background: rgba(255,255,255,.09); border-color: rgba(255,255,255,.24); }
+.v-saved b { font: 600 14px/1.2 var(--body); }
+.v-saved span { font: 500 12px/1 var(--mono); color: var(--ink-3); }
+.thumb { height: 36px; display: grid; gap: 3px; }
+.thumb i { border-radius: 4px; background: rgba(255,255,255,.18); }
+.v-term { width: 100%; align-self: stretch; place-items: stretch; font: 13px/1.8 var(--mono); color: #dcdce0; padding: 6px 8px; }
+.v-term .p { color: #6f6f76; }
+.v-term .ok { color: #fff; }
+
+/* ---------- install ---------- */
+.install { padding-block: 20px 120px; }
+.install-grid { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.install-col { display: grid; gap: 18px; align-content: start; padding: clamp(18px, 2.2vw, 28px); border-radius: 34px;
+  border: 1px solid rgba(255,255,255,.08); background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015)); }
+.install-col h3 { margin: 0 0 0 6px; font: 600 clamp(22px, 2vw, 28px)/1.15 var(--display); letter-spacing: -.03em; }
+.term-card { display: flex; flex-direction: column; border-radius: 24px; overflow: hidden;
+  background: rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.07); }
+.term-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 12px 12px 18px; border-bottom: 1px solid rgba(255,255,255,.06); }
+.copy-btn { padding: 8px 14px; border-radius: 999px; cursor: pointer; color: var(--ink); font: 500 12px/1 var(--mono); letter-spacing: .04em; }
+.copy-btn:hover { background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.2); }
+.term-card pre { margin: 0; padding: 20px 22px; overflow-x: auto; font: 13.5px/1.9 var(--mono); color: #e4e4e8; }
+.term-card pre .p { color: #62626a; user-select: none; -webkit-user-select: none; }
+
+.closing { padding-block: 0 120px; display: grid; justify-items: center; gap: 30px; text-align: center; }
+
+footer { padding-block: 36px 48px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 14px 28px; align-items: center; justify-content: space-between; color: var(--ink-3); font-size: 13px; }
+footer nav { display: flex; gap: 22px; }
+footer a { text-decoration: none; color: var(--ink-2); }
+footer a:hover { color: var(--ink); }
+
+@media (max-width: 960px) {
+  .install-grid { grid-template-columns: 1fr; }
+  .card { grid-column: span 6; }
+  .card.wide, .card.tail { grid-column: span 12; }
+}
+@media (max-width: 640px) {
+  .card, .card.wide { grid-column: span 12; min-height: 0; }
+  .mac { aspect-ratio: 4 / 5; }
+  .links a:not(:last-child) { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero.enter .headline, .hero.enter + .intro { animation: none; }
+  .win { transition: none; }
+  .term .cursor { animation: none; }
+}
+</style>
+</head>
+<body>
+<header class="hero" id="top">
+  <nav class="nav wrap" aria-label="Primary">
+    <a class="brand" href="#top" aria-label="Tilez home">
+      <svg viewBox="0 0 18 18" aria-hidden="true"><rect x="1" y="1" width="16" height="5" rx="1.2" fill="#fff"/><rect x="1" y="8" width="7" height="9" rx="1.2" fill="#fff"/><rect x="10" y="8" width="7" height="9" rx="1.2" fill="#fff"/></svg>
+      Tilez
+    </a>
+    <div class="links">
+      <a href="#try">Try it</a>
+      <a href="#features">Features</a>
+      <a href="#install">Install</a>
+      <a href="https://github.com/YisroelArnson/Tilez">GitHub</a>
+    </div>
+  </nav>
+  <div class="wrap">
+    <h1 class="headline">
+      Window management made easy
+    </h1>
+  </div>
+</header>
+
+<section class="intro wrap">
+  <p class="lede">Open source macOS tile management.</p>
+  <div class="cta">
+    <a class="btn primary" href="https://github.com/YisroelArnson/Tilez/releases/latest/download/Tilez.dmg">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+      Download for Mac
+    </a>
+    <a class="btn ghost glass" href="https://github.com/YisroelArnson/Tilez">View source</a>
+  </div>
+</section>
+
+<section class="try wrap" id="try">
+  <div class="section-head">
+    <h2><b>Try it here.</b> Hover the desktop, then drive it with your keyboard or the keys below.</h2>
+  </div>
+  <div class="mac" id="desk" tabindex="0" aria-label="Interactive Tilez demo desktop">
+    <div class="menubar">
+      <span class="app" id="menuApp">Claude</span>
+      <span class="muted">File</span><span class="muted">Edit</span><span class="muted">View</span><span class="muted">Window</span><span class="muted">Help</span>
+      <span class="spacer"></span>
+      <svg viewBox="0 0 18 18" aria-hidden="true"><rect x="1" y="1" width="16" height="5" rx="1.2" fill="#fff"/><rect x="1" y="8" width="7" height="9" rx="1.2" fill="#fff"/><rect x="10" y="8" width="7" height="9" rx="1.2" fill="#fff"/></svg>
+      <span id="clock">9:41</span>
+    </div>
+    <div class="area" id="area"></div>
+    <div class="empty" id="empty" hidden>Empty desktop. Press ⌘K to open an app.</div>
+    <div class="editor-hint glass">Grid editor · ↩ Apply · Esc Close</div>
+    <div class="hud glass" id="hud" role="status" aria-live="polite"></div>
+  </div>
+  <div class="keys" id="keys"></div>
+</section>
+
+<section class="features wrap" id="features">
+  <div class="section-head">
+    <h2><b>Small tool, sharp edges.</b> Everything Tilez does to your windows, one tile at a time.</h2>
+  </div>
+  <div class="bento">
+    <article class="card wide" style="--span:7">
+      <div class="vis"><div class="v-desk"><div class="fp "><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l8 4.6v9.2l-8 4.6-8-4.6V7.4z"/><circle cx="12" cy="12" r="3.2"/></svg></span>ChatGPT</div><div class="fp on"><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/></svg></span>Claude</div><div class="fp "><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg></span>Safari</div><div class="fp "><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7l5 5-5 5M12.5 17H19"/></svg></span>Terminal</div></div></div>
+      <div class="copy"><span class="chip">⌃⌥ Space</span><h3>Starts from your real desktop</h3>
+        <p>The grid mirrors the windows already on screen, uneven sizes and all. Nothing moves until you press Return.</p></div>
+    </article>
+    <article class="card wide" style="--span:5">
+      <div class="vis"><div class="v-zoom"><div class="fp"></div><div class="fp"></div><div class="fp"></div><div class="fp"></div><div class="fp"></div><div class="fp"></div><div class="fp on big"><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/></svg></span>Claude</div></div></div>
+      <div class="copy"><span class="chip">⌃⌥ Return · ⌃⌥ Click</span><h3>Enlarge, then put it back</h3>
+        <p>Blow a window up over its neighbors, then drop it exactly where it was. Each screen and desktop keeps its own.</p></div>
+    </article>
+    <article class="card">
+      <div class="vis"><div class="v-split"><div class="fp "><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7l5 5-5 5M12.5 17H19"/></svg></span>Terminal</div><div class="fp on"><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/></svg></span>Xcode</div><div class="fp "><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg></span>Safari</div><span class="bar"></span></div></div>
+      <div class="copy"><span class="chip">⌥ Arrows · Drag edges</span><h3>Split, merge, resize</h3>
+        <p>Grow a pane from any edge or corner. Panes that share a line move together.</p></div>
+    </article>
+    <article class="card">
+      <div class="vis"><div class="v-swap"><div class="fp old"><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l8 4.6v9.2l-8 4.6-8-4.6V7.4z"/><circle cx="12" cy="12" r="3.2"/></svg></span>ChatGPT</div><span class="arrow">↓</span><div class="fp on"><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7l5 5-5 5M12.5 17H19"/></svg></span>Terminal</div></div></div>
+      <div class="copy"><span class="chip">Apply</span><h3>Replacing closes cleanly</h3>
+        <p>Swap an app into a pane and the old window closes, instead of piling up in the Dock.</p></div>
+    </article>
+    <article class="card tail">
+      <div class="vis"><div class="v-lock"><div class="ring"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg></div>
+        <div class="nos"><span class="chip">No accounts</span><span class="chip">No analytics</span><span class="chip">No network</span></div></div></div>
+      <div class="copy"><span class="chip">Accessibility only</span><h3>Stays on your Mac</h3>
+        <p>No screen recording and no Input Monitoring. Tilez only needs to move your windows.</p></div>
+    </article>
+    <article class="card wide" style="--span:5">
+      <div class="vis"><div class="v-saved">
+        <div class="item on"><div class="thumb" style="grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr)"><i style="grid-row:span 2"></i><i style=""></i><i style=""></i><i style="grid-column:span 2"></i></div><b>Writing</b><span>4 apps</span></div>
+        <div class="item"><div class="thumb" style="grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(1,1fr)"><i style=""></i><i style=""></i></div><b>Reading</b><span>2 apps</span></div>
+        <div class="item"><div class="thumb" style="grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr)"><i style="grid-row:span 2"></i><i style=""></i><i style=""></i><i style=""></i><i style=""></i><i style=""></i><i style=""></i></div><b>Launch day</b><span>7 apps</span></div>
+      </div></div>
+      <div class="copy"><span class="chip">⌘S · ⌘O</span><h3>Saved grids</h3>
+        <p>Name a layout once and open it on any desktop. Saved grids keep app choices and pane shapes.</p></div>
+    </article>
+    <article class="card wide" style="--span:7">
+      <div class="vis v-term"><div>
+        <div><span class="p">~ %</span> gh repo clone YisroelArnson/Tilez</div>
+        <div><span class="p">~ %</span> cd Tilez &amp;&amp; bash scripts/update.sh</div>
+        <div class="p">Build complete!</div>
+        <div class="ok">Installed and launched: /Applications/Tilez.app</div>
+      </div></div>
+      <div class="copy"><span class="chip">Swift · macOS 14+</span><h3>Open source, one-line updates</h3>
+        <p>Read it, change it, build it. The same script installs Tilez the first time and updates it after every push.</p></div>
+    </article>
+  </div>
+</section>
+
+<section class="install wrap" id="install">
+  <div class="section-head">
+    <h2><b>Install in a minute.</b> Clone it once, and one command keeps it current.</h2>
+  </div>
+  <div class="install-grid">
+    <div class="install-col">
+      <h3>First install</h3>
+      <div class="term-card">
+        <div class="term-head"><span class="chip">Terminal</span><button class="copy-btn glass" type="button" data-copy="first">Copy</button></div>
+<pre id="cmd-first"><span class="p">% </span>xcode-select --install
+<span class="p">% </span>git clone https://github.com/YisroelArnson/Tilez.git
+<span class="p">% </span>cd Tilez
+<span class="p">% </span>bash scripts/update.sh</pre>
+      </div>
+    </div>
+    <div class="install-col">
+      <h3>Update</h3>
+      <div class="term-card">
+        <div class="term-head"><span class="chip">Terminal</span><button class="copy-btn glass" type="button" data-copy="update">Copy</button></div>
+<pre id="cmd-update"><span class="p">% </span>cd Tilez
+<span class="p">% </span>bash scripts/update.sh</pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="closing wrap">
+  <h2><b>Get Tilez.</b> Free and open source.</h2>
+  <div class="cta">
+    <a class="btn primary" href="https://github.com/YisroelArnson/Tilez/releases/latest/download/Tilez.dmg">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+      Download for Mac
+    </a>
+    <a class="btn ghost glass" href="https://github.com/YisroelArnson/Tilez">View source</a>
+  </div>
+</section>
+
+<footer class="wrap">
+  <a class="brand" href="#top">
+    <svg viewBox="0 0 18 18" aria-hidden="true"><rect x="1" y="1" width="16" height="5" rx="1.2" fill="#fff"/><rect x="1" y="8" width="7" height="9" rx="1.2" fill="#fff"/><rect x="10" y="8" width="7" height="9" rx="1.2" fill="#fff"/></svg>
+    Tilez
+  </a>
+  <span>Open source · macOS 14 or later</span>
+  <nav aria-label="Footer">
+    <a href="https://github.com/YisroelArnson/Tilez">Source</a>
+    <a href="https://github.com/YisroelArnson/Tilez/releases/latest/download/Tilez.dmg">Download</a>
+  </nav>
+</footer>
+
+<script>
+(() => {
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  /* =================== Load animation =================== */
+  // A one-time full-screen pass of large tiles. The tiles that spell TILEZ look like
+  // every other tile until the light passes, when they lift further; then all clear.
+  const FONT = {
+    T: ['#####', '..#..', '..#..', '..#..', '..#..', '..#..', '..#..'],
+    I: ['###', '.#.', '.#.', '.#.', '.#.', '.#.', '###'],
+    L: ['#...', '#...', '#...', '#...', '#...', '#...', '####'],
+    E: ['####', '#...', '#...', '###.', '#...', '#...', '####'],
+    Z: ['#####', '....#', '...#.', '..#..', '.#...', '#....', '#####']
+  };
+  const hero = document.getElementById('top');
+  const order = (sizes) => sizes.map(([w, h, wt]) => ({ w, h, k: -Math.log(Math.random()) / wt })).sort((a, b) => a.k - b.k);
+  const LETTER = [[1, 5, 4], [5, 1, 4], [1, 4, 3], [4, 1, 3], [1, 3, 2], [3, 1, 2], [1, 2, 1], [2, 1, 1], [1, 1, .3]];
+  const BG = [[1, 1, 1], [2, 1, 2], [1, 2, 2], [2, 2, 3], [3, 2, 2.5], [2, 3, 2.5], [3, 3, 2], [4, 2, 1.2], [2, 4, 1.2], [4, 3, 1], [3, 4, 1], [1, 3, .8], [3, 1, .8]];
+  const T = { appear: 220, sweepStart: 240, sweep: 560, exitStart: 1120, exit: 280 };
+
+  function playIntro(done) {
+    const W = innerWidth, H = innerHeight;
+    const glyphs = [...'TILEZ'].map(ch => FONT[ch]);
+    const wordCols = glyphs.reduce((n, g) => n + g[0].length, 0) + glyphs.length - 1;
+    const cell = Math.min(W * .92 / wordCols, H * .52 / 7, 130);
+    // The word fixes the cell size, so background tiles are built from double-size (or larger) units.
+    const k = Math.max(2, Math.round(100 / cell));
+    const bgSizes = BG.map(([w, h, wt]) => [w * k, h * k, wt])
+      .concat([[k, k - 1 || 1, .08], [k - 1 || 1, k, .08], [k, 1, .04], [1, k, .04], [2, 1, .02], [1, 2, .02], [1, 1, .01]]);
+    const cols = Math.ceil(W / cell), rows = Math.ceil(H / cell);
+    const c0 = Math.floor((cols - wordCols) / 2), r0 = Math.floor((rows - 7) / 2);
+    const grid = new Int8Array(cols * rows); // 0 free, 1 letter, 3 taken
+    let x0 = c0;
+    for (const g of glyphs) {
+      for (let y = 0; y < 7; y++) for (let x = 0; x < g[0].length; x++) {
+        const c = x0 + x, r = r0 + y;
+        if (g[y][x] === '#' && c >= 0 && c < cols && r >= 0 && r < rows) grid[r * cols + c] = 1;
+      }
+      x0 += g[0].length + 1;
+    }
+    const tiles = [];
+    const place = (want, sizes, letter) => {
+      for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+        if (grid[r * cols + c] !== want) continue;
+        for (const { w, h } of order(sizes)) {
+          let ok = c + w <= cols && r + h <= rows;
+          for (let y = 0; ok && y < h; y++) for (let x = 0; x < w; x++) if (grid[(r + y) * cols + c + x] !== want) { ok = false; break; }
+          if (!ok) continue;
+          for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) grid[(r + y) * cols + c + x] = 3;
+          tiles.push({ c, r, w, h, letter });
+          break;
+        }
+      }
+    };
+    place(1, LETTER, true);
+    place(0, bgSizes, false);
+    const veil = document.createElement('div');
+    veil.className = 'intro-tiles';
+    veil.setAttribute('aria-hidden', 'true');
+    const gap = Math.max(6, cell * .1);
+    veil.style.setProperty('--tr', Math.min(18, Math.max(8, cell * .2)).toFixed(1) + 'px');
+    // The backdrop stays solid until the last tile is gone, so nothing shows through the gaps.
+    const reveal = T.exitStart + T.exit + 260;
+    veil.style.setProperty('--reveal', reveal + 'ms');
+    for (const t of tiles) {
+      const el = document.createElement('i');
+      if (t.letter) el.className = 'letter';
+      const diag = (t.c + t.w / 2 + t.r + t.h / 2) / (cols + rows);
+      el.style.cssText = `left:${t.c * cell + gap / 2}px;top:${t.r * cell + gap / 2}px;width:${t.w * cell - gap}px;height:${t.h * cell - gap}px;`
+        + `--l:${(4 + Math.random() * 3).toFixed(1)};--d:${Math.round(diag * T.appear)}ms;--s:${Math.round(T.sweepStart + diag * T.sweep)}ms;`
+        + `--x:${Math.round(T.exitStart + diag * T.exit)}ms`;
+      veil.appendChild(el);
+    }
+    document.body.appendChild(veil);
+    let revealed = false;
+    const revealPage = () => { if (!revealed) { revealed = true; done(); } };
+    const finish = () => { veil.remove(); revealPage(); };
+    setTimeout(revealPage, reveal);
+    setTimeout(finish, reveal + 240);
+    veil.addEventListener('click', finish);
+  }
+
+  if (!reduced) playIntro(() => hero.classList.add('enter'));
+
+  /* =================== Demo: layout model =================== */
+  // A JavaScript port of Tilez's pane rules: normalized frames with a fixed gap,
+  // dividers between adjacent panes, T-junctions that move together, free sides
+  // that stop just short of the next pane, and corner drags that move a junction.
+  const GX = .008, GY = .0128, MIN_W = .07, MIN_H = .1, TOL = .03;
+  const H_EDGES = ['left', 'right'];
+  const isH = e => e === 'left' || e === 'right';
+  const clone = ps => ps.map(p => ({ ...p }));
+  const maxX = p => p.x + p.w, maxY = p => p.y + p.h;
+
+  function dividersOf(ps) {
+    const out = [];
+    ps.forEach((a, i) => ps.forEach((b, j) => {
+      if (i === j) return;
+      for (const vertical of [true, false]) {
+        const gap = vertical ? b.x - maxX(a) : b.y - maxY(a);
+        const lower = vertical ? Math.max(a.y, b.y) : Math.max(a.x, b.x);
+        const upper = vertical ? Math.min(maxY(a), maxY(b)) : Math.min(maxX(a), maxX(b));
+        if (gap >= -.001 && gap <= TOL && upper - lower > .02) {
+          out.push({ before: i, after: j, vertical, lower, upper, id: `${i}-${j}-${vertical}`,
+                     position: vertical ? (maxX(a) + b.x) / 2 : (maxY(a) + b.y) / 2 });
+        }
+      }
+    }));
+    return out;
+  }
+  function sides(ds, d) {
+    const before = new Set([d.before]), after = new Set([d.after]);
+    const shared = ds.filter(x => x.vertical === d.vertical && Math.abs(x.position - d.position) < .002);
+    let changed = true;
+    while (changed) {
+      const n = before.size + after.size;
+      for (const x of shared) if (before.has(x.before) || after.has(x.after)) { before.add(x.before); after.add(x.after); }
+      changed = before.size + after.size !== n;
+    }
+    return { before, after };
+  }
+  function moveDivider(ps, d, extra, position) {
+    const ds = dividersOf(ps), v = d.vertical, min = v ? MIN_W : MIN_H;
+    const before = new Set(), after = new Set();
+    for (const x of [d, ...extra]) { const s = sides(ds, x); s.before.forEach(i => before.add(i)); s.after.forEach(i => after.add(i)); }
+    const lower = Math.max(...[...before].map(i => min - (v ? ps[i].w : ps[i].h)));
+    const upper = Math.min(...[...after].map(i => (v ? ps[i].w : ps[i].h) - min));
+    if (lower > upper) return;
+    const delta = Math.max(lower, Math.min(upper, position - d.position));
+    before.forEach(i => { if (v) ps[i].w += delta; else ps[i].h += delta; });
+    after.forEach(i => { if (v) { ps[i].x += delta; ps[i].w -= delta; } else { ps[i].y += delta; ps[i].h -= delta; } });
+  }
+  function moveFreeSide(ps, i, edge, delta) {
+    const p = ps[i], hz = isH(edge), gap = hz ? GX : GY;
+    const level = ps.filter((f, j) => j !== i && (hz ? Math.min(maxY(f), maxY(p)) - Math.max(f.y, p.y) > .001
+                                                     : Math.min(maxX(f), maxX(p)) - Math.max(f.x, p.x) > .001));
+    if (edge === 'left') {
+      const stop = Math.max(0, ...level.filter(f => maxX(f) <= p.x + .001).map(f => maxX(f) + gap));
+      const x = Math.max(stop, Math.min(maxX(p) - MIN_W, p.x + delta)); p.w = maxX(p) - x; p.x = x;
+    } else if (edge === 'right') {
+      const stop = Math.min(1, ...level.filter(f => f.x >= maxX(p) - .001).map(f => f.x - gap));
+      p.w = Math.max(p.x + MIN_W, Math.min(stop, maxX(p) + delta)) - p.x;
+    } else if (edge === 'top') {
+      const stop = Math.max(0, ...level.filter(f => maxY(f) <= p.y + .001).map(f => maxY(f) + gap));
+      const y = Math.max(stop, Math.min(maxY(p) - MIN_H, p.y + delta)); p.h = maxY(p) - y; p.y = y;
+    } else {
+      const stop = Math.min(1, ...level.filter(f => f.y >= maxY(p) - .001).map(f => f.y - gap));
+      p.h = Math.max(p.y + MIN_H, Math.min(stop, maxY(p) + delta)) - p.y;
+    }
+  }
+  function resizePane(ps, i, edges, off) {
+    for (const edge of edges) {
+      const hz = isH(edge), delta = hz ? off.x : off.y;
+      const lines = dividersOf(ps).filter(d => d.vertical === hz);
+      const d = lines.find(d => (edge === 'right' || edge === 'bottom') ? d.before === i : d.after === i);
+      if (!d) { moveFreeSide(ps, i, edge, delta); continue; }
+      let extra = [];
+      const across = edges.find(e => isH(e) !== hz);
+      if (across) {
+        const p = ps[i];
+        const corner = across === 'left' ? p.x : across === 'right' ? maxX(p) : across === 'top' ? p.y : maxY(p);
+        extra = lines.filter(x => x.id !== d.id && Math.abs(x.position - d.position) < .002
+          && (Math.abs(x.lower - corner) <= TOL || Math.abs(x.upper - corner) <= TOL));
+      }
+      moveDivider(ps, d, extra, d.position + delta);
+    }
+  }
+  function neighbor(ps, i, dx, dy) {
+    const o = { x: ps[i].x + ps[i].w / 2, y: ps[i].y + ps[i].h / 2 };
+    let best = -1, score = Infinity;
+    ps.forEach((p, j) => {
+      if (j === i) return;
+      const d = { x: p.x + p.w / 2 - o.x, y: p.y + p.h / 2 - o.y };
+      if (dx ? d.x * dx <= .001 : d.y * dy <= .001) return;
+      const s = dx ? Math.abs(d.x) + Math.abs(d.y) * 3 : Math.abs(d.y) + Math.abs(d.x) * 3;
+      if (s < score) { score = s; best = j; }
+    });
+    return best;
+  }
+  function split(ps, i, edge, app) {
+    const old = ps[i], v = isH(edge), sp = v ? GX : GY;
+    const len = ((v ? old.w : old.h) - sp) / 2;
+    if (len < (v ? MIN_W : MIN_H)) return null;
+    const a = { ...old }, b = { ...old };
+    if (v) { a.w = b.w = len; b.x = a.x + len + sp; } else { a.h = b.h = len; b.y = a.y + len + sp; }
+    const newFirst = edge === 'left' || edge === 'top';
+    const keep = newFirst ? b : a, add = newFirst ? a : b;
+    Object.assign(ps[i], { x: keep.x, y: keep.y, w: keep.w, h: keep.h });
+    const pane = { id: newId(), app, x: add.x, y: add.y, w: add.w, h: add.h };
+    ps.push(pane);
+    return pane;
+  }
+  function mergeCandidates(ps, i, edge) {
+    const pane = ps[i], across = isH(edge), tol = .004;
+    const low = f => across ? f.y : f.x, high = f => across ? maxY(f) : maxX(f);
+    const far = f => edge === 'left' ? f.x : edge === 'right' ? maxX(f) : edge === 'top' ? f.y : maxY(f);
+    const gapTo = f => edge === 'left' ? pane.x - maxX(f) : edge === 'right' ? f.x - maxX(pane) : edge === 'top' ? pane.y - maxY(f) : f.y - maxY(pane);
+    const nb = ps.map((_, j) => j).filter(j => {
+      if (j === i) return false;
+      const f = ps[j], g = gapTo(f);
+      return g >= -.001 && g <= TOL && Math.min(high(f), high(pane)) - Math.max(low(f), low(pane)) > tol;
+    }).sort((a, b) => low(ps[a]) - low(ps[b]));
+    if (!nb.length) return [];
+    const first = ps[nb[0]], last = ps[nb[nb.length - 1]];
+    if (Math.abs(low(first) - low(pane)) >= tol || Math.abs(high(last) - high(pane)) >= tol) return [];
+    if (!nb.every(j => Math.abs(far(ps[j]) - far(first)) < tol)) return [];
+    for (let k = 1; k < nb.length; k++) { const g = low(ps[nb[k]]) - high(ps[nb[k - 1]]); if (g < -.001 || g > TOL) return []; }
+    const u = nb.reduce((r, j) => union(r, ps[j]), pane);
+    const inner = { x: u.x + tol, y: u.y + tol, w: u.w - 2 * tol, h: u.h - 2 * tol };
+    if (ps.some((f, j) => j !== i && !nb.includes(j) && intersects(f, inner))) return [];
+    return nb;
+  }
+  function union(a, b) {
+    const x = Math.min(a.x, b.x), y = Math.min(a.y, b.y);
+    return { ...a, x, y, w: Math.max(maxX(a), maxX(b)) - x, h: Math.max(maxY(a), maxY(b)) - y };
+  }
+  const intersects = (a, b) => a.x < maxX(b) && b.x < maxX(a) && a.y < maxY(b) && b.y < maxY(a);
+  function removePane(ps, i) {
+    const removed = ps[i];
+    for (const edge of ['left', 'right', 'top', 'bottom']) {
+      const v = isH(edge);
+      const lo = f => v ? f.y : f.x, hi = f => v ? maxY(f) : maxX(f);
+      const start = lo(removed), end = hi(removed);
+      const cand = ps.map((_, j) => j).filter(j => {
+        if (j === i) return false;
+        const f = ps[j];
+        const g = edge === 'left' ? removed.x - maxX(f) : edge === 'right' ? f.x - maxX(removed) : edge === 'top' ? removed.y - maxY(f) : f.y - maxY(removed);
+        return g >= -.001 && g <= TOL && lo(f) >= start - .001 && hi(f) <= end + .001;
+      }).sort((a, b) => lo(ps[a]) - lo(ps[b]));
+      if (!cand.length) continue;
+      if (Math.abs(lo(ps[cand[0]]) - start) >= .002 || Math.abs(hi(ps[cand[cand.length - 1]]) - end) >= .002) continue;
+      let contiguous = true;
+      for (let k = 1; k < cand.length; k++) { const g = lo(ps[cand[k]]) - hi(ps[cand[k - 1]]); if (g < -.001 || g > TOL) contiguous = false; }
+      if (!contiguous) continue;
+      for (const j of cand) {
+        const f = ps[j];
+        if (edge === 'left') f.w = maxX(removed) - f.x;
+        else if (edge === 'right') { const e = maxX(f); f.x = removed.x; f.w = e - removed.x; }
+        else if (edge === 'top') f.h = maxY(removed) - f.y;
+        else { const e = maxY(f); f.y = removed.y; f.h = e - removed.y; }
+      }
+      break;
+    }
+    ps.splice(i, 1);
+  }
+
+  /* =================== Demo: apps + windows =================== */
+  const ICON = {
+    hex: '<path d="M12 2.8l8 4.6v9.2l-8 4.6-8-4.6V7.4z"/><circle cx="12" cy="12" r="3.2"/>',
+    star: '<path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/>',
+    term: '<path d="M5 7l5 5-5 5M12.5 17H19"/>',
+    compass: '<circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/>',
+    code: '<path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/>',
+    notes: '<path d="M6 3.5h12v17H6z"/><path d="M9 8.5h6M9 12.5h6M9 16.5h3.5"/>',
+    hash: '<path d="M9.5 4L7.5 20M16.5 4l-2 16M4.5 9h16M3.5 15h16"/>',
+    folder: '<path d="M3 6.5h6l2 2h10V19H3z"/>',
+    mail: '<path d="M3 6h18v12H3z"/><path d="M3 7l9 6 9-6"/>',
+    music: '<path d="M9 18V6l10-2v12"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="16.5" cy="16" r="2.5"/>',
+    dots: '<circle cx="9" cy="6" r="2.6"/><circle cx="15" cy="6" r="2.6"/><circle cx="9" cy="12" r="2.6"/><circle cx="15" cy="12" r="2.6"/><circle cx="9" cy="18" r="2.6"/>',
+    cal: '<path d="M4 6h16v14H4zM4 10.5h16M8.5 3v5M15.5 3v5"/>'
+  };
+  const APPS = [
+    { key: 'chatgpt', name: 'ChatGPT', icon: 'hex', kind: 'chat', line: 'Here’s a tidy way to lay out your afternoon:', compose: 'Message ChatGPT' },
+    { key: 'claude', name: 'Claude', icon: 'star', kind: 'chat', line: 'Split the right pane, then drag its corner.', compose: 'Reply to Claude…' },
+    { key: 'terminal', name: 'Terminal', icon: 'term', kind: 'term' },
+    { key: 'safari', name: 'Safari', icon: 'compass', kind: 'web' },
+    { key: 'xcode', name: 'Xcode', icon: 'code', kind: 'code' },
+    { key: 'notes', name: 'Notes', icon: 'notes', kind: 'notes' },
+    { key: 'slack', name: 'Slack', icon: 'hash', kind: 'list' },
+    { key: 'finder', name: 'Finder', icon: 'folder', kind: 'files' },
+    { key: 'mail', name: 'Mail', icon: 'mail', kind: 'mail' },
+    { key: 'calendar', name: 'Calendar', icon: 'cal', kind: 'cal' },
+    { key: 'music', name: 'Music', icon: 'music', kind: 'generic' },
+    { key: 'figma', name: 'Figma', icon: 'dots', kind: 'generic' }
+  ];
+  const appOf = key => APPS.find(a => a.key === key);
+  const ico = (a, cls = '') => `<span class="ico ${cls}"><svg viewBox="0 0 24 24" aria-hidden="true">${ICON[a.icon]}</svg></span>`;
+  const bars = (...ws) => ws.map(w => `<i style="width:${w}%"></i>`).join('');
+  const CODE = [
+    'for edge in edges {',
+    '    let horizontal = edge == .left || edge == .right',
+    '    let delta = horizontal ? offset.width : offset.height',
+    '    let lines = dividers.filter { $0.vertical == horizontal }',
+    '    guard let divider = lines.first(where: {',
+    '        edge == .right ? $0.before == index : $0.after == index',
+    '    }) else {',
+    '        moveFreeSide(index, edge, by: delta, gap: gap)',
+    '        continue',
+    '    }',
+    '    moveDivider(divider, with: extra, to: divider.position + delta)',
+    '}'
+  ];
+  function content(a) {
+    switch (a.kind) {
+      case 'chat': return `<div class="c chat"><span class="me"></span><div class="ai"><p>${a.line}</p>${bars(94, 82, 88, 58)}</div><span class="me short"></span><div class="ai">${bars(90, 70)}</div><div class="compose">${a.compose}</div></div>`;
+      case 'term': return `<div class="c term"><div><span class="p">~/Developer/tools/Tilez %</span> git pull</div><div class="p">Updating 6fc529b..3a91e0c</div><div><span class="p">~/Developer/tools/Tilez %</span> bash scripts/update.sh</div><div class="p">Build complete! (11.94s)</div><div>Built: dist/Tilez.app</div><div>Installed and launched: /Applications/Tilez.app</div><div><span class="p">~/Developer/tools/Tilez %</span> <span class="cursor"></span></div></div>`;
+      case 'web': return `<div class="c web"><div class="url">github.com/YisroelArnson/Tilez</div><div class="hbar"></div>${bars(88, 76, 82)}<div class="imgs"><span></span><span></span><span></span></div>${bars(70, 84)}</div>`;
+      case 'code': return `<div class="c code">${CODE.map((l, n) => `<div><em>${n + 212}</em>${l.replace(/\b(for|in|let|guard|else|continue|where)\b/g, '<b>$1</b>')}</div>`).join('')}</div>`;
+      case 'notes': return `<div class="c notes"><h4>Launch checklist</h4><div class="li done">Record a 30-second demo</div><div class="li done">Rename to Tilez</div><div class="li">Write release notes</div><div class="li">Test on a second Mac</div></div>`;
+      case 'list': return `<div class="c list"><div class="ch"><b># launch</b></div>${bars(86, 64)}<div class="ch"># design</div>${bars(78, 52, 70)}<div class="ch"># general</div>${bars(60)}</div>`;
+      case 'files': return `<div class="c files"><div class="grid">${['Applications', 'Developer', 'Documents', 'Downloads', 'Pictures', 'Music'].map(n => `<div class="f"><span></span>${n}</div>`).join('')}</div></div>`;
+      case 'mail': return `<div class="c mail">${['Release checklist', 'Design review', 'Invoice #2031'].map(t => `<div class="row"><b>${t}</b>${bars(90, 64)}</div>`).join('')}</div>`;
+      case 'cal': return `<div class="c cal"><h4 style="margin:0;font:700 13px var(--body);color:#fff">September</h4><div class="days">${Array.from({ length: 28 }, (_, n) => `<span class="${n === 22 ? 'on' : ''}"></span>`).join('')}</div></div>`;
+      default: return `<div class="c">${bars(70, 90, 80, 60, 85, 50)}</div>`;
+    }
+  }
+
+  let uid = 0;
+  const newId = () => 'p' + (++uid);
+  let panes = [
+    { id: newId(), app: 'chatgpt', x: 0, y: 0, w: .336, h: 1 },
+    { id: newId(), app: 'claude', x: .344, y: 0, w: .328, h: .594 },
+    { id: newId(), app: 'terminal', x: .344, y: .6068, w: .328, h: .3932 },
+    { id: newId(), app: 'safari', x: .68, y: 0, w: .32, h: .4936 },
+    { id: newId(), app: 'xcode', x: .68, y: .5064, w: .32, h: .4936 }
+  ];
+  let selectedId = panes[1].id, zoomedId = null, editing = false;
+  const undoStack = [];
+  const desk = document.getElementById('desk'), area = document.getElementById('area');
+  const hudEl = document.getElementById('hud'), emptyEl = document.getElementById('empty');
+  const menuApp = document.getElementById('menuApp');
+  const els = new Map();
+
+  function makeWin(p) {
+    const a = appOf(p.app);
+    const el = document.createElement('div');
+    el.className = 'win';
+    el.dataset.id = p.id;
+    el.innerHTML = `<div class="titlebar"><span class="lights"><i></i><i></i><i></i></span><span class="wtitle">${ico(a)}<span>${a.name}</span></span></div>
+      <div class="wbody">${content(a)}<div class="mini">${ico(a, 'lg')}<span>${a.name}</span></div></div>
+      <div class="pane-card"><span class="num"></span>${ico(a, 'lg')}<span>${a.name}</span></div>`;
+    return el;
+  }
+  function place(el, r) {
+    el.style.left = r.x * 100 + '%'; el.style.top = r.y * 100 + '%';
+    el.style.width = r.w * 100 + '%'; el.style.height = r.h * 100 + '%';
+  }
+  function render() {
+    const ids = new Set(panes.map(p => p.id));
+    for (const [id, el] of els) {
+      if (ids.has(id)) continue;
+      el.classList.add('closing');
+      setTimeout(() => el.remove(), 240);
+      els.delete(id);
+    }
+    panes.forEach((p, i) => {
+      let el = els.get(p.id);
+      if (!el) {
+        el = makeWin(p);
+        place(el, p);
+        el.classList.add('opening');
+        area.appendChild(el);
+        els.set(p.id, el);
+        requestAnimationFrame(() => requestAnimationFrame(() => el.classList.remove('opening')));
+      }
+      const z = p.id === zoomedId;
+      place(el, z ? { x: 0, y: 0, w: 1, h: 1 } : p);
+      el.classList.toggle('selected', p.id === selectedId);
+      el.classList.toggle('zoomed', z);
+      el.querySelector('.num').textContent = i + 1;
+    });
+    const sel = panes.find(p => p.id === selectedId);
+    menuApp.textContent = sel ? appOf(sel.app).name : 'Finder';
+    emptyEl.hidden = panes.length > 0;
+    desk.classList.toggle('editing', editing);
+  }
+
+  let hudTimer;
+  function hud(text) {
+    hudEl.textContent = text;
+    hudEl.classList.add('show');
+    clearTimeout(hudTimer);
+    hudTimer = setTimeout(() => hudEl.classList.remove('show'), 1700);
+  }
+  const nameOf = p => appOf(p.app).name;
+  const selIndex = () => {
+    let i = panes.findIndex(p => p.id === selectedId);
+    if (i < 0 && panes.length) { i = 0; selectedId = panes[0].id; }
+    return i;
+  };
+  function snapshot() {
+    undoStack.push({ panes: clone(panes), selectedId, zoomedId });
+    if (undoStack.length > 60) undoStack.shift();
+  }
+  function nextApp() {
+    const used = new Set(panes.map(p => p.app));
+    const free = APPS.find(a => !used.has(a.key));
+    return (free || APPS[(uid + 2) % APPS.length]).key;
+  }
+  const DIRS = { left: [-1, 0], right: [1, 0], top: [0, -1], bottom: [0, 1] };
+  const WORD = { left: 'to the left', right: 'to the right', top: 'above', bottom: 'below' };
+
+  const actions = {
+    select(dir) {
+      const i = selIndex(); if (i < 0) return;
+      const j = neighbor(panes, i, ...DIRS[dir]);
+      if (j < 0) { hud(`Nothing ${WORD[dir]}`); return; }
+      selectedId = panes[j].id;
+    },
+    swap(dir) {
+      const i = selIndex(); if (i < 0) return;
+      const j = neighbor(panes, i, ...DIRS[dir]);
+      if (j < 0) { hud(`Nothing ${WORD[dir]} to swap with`); return; }
+      snapshot();
+      swapPanes(i, j);
+      hud(`Swapped ${nameOf(panes[i])} and ${nameOf(panes[j])}`);
+    },
+    split(dir) {
+      const i = selIndex();
+      if (i < 0) { actions.add(); return; }
+      const before = clone(panes);
+      const added = split(panes, i, dir, nextApp());
+      if (!added) { hud('That pane is too small to split'); return; }
+      undoStack.push({ panes: before, selectedId, zoomedId });
+      selectedId = added.id;
+      hud(`Opened ${nameOf(added)} ${WORD[dir]}`);
+    },
+    merge(dir) {
+      const i = selIndex(); if (i < 0) return;
+      const absorbed = mergeCandidates(panes, i, dir);
+      if (!absorbed.length) { hud('Those panes don’t line up. Drag a divider to match them first.'); return; }
+      snapshot();
+      const names = absorbed.map(j => nameOf(panes[j]));
+      if (absorbed.some(j => panes[j].id === zoomedId)) zoomedId = null;
+      panes[i] = absorbed.reduce((r, j) => union(r, panes[j]), panes[i]);
+      absorbed.sort((a, b) => b - a).forEach(j => panes.splice(j, 1));
+      hud(`${nameOf(panes.find(p => p.id === selectedId))} grew over ${names.join(' and ')}`);
+    },
+    remove() {
+      const i = selIndex(); if (i < 0) return;
+      snapshot();
+      const name = nameOf(panes[i]);
+      if (panes[i].id === zoomedId) zoomedId = null;
+      removePane(panes, i);
+      selectedId = panes.length ? panes[Math.min(i, panes.length - 1)].id : null;
+      hud(`Closed ${name}`);
+    },
+    zoom() {
+      const i = selIndex(); if (i < 0) return;
+      toggleZoom(panes[i].id);
+    },
+    add() {
+      snapshot();
+      if (!panes.length) {
+        const p = { id: newId(), app: nextApp(), x: 0, y: 0, w: 1, h: 1 };
+        panes.push(p); selectedId = p.id; hud(`Opened ${nameOf(p)}`); return;
+      }
+      const i = selIndex(), p = panes[i];
+      const r = area.getBoundingClientRect();
+      const added = split(panes, i, p.w * r.width >= p.h * r.height ? 'right' : 'bottom', nextApp());
+      if (!added) { undoStack.pop(); hud('That pane is too small to split'); return; }
+      selectedId = added.id;
+      hud(`Opened ${nameOf(added)}`);
+    },
+    undo() {
+      const last = undoStack.pop();
+      if (!last) { hud('Nothing to undo'); return; }
+      panes = last.panes; selectedId = last.selectedId; zoomedId = last.zoomedId;
+      hud('Undid the last change');
+    },
+    editor() {
+      editing = !editing;
+      hud(editing ? 'Grid editor open' : 'Applied');
+    }
+  };
+  function swapPanes(i, j) {
+    const a = panes[i], b = panes[j];
+    [a.x, b.x] = [b.x, a.x]; [a.y, b.y] = [b.y, a.y]; [a.w, b.w] = [b.w, a.w]; [a.h, b.h] = [b.h, a.h];
+  }
+  function toggleZoom(id) {
+    const p = panes.find(q => q.id === id); if (!p) return;
+    snapshot();
+    selectedId = id;
+    if (zoomedId === id) { zoomedId = null; hud(`Put ${nameOf(p)} back`); }
+    else { zoomedId = id; hud(`Enlarged ${nameOf(p)}. Press ⌃⌥↩ again to put it back.`); }
+  }
+  function run(action, dir) {
+    if (!actions[action]) return;
+    actions[action](dir);
+    render();
+  }
+
+  /* =================== Demo: shortcut buttons =================== */
+  // A click runs the shortcut on its own. Directional ones pick a direction that works,
+  // rotating through neighbors so repeated clicks move around the desktop.
+  const KEYS = [
+    { action: 'select', label: 'Select', combo: 'Arrows', dir: true },
+    { action: 'swap', label: 'Swap', combo: '⇧ Arrow', dir: true },
+    { action: 'split', label: 'Split', combo: '⌥ Arrow', dir: true },
+    { action: 'merge', label: 'Merge', combo: '⌥⇧ Arrow', dir: true },
+    { action: 'zoom', label: 'Enlarge', combo: '⌃⌥ Return' },
+    { action: 'add', label: 'Add', combo: '⌘K' },
+    { action: 'remove', label: 'Close', combo: '⌫' },
+    { action: 'undo', label: 'Undo', combo: '⌘Z' },
+    { action: 'editor', label: 'Grid editor', combo: '⌃⌥ Space' }
+  ];
+  const ORDER = ['right', 'bottom', 'left', 'top'];
+  let turn = 0;
+  function autoDir(action) {
+    const i = selIndex();
+    if (i < 0) return 'right';
+    if (action === 'split') {
+      const p = panes[i], r = area.getBoundingClientRect();
+      return p.w * r.width >= p.h * r.height ? 'right' : 'bottom';
+    }
+    const works = (j, d) => action === 'merge' ? mergeCandidates(panes, j, d).length > 0 : neighbor(panes, j, ...DIRS[d]) >= 0;
+    for (let k = 0; k < 4; k++) {
+      const d = ORDER[(turn + k) % 4];
+      if (works(i, d)) { turn = (turn + k + 1) % 4; return d; }
+    }
+    // Merge from another pane when the selected one has nothing lined up beside it.
+    if (action === 'merge') {
+      for (let j = 0; j < panes.length; j++) for (const d of ORDER) if (works(j, d)) { selectedId = panes[j].id; return d; }
+    }
+    return ORDER[turn];
+  }
+  const keysEl = document.getElementById('keys');
+  for (const k of KEYS) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'key-btn glass';
+    btn.dataset.action = k.action;
+    btn.innerHTML = `<span class="klabel">${k.label}</span><span class="kcombo">${k.combo}</span>`;
+    btn.addEventListener('click', () => run(k.action, k.dir ? autoDir(k.action) : undefined));
+    keysEl.appendChild(btn);
+  }
+  function flash(action) {
+    const btn = keysEl.querySelector(`[data-action="${action}"]`);
+    if (!btn) return;
+    btn.classList.add('pressed');
+    setTimeout(() => btn.classList.remove('pressed'), 170);
+  }
+
+  /* =================== Demo: keyboard =================== */
+  let hovering = false;
+  const armed = () => hovering || document.activeElement === desk || desk.contains(document.activeElement);
+  function updateStatus() {
+    desk.classList.toggle('armed', armed());
+  }
+  desk.addEventListener('pointerenter', () => { hovering = true; updateStatus(); });
+  desk.addEventListener('pointerleave', () => { hovering = false; updateStatus(); });
+  desk.addEventListener('focus', updateStatus);
+  desk.addEventListener('blur', updateStatus);
+  const ARROWS = { ArrowLeft: 'left', ArrowRight: 'right', ArrowUp: 'top', ArrowDown: 'bottom' };
+  window.addEventListener('keydown', e => {
+    if (!armed()) return;
+    const key = e.key, dir = ARROWS[key];
+    const plain = !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey;
+    let action = null;
+    // On a Mac running Tilez, the app claims ⌃⌥Space, ⌃⌥Return, and ⌃⌥-click before the
+    // browser sees them, so plain Space, Return, and ⌥-click stand in for them here.
+    if (e.code === 'Space' && ((e.ctrlKey && e.altKey) || plain)) action = 'editor';
+    else if (key === 'Enter' && e.ctrlKey && e.altKey) action = 'zoom';
+    else if (key === 'Enter' && plain && !editing) action = 'zoom';
+    else if ((e.metaKey || e.ctrlKey) && e.code === 'KeyZ') action = 'undo';
+    else if ((e.metaKey || e.ctrlKey) && e.code === 'KeyK') action = 'add';
+    else if (dir && !e.metaKey && !e.ctrlKey) action = e.altKey && e.shiftKey ? 'merge' : e.altKey ? 'split' : e.shiftKey ? 'swap' : 'select';
+    else if ((key === 'Backspace' || key === 'Delete') && !e.metaKey) action = 'remove';
+    else if (editing && (key === 'Escape' || key === 'Enter')) {
+      e.preventDefault(); editing = false; hud(key === 'Enter' ? 'Applied' : 'Grid editor closed'); render(); return;
+    } else if (/^[1-9]$/.test(key) && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      const p = panes[Number(key) - 1];
+      if (p) { e.preventDefault(); selectedId = p.id; render(); }
+      return;
+    }
+    if (!action) return;
+    e.preventDefault();
+    run(action, dir);
+    flash(action);
+  });
+
+  /* =================== Demo: mouse =================== */
+  const CURSOR = { left: 'ew-resize', right: 'ew-resize', top: 'ns-resize', bottom: 'ns-resize',
+                   'left,top': 'nwse-resize', 'right,bottom': 'nwse-resize', 'right,top': 'nesw-resize', 'left,bottom': 'nesw-resize' };
+  function zoneAt(i, pt, r) {
+    const p = panes[i];
+    const f = { x: p.x * r.width, y: p.y * r.height, w: p.w * r.width, h: p.h * r.height };
+    if (pt.x < f.x || pt.y < f.y || pt.x > f.x + f.w || pt.y > f.y + f.h) return [];
+    const l = pt.x - f.x, rt = f.x + f.w - pt.x, t = pt.y - f.y, b = f.y + f.h - pt.y;
+    const hz = l < rt ? 'left' : 'right', vt = t < b ? 'top' : 'bottom';
+    if (Math.min(l, rt) <= 14 && Math.min(t, b) <= 14) return [hz, vt];
+    if (Math.min(l, rt) <= 7) return [hz];
+    if (Math.min(t, b) <= 7) return [vt];
+    return [];
+  }
+  let gesture = null;
+  area.addEventListener('contextmenu', e => { if (e.altKey) e.preventDefault(); });
+  area.addEventListener('pointerdown', e => {
+    const winEl = e.target.closest('.win'); if (!winEl) return;
+    const i = panes.findIndex(p => p.id === winEl.dataset.id); if (i < 0) return;
+    desk.focus({ preventScroll: true });
+    if (e.altKey && !e.shiftKey && !e.metaKey) { e.preventDefault(); toggleZoom(panes[i].id); flash('zoom'); render(); return; }
+    if (e.button !== 0) return;
+    selectedId = panes[i].id;
+    render();
+    if (panes[i].id === zoomedId || editing) return;
+    const r = area.getBoundingClientRect();
+    gesture = { i, el: winEl, edges: zoneAt(i, { x: e.clientX - r.left, y: e.clientY - r.top }, r),
+                sx: e.clientX, sy: e.clientY, base: clone(panes), rect: r, moved: false, target: -1 };
+    area.setPointerCapture(e.pointerId);
+  });
+  area.addEventListener('pointermove', e => {
+    const r = area.getBoundingClientRect();
+    if (!gesture) {
+      const winEl = e.target.closest('.win');
+      const i = winEl ? panes.findIndex(p => p.id === winEl.dataset.id) : -1;
+      const edges = i >= 0 && panes[i].id !== zoomedId && !editing ? zoneAt(i, { x: e.clientX - r.left, y: e.clientY - r.top }, r) : [];
+      area.style.cursor = CURSOR[edges.join(',')] || '';
+      return;
+    }
+    const g = gesture, dx = e.clientX - g.sx, dy = e.clientY - g.sy;
+    if (g.edges.length) {
+      if (!g.moved && Math.hypot(dx, dy) < 2) return;
+      g.moved = true;
+      desk.classList.add('live');
+      const ps = clone(g.base);
+      resizePane(ps, g.i, g.edges, { x: dx / g.rect.width, y: dy / g.rect.height });
+      panes = ps;
+      render();
+    } else {
+      if (!g.moved && Math.hypot(dx, dy) < 6) return;
+      g.moved = true;
+      g.el.classList.add('dragging');
+      g.el.style.transform = `translate(${dx}px, ${dy}px)`;
+      const pt = { x: (e.clientX - r.left) / r.width, y: (e.clientY - r.top) / r.height };
+      const t = panes.findIndex((p, j) => j !== g.i && pt.x >= p.x && pt.x <= maxX(p) && pt.y >= p.y && pt.y <= maxY(p));
+      if (t !== g.target) {
+        if (g.target >= 0) els.get(panes[g.target].id)?.classList.remove('target');
+        if (t >= 0) els.get(panes[t].id)?.classList.add('target');
+        g.target = t;
+      }
+    }
+  });
+  function endGesture() {
+    const g = gesture; if (!g) return;
+    gesture = null;
+    desk.classList.remove('live');
+    if (g.edges.length) {
+      if (g.moved && JSON.stringify(g.base) !== JSON.stringify(panes)) {
+        undoStack.push({ panes: g.base, selectedId, zoomedId });
+        hud(`Resized ${nameOf(panes[g.i])}`);
+      }
+    } else if (g.moved) {
+      g.el.classList.remove('dragging');
+      g.el.style.transform = '';
+      if (g.target >= 0) {
+        els.get(panes[g.target].id)?.classList.remove('target');
+        snapshot();
+        swapPanes(g.i, g.target);
+        hud(`Swapped ${nameOf(panes[g.i])} and ${nameOf(panes[g.target])}`);
+      }
+    }
+    render();
+  }
+  area.addEventListener('pointerup', endGesture);
+  area.addEventListener('pointercancel', endGesture);
+
+  /* =================== Install: copy =================== */
+  // Copies only the commands, not prompts or sample output.
+  document.querySelectorAll('.copy-btn').forEach(btn => btn.addEventListener('click', () => {
+    const pre = document.getElementById('cmd-' + btn.dataset.copy);
+    const text = pre.innerText.split('\n').filter(l => l.startsWith('% ')).map(l => l.slice(2)).join('\n');
+    const done = label => { btn.textContent = label; setTimeout(() => { btn.textContent = 'Copy'; }, 1400); };
+    const select = () => { const r = document.createRange(); r.selectNodeContents(pre); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); done('Selected'); };
+    try { navigator.clipboard.writeText(text).then(() => done('Copied'), select); } catch { select(); }
+  }));
+
+  const clock = document.getElementById('clock');
+  const tick = () => { clock.textContent = new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }); };
+  tick(); setInterval(tick, 30000);
+  render();
+})();
+</script>
+
+</body>
+</html>
