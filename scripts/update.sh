@@ -21,7 +21,7 @@ bash "$TILEZ_ROOT/scripts/build.sh"
 
 # Quit the running copy so its binary can be replaced.
 if pgrep -xq Tilez; then
-  osascript -e 'tell application id "com.local.tilez" to quit' || true
+  osascript -e 'tell application id "com.yisroelarnson.tilez" to quit' || true
   for _ in $(seq 1 50); do pgrep -xq Tilez || break; sleep 0.2; done
   if pgrep -xq Tilez; then echo "Tilez did not quit. Quit it from the menu bar and run update again." >&2; exit 1; fi
 fi

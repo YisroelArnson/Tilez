@@ -17,7 +17,7 @@ cat > "$TILEZ_FIXTURE/Contents/Info.plist" <<'PLIST'
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
 <key>CFBundleName</key><string>Tilez Popover Check</string>
-<key>CFBundleIdentifier</key><string>com.local.tilezpopovercheck</string>
+<key>CFBundleIdentifier</key><string>com.yisroelarnson.tilez.popovercheck</string>
 <key>CFBundleExecutable</key><string>TilezPopoverCheck</string>
 <key>CFBundlePackageType</key><string>APPL</string>
 <key>LSUIElement</key><true/>

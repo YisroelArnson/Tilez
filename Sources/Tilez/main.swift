@@ -1,4 +1,5 @@
 import AppKit
+import Sparkle
 import SwiftUI
 
 final class ActionItem: NSMenuItem {
@@ -19,6 +20,7 @@ final class ActionItem: NSMenuItem {
     private var hotkey: GridHotKey!
     private var zoom: WindowZoom!
     private var swap: WindowSwap!
+    private var updater: SPUStandardUpdaterController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -34,6 +36,15 @@ final class ActionItem: NSMenuItem {
         zoom = WindowZoom()
         swap = WindowSwap()
         swap.isExcluded = { [weak self] in self?.zoom.isEnlarged($0) ?? false }
+        // Only release builds carry an update feed; builds from source update with scripts/update.sh.
+        if Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil {
+            updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+            overlay.model.onCheckForUpdates = { [weak self] in
+                self?.overlay.close(restoreFocus: false)
+                NSApp.activate(ignoringOtherApps: true)
+                self?.updater?.checkForUpdates(nil)
+            }
+        }
         configureMainMenu()
         // A small first-run introduction is the actual grid, with permission inline if needed.
         if !UserDefaults.standard.bool(forKey: "hasOpenedGridV2") || CommandLine.arguments.contains("--show-grid") {

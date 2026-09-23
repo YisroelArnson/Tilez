@@ -32,6 +32,7 @@ struct GridAppChoice: Identifiable, Sendable {
     var onDismiss: (() -> Void)?
     var onFinished: (() -> Void)?
     var onFocusGrid: (() -> Void)?
+    var onCheckForUpdates: (() -> Void)?
     var hasActiveLayer: Bool { choosingApp || saving || showingSaved || resizing }
     private var selections: [String: Int] = [:]
     private(set) var display: Display?

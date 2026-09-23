@@ -56,7 +56,7 @@ enum GridDirection {
         } else { selectedCell = target }
     }
 
-    private static let appPasteboardType = NSPasteboard.PasteboardType("com.local.tilez.grid-app")
+    private static let appPasteboardType = NSPasteboard.PasteboardType("com.yisroelarnson.tilez.grid-app")
 
     func copySelectedApp() {
         guard let index = selectedCell, grid.slots.indices.contains(index),

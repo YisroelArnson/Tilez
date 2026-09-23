@@ -49,9 +49,32 @@ swift -module-cache-path .build/module-cache scripts/icon.swift Resources
 bash scripts/build.sh
 ```
 
-The built app is version **2.0.0**, bundle ID `com.local.tilez`. Grant it Accessibility access when the inline prompt appears. No Input Monitoring permission is needed for the grid shortcut.
+The built app is version **2.0.0**, bundle ID `com.yisroelarnson.tilez`. Grant it Accessibility access when the inline prompt appears. No Input Monitoring permission is needed for the grid shortcut.
 
 Only one copy should run at a time. The app in `dist/` and an installed copy use the same bundle identity and preferences.
+
+## Release a DMG
+
+Commit and push, then run one command with the new version:
+
+```bash
+bash scripts/release.sh 2.1.0
+```
+
+It builds Tilez (version 2.1.0, build number = commit count), signs it and the embedded Sparkle updater with your Developer ID and the hardened runtime, packages `dist/Tilez.dmg` with an Applications shortcut, notarizes and staples it, signs it for Sparkle, writes `dist/appcast.xml`, tags `v2.1.0`, and publishes a GitHub release with both files. It stops first if there are uncommitted changes, the tag exists, or `main` isn't pushed.
+
+People who installed the DMG get the update automatically: Sparkle checks `releases/latest/download/appcast.xml`, and **… → Check for Updates…** checks right away. Builds from source have no feed and keep updating with `scripts/update.sh`. The site's Download button links to `releases/latest/download/Tilez.dmg`.
+
+One-time setup:
+
+1. **Developer ID certificate.** In Keychain Access, choose Certificate Assistant → Request a Certificate From a Certificate Authority, and save the request to disk. At [developer.apple.com → Certificates](https://developer.apple.com/account/resources/certificates/add), create a **Developer ID Application** certificate from that request (only the account holder can), download it, and double-click it to add it to your login keychain. `security find-identity -v -p codesigning` should then list it.
+2. **Notarization credentials.** Create an app-specific password at [account.apple.com](https://account.apple.com) → Sign-In and Security → App-Specific Passwords, then save it under the profile the script uses:
+
+   ```bash
+   xcrun notarytool store-credentials tilez-notary --apple-id you@example.com --team-id YOURTEAMID
+   ```
+
+3. **Sparkle update key.** `.build/sparkle-2.10.0/bin/generate_keys` stores the private key in your login keychain and prints the public key, which `scripts/build.sh` embeds as `SUPublicEDKey`. Back up the private key with `generate_keys -x tilez-sparkle-key` and keep the file somewhere safe; without it, installed copies can't verify future updates.
 
 ## Install on another Mac
 

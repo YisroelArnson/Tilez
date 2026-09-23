@@ -57,7 +57,7 @@ struct Display: Identifiable {
 enum Accessibility {
     // AX is synchronous IPC. Keep grid operations off the event loop and serialize
     // them so a slow app cannot stall typing, dragging, or the Escape shortcut.
-    private static let workQueue = DispatchQueue(label: "com.local.tilez.accessibility", qos: .userInitiated)
+    private static let workQueue = DispatchQueue(label: "com.yisroelarnson.tilez.accessibility", qos: .userInitiated)
     private static let inventoryLock = NSLock()
 
     static func perform<T>(_ operation: @escaping () -> T) async throws -> T {
