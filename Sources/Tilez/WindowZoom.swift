@@ -63,6 +63,7 @@ import Carbon
     }
 
     func hasEnlarged(on display: Display) -> Bool { zoomed[Self.key(for: display)] != nil }
+    func isEnlarged(_ element: AXUIElement) -> Bool { zoomed.values.contains { CFEqual($0.element, element) } }
 
     /// Puts back this screen's enlarged window before the grid captures its desktop.
     func restore(on display: Display) async {

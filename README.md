@@ -25,6 +25,10 @@ Press **Control–Option–Space** or click the grid icon in the menu bar. The p
 - **Save / ⌘S** names an optional reusable grid. **⌘O** or the chevron beside Save opens searchable saved grids: type, use ↑/↓, then Return to load a draft on any desktop. Saved grids contain app choices, not a fixed screen or desktop destination.
 - **Escape** closes the app picker first, then the overlay. While opening windows it stops the request; windows already created stay available.
 
+### Swap two windows by dragging
+
+Drag a window by its title bar and pause over another window. A frosted outline marks where your window will land and a dashed outline marks where the other window will go; release to swap them exactly. Dragging across windows without pausing is an ordinary move. Enlarged and full-screen windows never swap.
+
 ### Enlarge a window temporarily
 
 Press **Control–Option–Return** in any window, or **Control–Option–click** it, to enlarge it over its neighbors, filling the screen with a 10-point margin. Nothing else moves. It stays enlarged while you click or switch to other windows. Each screen and desktop keeps its own enlarged window, so you can enlarge one window per monitor and per desktop without them affecting each other. Press the shortcut again on the same screen and desktop, or Control–Option–click the enlarged window, to return it to exactly where it was. Control–Option–clicking a different window puts back the one enlarged on that screen and desktop and enlarges the clicked one. Tilez consumes Control–Option–clicks so apps don't also treat them as right-clicks; ordinary clicks and Control-clicks are untouched. Opening the grid puts back only the enlarged window on the screen and desktop it opens on; quitting Tilez puts them all back. Only standard, resizable windows outside full screen can be enlarged; anything else beeps.

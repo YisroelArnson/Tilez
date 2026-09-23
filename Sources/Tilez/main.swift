@@ -18,6 +18,7 @@ final class ActionItem: NSMenuItem {
     private var overlay: GridOverlayController!
     private var hotkey: GridHotKey!
     private var zoom: WindowZoom!
+    private var swap: WindowSwap!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -31,6 +32,8 @@ final class ActionItem: NSMenuItem {
         statusItem.button?.action = #selector(toggleGrid)
         hotkey = GridHotKey { [weak self] in self?.showGrid() }
         zoom = WindowZoom()
+        swap = WindowSwap()
+        swap.isExcluded = { [weak self] in self?.zoom.isEnlarged($0) ?? false }
         configureMainMenu()
         // A small first-run introduction is the actual grid, with permission inline if needed.
         if !UserDefaults.standard.bool(forKey: "hasOpenedGridV2") || CommandLine.arguments.contains("--show-grid") {
