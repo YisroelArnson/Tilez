@@ -180,10 +180,17 @@ extension DesktopGrid {
     }
 
     public mutating func resizeDivider(_ divider: PaneDivider, to position: CGFloat) {
+        moveDivider(divider, with: [], to: position)
+    }
+
+    /// `extra` dividers on the same line move too, e.g. the rest of a line through a corner.
+    private mutating func moveDivider(_ divider: PaneDivider, with extra: [PaneDivider], to position: CGFloat) {
         var frames = normalizedFrames
         guard frames.indices.contains(divider.before), frames.indices.contains(divider.after), position.isFinite else { return }
         let vertical = divider.vertical
-        let (before, after) = sides(of: divider)
+        let groups = ([divider] + extra).map(sides(of:))
+        let before = groups.reduce(Set<Int>()) { $0.union($1.before) }
+        let after = groups.reduce(Set<Int>()) { $0.union($1.after) }
         let minimum: CGFloat = 0.04
         let lower = before.map { minimum - (vertical ? frames[$0].width : frames[$0].height) }.max() ?? 0
         let upper = after.map { (vertical ? frames[$0].width : frames[$0].height) - minimum }.min() ?? 0
@@ -208,6 +215,64 @@ extension DesktopGrid {
         let start = before.map { divider.vertical ? frames[$0].minX : frames[$0].minY }.max() ?? 0
         let end = after.map { divider.vertical ? frames[$0].maxX : frames[$0].maxY }.min() ?? 1
         resizeDivider(divider, to: (start + end) / 2)
+    }
+
+    /// Drag one or two sides of a pane (two for a corner) by a normalized offset.
+    /// A side shared with neighbors moves their divider, keeping the panes tiled. A free side,
+    /// at the screen edge or facing a gap, moves alone and stops just short of any pane it
+    /// would cover, so dragging it that far makes the two panes neighbors.
+    public mutating func resizePane(_ index: Int, edges: [PaneEdge], by offset: CGSize, gap: CGFloat = 0.008) {
+        guard slots.indices.contains(index), offset.width.isFinite, offset.height.isFinite else { return }
+        for edge in edges {
+            let horizontal = edge == .left || edge == .right
+            let delta = horizontal ? offset.width : offset.height
+            let lines = dividers.filter { $0.vertical == horizontal }
+            guard let divider = lines.first(where: { edge == .right || edge == .bottom ? $0.before == index : $0.after == index }) else {
+                moveFreeSide(index, edge, by: delta, gap: gap)
+                continue
+            }
+            // A corner drag moves the junction: dividers continuing this line past the
+            // corner move too, so the diagonal pane can't be overlapped.
+            var extra: [PaneDivider] = []
+            if let across = edges.first(where: { ($0 == .left || $0 == .right) != horizontal }) {
+                let pane = normalizedFrames[index]
+                let corner = across == .left ? pane.minX : across == .right ? pane.maxX : across == .top ? pane.minY : pane.maxY
+                extra = lines.filter { $0.id != divider.id && abs($0.position - divider.position) < 0.002
+                    && (abs($0.lower - corner) <= 0.025 || abs($0.upper - corner) <= 0.025) }
+            }
+            moveDivider(divider, with: extra, to: divider.position + delta)
+        }
+    }
+
+    private mutating func moveFreeSide(_ index: Int, _ edge: PaneEdge, by delta: CGFloat, gap: CGFloat) {
+        var frames = normalizedFrames
+        let pane = frames[index]
+        let minimum: CGFloat = 0.04
+        let horizontal = edge == .left || edge == .right
+        // Only panes level with this side can block it.
+        let level = frames.indices.filter { other in
+            guard other != index else { return false }
+            let f = frames[other]
+            return horizontal ? min(f.maxY, pane.maxY) - max(f.minY, pane.minY) > 0.001
+                              : min(f.maxX, pane.maxX) - max(f.minX, pane.minX) > 0.001
+        }.map { frames[$0] }
+        switch edge {
+        case .left:
+            let stop = level.filter { $0.maxX <= pane.minX + 0.001 }.map { $0.maxX + gap }.max() ?? 0
+            let x = max(stop, min(pane.maxX - minimum, pane.minX + delta))
+            frames[index] = CGRect(x: x, y: pane.minY, width: pane.maxX - x, height: pane.height)
+        case .right:
+            let stop = level.filter { $0.minX >= pane.maxX - 0.001 }.map { $0.minX - gap }.min() ?? 1
+            frames[index].size.width = max(pane.minX + minimum, min(stop, pane.maxX + delta)) - pane.minX
+        case .top:
+            let stop = level.filter { $0.maxY <= pane.minY + 0.001 }.map { $0.maxY + gap }.max() ?? 0
+            let y = max(stop, min(pane.maxY - minimum, pane.minY + delta))
+            frames[index] = CGRect(x: pane.minX, y: y, width: pane.width, height: pane.maxY - y)
+        case .bottom:
+            let stop = level.filter { $0.minY >= pane.maxY - 0.001 }.map { $0.minY - gap }.min() ?? 1
+            frames[index].size.height = max(pane.minY + minimum, min(stop, pane.maxY + delta)) - pane.minY
+        }
+        paneFrames = frames
     }
 
     /// Panes that exactly fill the space beside `index` on `edge`, so absorbing them

@@ -240,6 +240,15 @@ struct GridAppChoice: Identifiable, Sendable {
         draft.resizeDivider(divider, to: position)
         grid = draft
     }
+    /// Dragging a pane's side or corner. Each update applies the whole offset to the grid as it
+    /// was when the drag began; `finishDivider` then records one undo step.
+    func previewResize(_ index: Int, edges: [PaneEdge], by offset: CGSize) {
+        guard !busy else { return }
+        if dividerDraft == nil { dividerDraft = grid; closeLayers() }
+        guard var draft = dividerDraft, draft.slots.indices.contains(index) else { return }
+        draft.resizePane(index, edges: edges, by: offset)
+        grid = draft
+    }
     func finishDivider() {
         guard let before = dividerDraft else { return }
         dividerDraft = nil

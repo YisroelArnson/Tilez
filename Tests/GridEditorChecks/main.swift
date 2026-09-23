@@ -356,6 +356,13 @@ MainActor.assumeIsolated {
            "Double-click reset restores the even split")
     model.undo(); model.undo()
     assert(model.grid == live, "Reset is its own undo step")
+    for tick in 1...30 { model.previewResize(0, edges: [.right, .bottom], by: CGSize(width: CGFloat(tick) * 0.002, height: CGFloat(tick) * 0.002)) }
+    model.finishDivider()
+    assert(abs(model.grid.normalizedFrames[0].maxX - live.normalizedFrames[0].maxX - 0.06) < 0.001
+           && abs(model.grid.normalizedFrames[0].maxY - live.normalizedFrames[0].maxY - 0.06) < 0.001,
+           "A corner drag applies its whole offset from where it began")
+    model.undo()
+    assert(model.grid == live, "An entire edge or corner drag is one undo step")
     model.selectedCell = 3
     let mergeKey = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [.option, .shift], timestamp: 0,
         windowNumber: 0, context: nil, characters: "", charactersIgnoringModifiers: "", isARepeat: false, keyCode: 126)!
@@ -391,5 +398,5 @@ MainActor.assumeIsolated {
     let captureElapsed = Date().timeIntervalSince(captureStart)
     assert(captureElapsed < 0.15, "Live desktop capture should not wait for AX discovery")
     model.endEditing()
-    print(String(format: "PASS: live desktop replacement, split/new-window intent, divider undo/reset, keyboard merges, deferred removal/close, cancellation, empty desktop; 60 drag updates %.1f ms, live capture %.1f ms", elapsed * 1000, captureElapsed * 1000))
+    print(String(format: "PASS: live desktop replacement, split/new-window intent, divider undo/reset, corner drags, keyboard merges, deferred removal/close, cancellation, empty desktop; 60 drag updates %.1f ms, live capture %.1f ms", elapsed * 1000, captureElapsed * 1000))
 }

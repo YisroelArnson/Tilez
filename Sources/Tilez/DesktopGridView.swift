@@ -95,6 +95,7 @@ struct DesktopGridView: View {
     @State private var overDivider = false
     @State private var pointer: CGPoint?
     @State private var activeDivider: PaneDivider?
+    @State private var activeResize: PaneResize?
     @FocusState private var nameFocused: Bool
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
@@ -158,7 +159,7 @@ struct DesktopGridView: View {
             let warning = dropped > 0 ? "  ·  Removes \(dropped) pane\(dropped == 1 ? "" : "s"); windows stay open" : ""
             return "\(model.draftColumns) × \(model.draftRows)\(warning)  ·  Click or press ↵ to confirm  ·  Esc to cancel"
         }
-        return "Double-click a pane to choose its app  ·  Add or merge at an edge  ·  Drag a divider to resize, double-click to reset  ·  Drag panes to swap"
+        return "Double-click a pane to choose its app  ·  Add or merge at an edge  ·  Drag an edge or corner to resize  ·  Drag panes to swap"
     }
 
     private var toolbar: some View {
@@ -277,7 +278,18 @@ struct DesktopGridView: View {
                     .zIndex(model.selectedCell == index ? Double(frames.count + 1) : Double(frames.count - index))
                     .simultaneousGesture(DragGesture(minimumDistance: 6, coordinateSpace: .named("grid"))
                         .onChanged { value in
-                            guard !model.busy, model.grid.slots[index].app != nil else { return }
+                            guard !model.busy else { return }
+                            // A drag that starts on a side or corner resizes; anywhere else it swaps.
+                            if activeResize == nil, dragSource == nil {
+                                let edges = resizeEdges(index, at: value.startLocation, frames: frames)
+                                if !edges.isEmpty { activeResize = PaneResize(index: index, edges: edges); suppressCellClick = true }
+                            }
+                            if let resize = activeResize {
+                                model.previewResize(resize.index, edges: resize.edges,
+                                                    by: CGSize(width: value.translation.width / width, height: value.translation.height / height))
+                                return
+                            }
+                            guard model.grid.slots[index].app != nil else { return }
                             if dragSource == nil {
                                 dragSource = index; suppressCellClick = true
                                 model.closeLayers()
@@ -287,6 +299,11 @@ struct DesktopGridView: View {
                             repeatDrag = NSEvent.modifierFlags.contains(.shift)
                         }
                         .onEnded { _ in
+                            if activeResize != nil {
+                                model.finishDivider(); activeResize = nil
+                                DispatchQueue.main.async { suppressCellClick = false }
+                                return
+                            }
                             if let source = dragSource, let target = dragTarget { model.move(from: source, to: target, repeating: repeatDrag) }
                             dragSource = nil; dragTarget = nil; dragTranslation = .zero
                             DispatchQueue.main.async { suppressCellClick = false }
@@ -311,16 +328,54 @@ struct DesktopGridView: View {
     /// Hover comes from polling the pointer: SwiftUI's hover never reached the panes in this panel.
     private func pointerMoved(_ point: CGPoint?, frames: [CGRect], width: CGFloat, height: CGFloat) {
         var cell: Int?
-        var divider: PaneDivider?
+        var cursor: NSCursor?
         if let point, dragSource == nil {
-            divider = activeDivider ?? model.grid.dividers.first { dividerRect($0, width: width, height: height).contains(point) }
             if let selected = model.selectedCell, frames.indices.contains(selected), frames[selected].contains(point) { cell = selected }
             else { cell = frames.indices.first { frames[$0].contains(point) } }
+            if let resize = activeResize { cursor = resizeCursor(resize.edges) }
+            else if let divider = activeDivider ?? model.grid.dividers.first(where: { dividerRect($0, width: width, height: height).contains(point) }) {
+                cursor = divider.vertical ? .resizeLeftRight : .resizeUpDown
+            } else if let cell, case let edges = resizeEdges(cell, at: point, frames: frames), !edges.isEmpty {
+                cursor = resizeCursor(edges)
+            }
         }
         if cell != hoveredCell { hoveredCell = cell }
-        if let divider { (divider.vertical ? NSCursor.resizeLeftRight : NSCursor.resizeUpDown).set() }
-        else if overDivider { NSCursor.arrow.set() }
-        overDivider = divider != nil
+        if let cursor { cursor.set() } else if overDivider { NSCursor.arrow.set() }
+        overDivider = cursor != nil
+    }
+
+    /// The side or corner of a pane under `point`: a 10-point band along each side and an
+    /// 18-point square at each corner, leaving out the edge buttons so they still click.
+    private func resizeEdges(_ index: Int, at point: CGPoint, frames: [CGRect]) -> [PaneEdge] {
+        guard frames.indices.contains(index), !model.busy else { return [] }
+        let frame = frames[index]
+        guard frame.contains(point) else { return [] }
+        let horizontal: PaneEdge = point.x - frame.minX < frame.maxX - point.x ? .left : .right
+        let vertical: PaneEdge = point.y - frame.minY < frame.maxY - point.y ? .top : .bottom
+        let fromSide = min(point.x - frame.minX, frame.maxX - point.x)
+        let fromTop = min(point.y - frame.minY, frame.maxY - point.y)
+        if fromSide <= 18 && fromTop <= 18 { return [horizontal, vertical] }
+        let edge: PaneEdge
+        if fromSide <= 10 { edge = horizontal } else if fromTop <= 10 { edge = vertical } else { return [] }
+        for side in PaneEdge.allCases {
+            let button = CGPoint(x: side == .left ? frame.minX + 18 : side == .right ? frame.maxX - 18 : frame.midX,
+                                 y: side == .top ? frame.minY + 18 : side == .bottom ? frame.maxY - 18 : frame.midY)
+            let along = side == .top || side == .bottom
+            let merge = CGPoint(x: button.x + (along ? 34 : 0), y: button.y + (along ? 0 : 34))
+            if hypot(point.x - button.x, point.y - button.y) < 17 { return [] }
+            if hypot(point.x - merge.x, point.y - merge.y) < 17, !model.grid.mergeCandidates(index, toward: side).isEmpty { return [] }
+        }
+        return [edge]
+    }
+
+    private func resizeCursor(_ edges: [PaneEdge]) -> NSCursor {
+        guard edges.count == 2 else { return edges.first == .left || edges.first == .right ? .resizeLeftRight : .resizeUpDown }
+        if #available(macOS 15, *) {
+            let position: NSCursor.FrameResizePosition = edges.contains(.top)
+                ? (edges.contains(.left) ? .topLeft : .topRight) : (edges.contains(.left) ? .bottomLeft : .bottomRight)
+            return .frameResize(position: position, directions: .all)
+        }
+        return .crosshair
     }
 
     private func dividerRect(_ divider: PaneDivider, width: CGFloat, height: CGFloat) -> CGRect {
@@ -802,4 +857,10 @@ private struct GridSizePicker: View {
         (max(1, min(DesktopGrid.maxColumns, Int(floor((point.x - 5) / step)) + 1)),
          max(1, min(DesktopGrid.maxRows, Int(floor((point.y - 5) / step)) + 1)))
     }
+}
+
+/// A pane side or corner being dragged; corners carry one horizontal and one vertical edge.
+private struct PaneResize: Equatable {
+    let index: Int
+    let edges: [PaneEdge]
 }

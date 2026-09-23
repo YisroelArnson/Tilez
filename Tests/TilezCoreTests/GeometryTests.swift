@@ -482,6 +482,50 @@ func checkPaneLayouts() {
     threeColumns.resetDivider(threeColumns.dividers.first { $0.vertical && $0.before == 0 }!)
     expect(zip(threeColumns.normalizedFrames, columnsBefore).allSatisfy { Geometry.approximatelyEqual($0, $1, tolerance: 0.0001) },
            "Reset moves every pane sharing the boundary")
+    func near(_ a: CGFloat, _ b: CGFloat) -> Bool { abs(a - b) < 0.0005 }
+    var free = single
+    free.resizePane(0, edges: [.right], by: CGSize(width: -0.3, height: 0))
+    expect(near(free.normalizedFrames[0].maxX, 0.7) && near(free.normalizedFrames[0].minX, 0) && free.isValid,
+           "A free side moves alone")
+    var cornered = single
+    cornered.resizePane(0, edges: [.left, .top], by: CGSize(width: 0.2, height: 0.1))
+    let corner = cornered.normalizedFrames[0]
+    expect(near(corner.minX, 0.2) && near(corner.minY, 0.1) && near(corner.maxX, 1) && near(corner.maxY, 1),
+           "A corner resizes both directions")
+    var clamped = single
+    clamped.resizePane(0, edges: [.right, .bottom], by: CGSize(width: 5, height: 5))
+    expect(clamped.normalizedFrames[0] == single.normalizedFrames[0], "Free sides stop at the screen edge")
+    clamped.resizePane(0, edges: [.right], by: CGSize(width: -5, height: 0))
+    expect(clamped.normalizedFrames[0].width >= 0.039 && clamped.isValid, "Panes keep a minimum size")
+    var shared = single
+    _ = shared.split(0, toward: .right)
+    let sharedBefore = shared.normalizedFrames
+    shared.resizePane(0, edges: [.right], by: CGSize(width: 0.1, height: 0))
+    expect(near(shared.normalizedFrames[0].maxX, sharedBefore[0].maxX + 0.1)
+           && near(shared.normalizedFrames[1].minX, sharedBefore[1].minX + 0.1)
+           && near(shared.normalizedFrames[1].maxX, 1), "A shared side moves the neighbor's side with it")
+    var quad = DesktopGrid.desktop(panes: Geometry.grid(count: 4, in: bounds, columns: 2, rows: 2, gap: 10).enumerated()
+        .map { (slot($0.offset), $0.element) }, in: bounds)
+    let quadBefore = quad.normalizedFrames
+    quad.resizePane(0, edges: [.right, .bottom], by: CGSize(width: 0.1, height: 0.1))
+    let quadAfter = quad.normalizedFrames
+    expect(near(quadAfter[0].maxX, quadBefore[0].maxX + 0.1) && near(quadAfter[0].maxY, quadBefore[0].maxY + 0.1)
+           && near(quadAfter[1].minX, quadBefore[1].minX + 0.1) && near(quadAfter[2].minY, quadBefore[2].minY + 0.1)
+           && near(quadAfter[3].minX, quadBefore[3].minX + 0.1) && near(quadAfter[3].minY, quadBefore[3].minY + 0.1)
+           && quad.isValid, "A four-way corner moves both dividers")
+    for i in quadAfter.indices { for j in quadAfter.indices where j > i {
+        expect(!quadAfter[i].insetBy(dx: 0.001, dy: 0.001).intersects(quadAfter[j]), "Corner drags never overlap panes \(i) and \(j)")
+    } }
+    var row = quad
+    row.resizePane(0, edges: [.right], by: CGSize(width: 0.1, height: 0))
+    expect(near(row.normalizedFrames[2].maxX, quadAfter[2].maxX) && near(row.normalizedFrames[0].maxX, quadAfter[0].maxX + 0.1), "A side drag leaves the other row's divider alone")
+    var gapped = DesktopGrid(panes: [slot(0), slot(1)], frames: [CGRect(x: 0, y: 0, width: 0.3, height: 1),
+                                                                   CGRect(x: 0.6, y: 0, width: 0.4, height: 1)])
+    expect(gapped.dividers.isEmpty)
+    gapped.resizePane(0, edges: [.right], by: CGSize(width: 0.5, height: 0))
+    expect(near(gapped.normalizedFrames[0].maxX, 0.592) && near(gapped.normalizedFrames[1].minX, 0.6),
+           "A free side stops just short of the pane it would cover")
+    expectEqual(gapped.dividers.count, 1)
     let start = Date()
     var edit = six
     for index in 0..<500 {
@@ -490,7 +534,7 @@ func checkPaneLayouts() {
     }
     let elapsed = Date().timeIntervalSince(start)
     expect(elapsed < 1, "500 divider updates should fit within one second; got \(elapsed)")
-    print(String(format: "PASS: live pane geometry, empty/full/six-window desktops, unequal and overlapping windows, split/remove/T-junction resizing, column merges, divider reset, exact bindings, legacy templates, new-window isolation; 500 divider edits %.1f ms", elapsed * 1000))
+    print(String(format: "PASS: live pane geometry, empty/full/six-window desktops, unequal and overlapping windows, split/remove/T-junction resizing, edge and corner resizing, column merges, divider reset, exact bindings, legacy templates, new-window isolation; 500 divider edits %.1f ms", elapsed * 1000))
 }
 
 @MainActor private func checkWindowSettling() async {
