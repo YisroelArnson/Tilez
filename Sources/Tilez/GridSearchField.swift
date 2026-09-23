@@ -7,6 +7,10 @@ struct GridSearchField: NSViewRepresentable {
     let placeholder: String
     @Binding var text: String
     let onSubmit: () -> Void
+    var fontSize: CGFloat = 14
+    /// Optional ↑/↓ and Escape handling for fields that aren't under the grid's key monitor.
+    var onMove: ((Int) -> Void)? = nil
+    var onCancel: (() -> Void)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -15,7 +19,7 @@ struct GridSearchField: NSViewRepresentable {
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
-        field.font = .systemFont(ofSize: 14)
+        field.font = .systemFont(ofSize: fontSize)
         field.delegate = context.coordinator
         field.onFocus = { [weak field, weak coordinator = context.coordinator] in
             guard let field, let coordinator, let window = field.window else { return }
@@ -65,8 +69,13 @@ struct GridSearchField: NSViewRepresentable {
             parent.text = field.stringValue
         }
         func control(_ control: NSControl, textView: NSTextView, doCommandBy selector: Selector) -> Bool {
-            guard selector == #selector(NSResponder.insertNewline(_:)) else { return false }
-            parent.onSubmit()
+            switch selector {
+            case #selector(NSResponder.insertNewline(_:)): parent.onSubmit()
+            case #selector(NSResponder.moveUp(_:)) where parent.onMove != nil: parent.onMove?(-1)
+            case #selector(NSResponder.moveDown(_:)) where parent.onMove != nil: parent.onMove?(1)
+            case #selector(NSResponder.cancelOperation(_:)) where parent.onCancel != nil: parent.onCancel?()
+            default: return false
+            }
             return true
         }
     }

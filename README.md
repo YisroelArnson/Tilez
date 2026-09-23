@@ -25,6 +25,10 @@ Press **Control–Option–Space** or click the grid icon in the menu bar. The p
 - **Save / ⌘S** names an optional reusable grid. **⌘O** or the chevron beside Save opens searchable saved grids: type, use ↑/↓, then Return to load a draft on any desktop. Saved grids contain app choices, not a fixed screen or desktop destination.
 - **Escape** closes the app picker first, then the overlay. While opening windows it stops the request; windows already created stay available.
 
+### Quick add a tile
+
+Press **Control–Option–N** anywhere to open a search panel of your apps, with recently added apps at the top. Type to filter, use ↑/↓ to choose, and press Return (or click) to open the app as a new tile. Tilez fills an empty pane if the desktop has one; otherwise it splits the largest pane along its longer side and fits the new window there. Every other window stays where it is. Escape, or clicking elsewhere, closes the panel.
+
 ### Swap two windows by dragging
 
 Drag a window by its title bar and pause over another window. A frosted outline marks where your window will land and a dashed outline marks where the other window will go; release to swap them exactly. Dragging across windows without pausing is an ordinary move. Enlarged and full-screen windows never swap.
@@ -41,7 +45,7 @@ Requires macOS 14 or later, Swift 5.9 or later, and Apple's Command Line Tools. 
 
 ```bash
 bash scripts/build.sh
-open "dist/Tilez.app"
+open "dist.noindex/Tilez.app"
 ```
 
 The app uses a black-and-white three-pane icon and monochrome interface accents. The approved icon artwork lives in `Resources/AppIcon.png`. To regenerate the macOS icon sizes and `.icns` bundle after replacing the artwork:
@@ -53,7 +57,7 @@ bash scripts/build.sh
 
 The built app is version **2.0.0**, bundle ID `com.yisroelarnson.tilez`. Grant it Accessibility access when the inline prompt appears. No Input Monitoring permission is needed for the grid shortcut.
 
-Only one copy should run at a time. The app in `dist/` and an installed copy use the same bundle identity and preferences.
+Builds go to `dist.noindex/`, which Spotlight skips, so local builds don't appear next to the installed app. Only one copy should run at a time. The app in `dist.noindex/` and an installed copy use the same bundle identity and preferences.
 
 ## Release a DMG
 
@@ -63,7 +67,7 @@ Commit and push, then run one command with the new version:
 bash scripts/release.sh 2.1.0
 ```
 
-It builds Tilez (version 2.1.0, build number = commit count), signs it and the embedded Sparkle updater with your Developer ID and the hardened runtime, packages `dist/Tilez.dmg` with an Applications shortcut, notarizes and staples it, signs it for Sparkle, writes `dist/appcast.xml`, tags `v2.1.0`, and publishes a GitHub release with both files. It stops first if there are uncommitted changes, the tag exists, or `main` isn't pushed.
+It builds Tilez (version 2.1.0, build number = commit count), signs it and the embedded Sparkle updater with your Developer ID and the hardened runtime, packages `dist.noindex/Tilez.dmg` with an Applications shortcut, notarizes and staples it, signs it for Sparkle, writes `dist.noindex/appcast.xml`, tags `v2.1.0`, and publishes a GitHub release with both files. It stops first if there are uncommitted changes, the tag exists, or `main` isn't pushed.
 
 People who installed the DMG get the update automatically: Sparkle checks `releases/latest/download/appcast.xml`, and **… → Check for Updates…** checks right away. Builds from source have no feed and keep updating with `scripts/update.sh`. The site's Download button links to `releases/latest/download/Tilez.dmg`.
 

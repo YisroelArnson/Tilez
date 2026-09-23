@@ -30,6 +30,7 @@ final class GridMemoryDefaults: UserDefaults {
     var values: [String: Any] = [:]
     override func data(forKey key: String) -> Data? { values[key] as? Data }
     override func set(_ value: Any?, forKey key: String) { values[key] = value }
+    override func stringArray(forKey key: String) -> [String]? { values[key] as? [String] }
 }
 
 MainActor.assumeIsolated {
@@ -399,4 +400,24 @@ MainActor.assumeIsolated {
     assert(captureElapsed < 0.15, "Live desktop capture should not wait for AX discovery")
     model.endEditing()
     print(String(format: "PASS: live desktop replacement, split/new-window intent, divider undo/reset, corner drags, keyboard merges, deferred removal/close, cancellation, empty desktop; 60 drag updates %.1f ms, live capture %.1f ms", elapsed * 1000, captureElapsed * 1000))
+}
+
+// Quick Add lists recently added apps first (newest on top), then names starting with the query.
+MainActor.assumeIsolated {
+    let storage = GridMemoryDefaults(suiteName: nil)!
+    let manager = WindowManager(preferences: Preferences(defaults: storage), backgroundArrangements: false)
+    let quick = QuickAddController(manager: manager, defaults: storage)
+    let url = URL(fileURLWithPath: "/Applications")
+    func choice(_ id: String, _ name: String) -> GridAppChoice { GridAppChoice(app: GridApp(bundleID: id, name: name), url: url) }
+    quick.model.apps = [choice("a.safari", "Safari"), choice("a.notes", "Notes"), choice("a.slack", "Slack"), choice("a.term", "Terminal")]
+    assert(quick.results.map(\.app.name) == ["Safari", "Notes", "Slack", "Terminal"])
+    storage.set(["a.term", "a.notes"], forKey: "quickAddRecents")
+    assert(quick.results.map(\.app.name) == ["Terminal", "Notes", "Safari", "Slack"], "Recent apps come first")
+    quick.query = "s"
+    assert(quick.results.map(\.app.name) == ["Notes", "Safari", "Slack"], "Recent matches, then prefix matches")
+    quick.move(1)
+    assert(quick.selected?.app.name == "Safari", "Down arrow moves the highlight")
+    quick.query = "sl"
+    assert(quick.selected?.app.name == "Slack", "Typing resets the highlight to the best match")
+    print("PASS: quick add ranks recent apps first, then prefix matches, and follows arrow selection")
 }

@@ -11,7 +11,7 @@ swiftc -module-cache-path "$CLANG_MODULE_CACHE_PATH" -I "$TILEZ_BIN/Modules" \
     Sources/Tilez/Desktops.swift Sources/Tilez/WindowManager.swift \
     Sources/Tilez/ActiveLayoutManager.swift Sources/Tilez/GridEditorModel.swift \
     Sources/Tilez/GridLauncher.swift Sources/Tilez/GridKeyboard.swift \
-    Sources/Tilez/GridOverlayController.swift Sources/Tilez/DesktopGridView.swift Sources/Tilez/GridSearchField.swift \
+    Sources/Tilez/GridOverlayController.swift Sources/Tilez/DesktopGridView.swift Sources/Tilez/GridSearchField.swift Sources/Tilez/QuickAdd.swift \
     Tests/GridEditorChecks/main.swift \
     "$TILEZ_BIN/TilezCore.build/"*.swift.o "$TILEZ_BIN/TilezSpacesBridge.build/"*.o \
     -o .build/grid-editor-checks

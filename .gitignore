@@ -1,5 +1,5 @@
 .build/
-dist/
+dist.noindex/
 Resources/AppIcon.iconset/
 .DS_Store
 backups/

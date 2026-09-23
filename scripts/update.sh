@@ -27,6 +27,6 @@ if pgrep -xq Tilez; then
 fi
 
 rm -rf "$TILEZ_INSTALLED"
-ditto "$TILEZ_ROOT/dist/Tilez.app" "$TILEZ_INSTALLED"
+ditto "$TILEZ_ROOT/dist.noindex/Tilez.app" "$TILEZ_INSTALLED"
 open "$TILEZ_INSTALLED"
 printf 'Installed and launched: %s\n' "$TILEZ_INSTALLED"

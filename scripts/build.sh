@@ -1,5 +1,5 @@
 #!/bin/bash
-# Build dist/Tilez.app. The version is TILEZ_VERSION, else the latest v* tag; the build number
+# Build dist.noindex/Tilez.app. The version is TILEZ_VERSION, else the latest v* tag; the build number
 # is the commit count, so it always increases. TILEZ_RELEASE=1 (set by scripts/release.sh)
 # adds the Sparkle update feed; builds from source update with scripts/update.sh instead.
 set -euo pipefail
@@ -14,7 +14,7 @@ SPARKLE_FEED="https://github.com/YisroelArnson/Tilez/releases/latest/download/ap
 SPARKLE_PUBLIC_KEY="6J1ID7e48qeOnQd3il4ZHsa804XQxgsl0LEK5yaTaNY="
 swift build -c release --disable-sandbox
 TILEZ_BIN="$(swift build -c release --show-bin-path --disable-sandbox)"
-TILEZ_APP="$TILEZ_ROOT/dist/Tilez.app"
+TILEZ_APP="$TILEZ_ROOT/dist.noindex/Tilez.app"
 mkdir -p "$TILEZ_APP/Contents/MacOS" "$TILEZ_APP/Contents/Resources"
 cp "$TILEZ_BIN/Tilez" "$TILEZ_APP/Contents/MacOS/Tilez"
 # SwiftPM leaves Sparkle beside the binary; an app bundle loads it from Contents/Frameworks.

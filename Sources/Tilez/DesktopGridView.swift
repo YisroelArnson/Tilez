@@ -237,6 +237,7 @@ struct DesktopGridView: View {
                 Divider()
                 Text("Show or hide Tilez: ⌃⌥Space")
                 Text("Enlarge a window, or put it back: ⌃⌥Return or ⌃⌥-click")
+                Text("Quick add a tile: ⌃⌥N")
                 if let check = model.onCheckForUpdates { Button("Check for Updates…", action: check) }
                 Button("Close", action: { model.onDismiss?() })
                 Button("Quit Tilez") { NSApp.terminate(nil) }

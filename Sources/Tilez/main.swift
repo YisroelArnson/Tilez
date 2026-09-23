@@ -1,4 +1,5 @@
 import AppKit
+import Carbon
 import Sparkle
 import SwiftUI
 
@@ -21,6 +22,8 @@ final class ActionItem: NSMenuItem {
     private var zoom: WindowZoom!
     private var swap: WindowSwap!
     private var updater: SPUStandardUpdaterController?
+    private var quickAdd: QuickAddController!
+    private var quickAddHotkey: GridHotKey!
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -36,6 +39,8 @@ final class ActionItem: NSMenuItem {
         zoom = WindowZoom()
         swap = WindowSwap()
         swap.isExcluded = { [weak self] in self?.zoom.isEnlarged($0) ?? false }
+        quickAdd = QuickAddController(manager: manager)
+        quickAddHotkey = GridHotKey(keyCode: kVK_ANSI_N, id: 3) { [weak self] in self?.showQuickAdd() }
         // Only release builds carry an update feed; builds from source update with scripts/update.sh.
         if Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil {
             updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
@@ -57,6 +62,9 @@ final class ActionItem: NSMenuItem {
         } else if !zoom.hotkey.registered {
             overlay.model.message = "⌃⌥Return is already in use, so windows can’t be enlarged with it."
             overlay.model.isError = true
+        } else if !quickAddHotkey.registered {
+            overlay.model.message = "⌃⌥N is already in use, so Quick Add is unavailable."
+            overlay.model.isError = true
         }
     }
     /// Template artwork follows the app icon's three panes and adapts to the menu bar.
@@ -74,9 +82,18 @@ final class ActionItem: NSMenuItem {
         image.accessibilityDescription = "Tilez"
         return image
     }
+    /// Quick Add opens where the grid would, after that screen's enlarged window returns to its pane.
+    private func showQuickAdd() {
+        if quickAdd.isShown { quickAdd.close(); return }
+        if overlay.isShown { overlay.model.cancel(); overlay.close(restoreFocus: false) }
+        guard let target = overlay.targetScreen(nil), let display = Display.all.first(where: { $0.screen == target }) else { return }
+        guard zoom.hasEnlarged(on: display) else { quickAdd.show(on: display); return }
+        Task { await zoom.restore(on: display); quickAdd.show(on: display) }
+    }
     @objc private func toggleGrid() { showGrid(on: statusItem.button?.window?.screen) }
     /// That screen's enlarged window returns to its pane first so the grid captures the real layout.
     private func showGrid(on screen: NSScreen? = nil) {
+        quickAdd.close()
         let target = overlay.targetScreen(screen)
         guard !overlay.isShown, let display = Display.all.first(where: { $0.screen == target }),
               zoom.hasEnlarged(on: display) else { overlay.toggle(on: target); return }

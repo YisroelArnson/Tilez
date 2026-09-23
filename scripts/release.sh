@@ -1,7 +1,7 @@
 #!/bin/bash
 # Publish a Tilez release: bash scripts/release.sh 2.1.0
-# Builds, signs with Developer ID, notarizes dist/Tilez.dmg, writes the Sparkle update feed
-# (dist/appcast.xml), tags v2.1.0, and creates the GitHub release with both files.
+# Builds, signs with Developer ID, notarizes dist.noindex/Tilez.dmg, writes the Sparkle update feed
+# (dist.noindex/appcast.xml), tags v2.1.0, and creates the GitHub release with both files.
 # One-time setup is in the README (Release a DMG). Override with TILEZ_SIGN_IDENTITY or TILEZ_NOTARY_PROFILE.
 set -euo pipefail
 TILEZ_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -35,9 +35,9 @@ if [ ! -x "$SPARKLE_TOOLS/sign_update" ]; then
 fi
 
 TILEZ_RELEASE=1 TILEZ_VERSION="$VERSION" bash "$TILEZ_ROOT/scripts/build.sh"
-APP="$TILEZ_ROOT/dist/Tilez.app"
+APP="$TILEZ_ROOT/dist.noindex/Tilez.app"
 BUILD="$(/usr/libexec/PlistBuddy -c 'Print CFBundleVersion' "$APP/Contents/Info.plist")"
-DMG="$TILEZ_ROOT/dist/Tilez.dmg"
+DMG="$TILEZ_ROOT/dist.noindex/Tilez.dmg"
 
 # Sign inside-out with the hardened runtime and a secure timestamp, as notarization requires.
 echo "Signing with $IDENTITY"
@@ -66,7 +66,7 @@ spctl --assess --type open --context context:primary-signature --verbose "$DMG"
 
 # Sparkle checks this signature (made with the private key in your keychain) before installing.
 SIGNATURE="$("$SPARKLE_TOOLS/sign_update" "$DMG")"
-cat > "$TILEZ_ROOT/dist/appcast.xml" <<XML
+cat > "$TILEZ_ROOT/dist.noindex/appcast.xml" <<XML
 <?xml version="1.0" encoding="utf-8"?>
 <rss version="2.0" xmlns:sparkle="http://www.andymatuschak.org/xml-namespaces/sparkle">
   <channel>
@@ -86,5 +86,5 @@ XML
 
 git tag -a "$TAG" -m "Tilez $VERSION"
 git push -q origin "$TAG"
-gh release create "$TAG" "$DMG" "$TILEZ_ROOT/dist/appcast.xml" --repo "$REPO" --title "Tilez $VERSION" --generate-notes
+gh release create "$TAG" "$DMG" "$TILEZ_ROOT/dist.noindex/appcast.xml" --repo "$REPO" --title "Tilez $VERSION" --generate-notes
 printf 'Released %s (build %s): https://github.com/%s/releases/tag/%s\n' "$VERSION" "$BUILD" "$REPO" "$TAG"
