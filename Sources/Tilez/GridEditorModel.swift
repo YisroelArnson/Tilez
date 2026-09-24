@@ -35,6 +35,9 @@ struct GridAppChoice: Identifiable, Sendable {
     var onCheckForUpdates: (() -> Void)?
     /// A newer version found by a background check, shown as a pill in the grid.
     @Published var availableUpdate: String?
+    /// The update is already downloaded, so the pill's button restarts into it.
+    @Published var updateReady = false
+    var onUpdate: (() -> Void)?
     var hasActiveLayer: Bool { choosingApp || saving || showingSaved || resizing }
     enum SaveKind { case workspace, layout }
     @Published var saveKind = SaveKind.workspace

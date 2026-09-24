@@ -84,12 +84,18 @@ final class ActionItem: NSMenuItem {
         ]
         // Only release builds carry an update feed; builds from source update with scripts/update.sh.
         if Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil {
-            updateReminder.onChange = { [weak self] version in self?.overlay.model.availableUpdate = version }
-            updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: updateReminder)
+            updateReminder.onChange = { [weak self] version in
+                self?.overlay.model.availableUpdate = version
+                self?.overlay.model.updateReady = self?.updateReminder.install != nil
+            }
+            updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: updateReminder, userDriverDelegate: updateReminder)
             overlay.model.onCheckForUpdates = { [weak self] in
                 self?.overlay.close(restoreFocus: false)
                 NSApp.activate(ignoringOtherApps: true)
                 self?.updater?.checkForUpdates(nil)
+            }
+            overlay.model.onUpdate = { [weak self] in
+                if let install = self?.updateReminder.install { install() } else { self?.overlay.model.onCheckForUpdates?() }
             }
         }
         configureMainMenu()
@@ -174,7 +180,7 @@ final class ActionItem: NSMenuItem {
         workspacePanel.close()
         // Opening the grid also checks for updates if it has been a while, so the pill appears promptly.
         if !overlay.isShown, let updater = updater?.updater, updater.canCheckForUpdates,
-           (updater.lastUpdateCheckDate ?? .distantPast) < Date().addingTimeInterval(-6 * 3600) {
+           (updater.lastUpdateCheckDate ?? .distantPast) < Date().addingTimeInterval(-3600) {
             updater.checkForUpdatesInBackground()
         }
         let target = overlay.targetScreen(screen)
@@ -213,14 +219,23 @@ app.delegate = delegate
 app.run()
 
 /// Scheduled update checks show as a pill in the grid instead of an alert over whatever you're
-/// doing; the pill's Update button opens Sparkle's usual update window.
-@MainActor final class UpdateReminder: NSObject, @preconcurrency SPUStandardUserDriverDelegate {
+/// doing; the pill's Update button opens Sparkle's usual update window. With automatic updates on,
+/// Sparkle downloads silently and would wait for you to quit; the pill's Restart installs it now.
+@MainActor final class UpdateReminder: NSObject, @preconcurrency SPUStandardUserDriverDelegate, SPUUpdaterDelegate {
     var onChange: ((String?) -> Void)?
+    private(set) var install: (() -> Void)?
+    func updater(_ updater: SPUUpdater, willInstallUpdateOnQuit item: SUAppcastItem,
+                 immediateInstallationBlock immediateInstallHandler: @escaping () -> Void) -> Bool {
+        install = immediateInstallHandler
+        onChange?(item.displayVersionString)
+        return true
+    }
     var supportsGentleScheduledUpdateReminders: Bool { true }
     func standardUserDriverShouldHandleShowingScheduledUpdate(_ update: SUAppcastItem, andInImmediateFocus immediateFocus: Bool) -> Bool { false }
     func standardUserDriverWillHandleShowingUpdate(_ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState) {
         if !handleShowingUpdate { onChange?(update.displayVersionString) }
     }
     func standardUserDriverDidReceiveUserAttention(forUpdate update: SUAppcastItem) { onChange?(nil) }
-    func standardUserDriverWillFinishUpdateSession() { onChange?(nil) }
+    // A downloaded update keeps its pill until you restart into it.
+    func standardUserDriverWillFinishUpdateSession() { if install == nil { onChange?(nil) } }
 }

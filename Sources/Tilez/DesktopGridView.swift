@@ -738,11 +738,11 @@ struct DesktopGridView: View {
 
     private var footer: some View {
         VStack(spacing: 10) {
-            if let version = model.availableUpdate, let update = model.onCheckForUpdates {
+            if let version = model.availableUpdate, let update = model.onUpdate {
                 HStack(spacing: 12) {
                     Image(systemName: "arrow.down.circle.fill").font(.system(size: 16))
-                    Text("Tilez \(version) is available")
-                    Button("Update", action: update).buttonStyle(GridButtonStyle(primary: true))
+                    Text("Tilez \(version) is \(model.updateReady ? "ready" : "available")")
+                    Button(model.updateReady ? "Restart" : "Update", action: update).buttonStyle(GridButtonStyle(primary: true))
                 }
                 .font(.system(size: 13, weight: .medium))
                 .padding(.leading, 16).padding(.trailing, 6).padding(.vertical, 6)

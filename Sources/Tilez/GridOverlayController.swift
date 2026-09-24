@@ -11,6 +11,7 @@ private final class GridPanel: NSPanel {
     let model: GridEditorModel
     private var panel: GridPanel?
     private var monitor: Any?
+    private var clickMonitor: Any?
     private var observers: [NSObjectProtocol] = []
     private var permissionTimer: Timer?
     private var previousApp: NSRunningApplication?
@@ -68,6 +69,7 @@ private final class GridPanel: NSPanel {
         panel?.makeKeyAndOrderFront(nil)
         panel?.makeFirstResponder(nil)
         installKeys()
+        installClicks()
         permissionTimer?.invalidate()
         permissionTimer = Timer.scheduledTimer(withTimeInterval: 0.75, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated {
@@ -83,6 +85,7 @@ private final class GridPanel: NSPanel {
         panel?.orderOut(nil)
         permissionTimer?.invalidate(); permissionTimer = nil
         if let monitor { NSEvent.removeMonitor(monitor); self.monitor = nil }
+        if let clickMonitor { NSEvent.removeMonitor(clickMonitor); self.clickMonitor = nil }
         if restoreFocus, let previousApp, previousApp.processIdentifier != getpid() {
             previousApp.activate(options: [])
         }
@@ -106,6 +109,21 @@ private final class GridPanel: NSPanel {
             return Display.containing(rect)?.screen
         }
         return nil
+    }
+
+    /// Clicking onto another screen means you've moved on, so the grid closes there. Global
+    /// monitors see only clicks in other apps, never the grid's own.
+    private func installClicks() {
+        if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
+        clickMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown, .otherMouseDown]) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self, self.isShown, !self.model.busy, let screen = self.panel?.screen else { return }
+                let point = NSEvent.mouseLocation
+                guard !NSMouseInRect(point, screen.frame, false),
+                      NSScreen.screens.contains(where: { NSMouseInRect(point, $0.frame, false) }) else { return }
+                self.model.cancel(); self.close(restoreFocus: false)
+            }
+        }
     }
 
     private func installKeys() {
