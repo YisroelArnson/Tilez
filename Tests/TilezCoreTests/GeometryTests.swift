@@ -656,6 +656,12 @@ func checkWorkspaces() {
     let joinedElsewhere = spanning.joining(binding(7), arranged: DesktopGrid(panes: [pane(7)], frames: [left]), on: "C")
     expectEqual(joinedElsewhere.screens.map(\.displayID), ["A", "B", "C"])
 
+    // A screen in full screen switches to a regular desktop: last shown, then most windows, then first.
+    expect(Workspace.regularDesktop(among: ["A|1", "A|2"], lastShown: "A|2", windows: ["A|1": 3]) == "A|2")
+    expect(Workspace.regularDesktop(among: ["A|1", "A|2"], lastShown: "B|1", windows: ["A|2": 1]) == "A|2", "A desktop on another screen doesn't count")
+    expect(Workspace.regularDesktop(among: ["A|1", "A|2"], lastShown: nil, windows: [:]) == "A|1")
+    expect(Workspace.regularDesktop(among: [], lastShown: nil, windows: [:]) == nil, "No regular desktop to switch to")
+
     // Shown: per screen and desktop, replaced by the next workspace or cleared by a layout.
     var shown = ShownWorkspaces()
     shown.show(workspace.id, on: "A", desktop: "A|1")

@@ -43,6 +43,15 @@ public struct Workspace: Codable, Identifiable, Equatable {
         return screens.filter { connected.contains($0.displayID) }.map { ($0, $0.displayID) }
     }
 
+    /// A screen showing a full-screen app shows the workspace on one of its regular desktops
+    /// instead, leaving the app in full screen: the desktop it last showed this workspace on, else
+    /// the one holding most of the workspace's windows for that screen, else its first desktop.
+    public static func regularDesktop(among desktops: [String], lastShown: String?, windows: [String: Int]) -> String? {
+        if let lastShown, desktops.contains(lastShown) { return lastShown }
+        let most = desktops.max { (windows[$0] ?? 0) < (windows[$1] ?? 0) }
+        return most.flatMap { (windows[$0] ?? 0) > 0 ? $0 : nil } ?? desktops.first
+    }
+
     /// Saving takes a screen's windows and arrangement as they are now. An empty screen leaves
     /// the workspace; nil when no screen has windows left.
     public func saving(_ grid: DesktopGrid, on displayID: String) -> Workspace? {

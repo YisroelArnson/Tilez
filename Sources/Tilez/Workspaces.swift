@@ -10,7 +10,7 @@ enum WorkspaceError: LocalizedError {
         case .disconnected(let name): return "None of the screens “\(name)” was saved on are connected."
         case .nothingToSave: return "There are no windows on this screen to save."
         case .noneShown: return "This screen isn’t showing a workspace. Save it as a new one."
-        case .fullScreen(let screen): return "\(screen) is showing a full-screen app. Leave full screen there and try again."
+        case .fullScreen(let screen): return "\(screen) has no regular desktop to show this workspace on. Leave full screen there and try again."
         }
     }
 }
@@ -142,11 +142,23 @@ enum WorkspaceError: LocalizedError {
         let destinations = workspace.destinations(connected: Display.all.map(\.id), current: display.id)
             .sorted { $0.displayID != display.id && $1.displayID == display.id }
         guard !destinations.isEmpty else { throw WorkspaceError.disconnected(workspace.name) }
+        // A full-screen app keeps its own desktop. Switch that screen to a regular desktop and
+        // leave the app in full screen; a full-screen window in the workspace leaves full screen
+        // when the launcher gathers it.
         for destination in destinations {
-            guard let target = Display.all.first(where: { $0.id == destination.displayID }),
-                  Desktops.current(displayID: target.id, includeFullScreen: true)?.isFullScreen != true else {
-                throw WorkspaceError.fullScreen(Display.all.first { $0.id == destination.displayID }?.name ?? "A screen")
+            guard Desktops.current(displayID: destination.displayID, includeFullScreen: true)?.isFullScreen == true else { continue }
+            let name = Display.all.first { $0.id == destination.displayID }?.name ?? "A screen"
+            let desktops = Desktops.all().filter { $0.displayID == destination.displayID }
+            let ids = Set(destination.screen.grid.slots.compactMap { $0.binding?.windowID })
+            var windows: [String: Int] = [:]
+            for window in manager.windows where ids.contains(window.id) {
+                let spaces = window.number.map(Desktops.spaces(for:)) ?? []
+                for desktop in desktops where spaces.contains(desktop.number) { windows[desktop.id, default: 0] += 1 }
             }
+            guard let chosen = Workspace.regularDesktop(among: desktops.map(\.id), lastShown: shown.screens[destination.displayID]?.desktop, windows: windows),
+                  let desktop = desktops.first(where: { $0.id == chosen }) else { throw WorkspaceError.fullScreen(name) }
+            progress("Leaving the full-screen app on \(name)…")
+            try await Desktops.activate(desktop)
         }
         // Pull windows off other desktops through WindowServer first. Otherwise the launcher
         // switches to each of their desktops to reach them.

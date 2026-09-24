@@ -37,7 +37,7 @@ A **workspace** is a set of open windows kept in one arrangement, on one screen 
 - **Save** with **Control–Option–S** (or **⌘S** in the grid). That saves the workspace the screen is showing. When it isn't showing one, you name a new one. **Control–Option–Shift–S** (or **⌘⇧S**) always saves a new workspace; with more than one display, choose **This screen** or **All screens**. A new workspace with an existing name replaces it.
 - **Rearranging, resizing, or swapping** windows marks the workspace as edited (a dot on the grid's Save button) until you save. Closing a window, or adding one with **Quick Add**, updates the workspace by itself. Quick Add's new window joins the workspace its screen is showing. A window can belong to several workspaces.
 - A screen shows a workspace from when you open or save it on that screen's current desktop until you open a different workspace or a saved layout there.
-- Pulling windows off other desktops uses the same desktop bridge as the grid (macOS 26.4+). Full-screen desktops can't show a workspace; leave full screen there first.
+- Pulling windows off other desktops uses the same desktop bridge as the grid (macOS 26.4+). When a screen is showing a full-screen app, that screen switches to a regular desktop for the workspace and the app stays in full screen on its own desktop. The workspace's own full-screen windows leave full screen and join the layout.
 
 ### Quick add a tile
 
