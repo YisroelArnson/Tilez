@@ -1,4 +1,5 @@
 import AppKit
+import Combine
 import SwiftUI
 import TilezCore
 
@@ -18,6 +19,7 @@ private final class QuickAddPanel: NSPanel {
     private var panel: QuickAddPanel?
     private var previousApp: NSRunningApplication?
     private var resignObserver: NSObjectProtocol?
+    private var busyWatch: AnyCancellable?
     private let defaults: UserDefaults
     private static let recentsKey = "quickAddRecents"
     var isShown: Bool { panel?.isVisible == true }
@@ -26,6 +28,14 @@ private final class QuickAddPanel: NSPanel {
         self.defaults = defaults
         model = GridEditorModel(manager: manager, defaults: defaults)
         model.onFinished = { [weak self] in self?.close(restoreFocus: false) }
+        // The panel hides as soon as an app is chosen; it returns only to explain a failure.
+        busyWatch = model.$busy.dropFirst().removeDuplicates().sink { [weak self] busy in
+            guard let self, !busy, self.model.isError, !self.model.message.isEmpty, self.panel?.isVisible == false else { return }
+            DispatchQueue.main.async {
+                NSApp.activate(ignoringOtherApps: true)
+                self.panel?.makeKeyAndOrderFront(nil)
+            }
+        }
     }
 
     var recents: [String] { defaults.stringArray(forKey: Self.recentsKey) ?? [] }
@@ -92,7 +102,7 @@ private final class QuickAddPanel: NSPanel {
     }
 
     func close(restoreFocus: Bool = true) {
-        guard isShown else { return }
+        guard isShown || model.busy || model.isError else { return }
         model.cancel()
         model.endEditing()
         panel?.orderOut(nil)
@@ -112,6 +122,8 @@ private final class QuickAddPanel: NSPanel {
         guard model.choosingApp else { model.isError = true; return }
         model.assign(choice.app)
         model.openGrid()
+        // Keep working in the background; close() would cancel the launch.
+        if model.busy { panel?.orderOut(nil) }
     }
 
     private func remember(_ bundleID: String) {

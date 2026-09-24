@@ -2,7 +2,8 @@ import AppKit
 import ApplicationServices
 import Carbon
 
-/// ⌃⌥Return or ⌃⌥-click enlarges a window over its neighbors without moving anything else.
+/// ⌃⌥Return or ⌃⌥-click enlarges a window over its neighbors without moving anything else;
+/// ⌃⌥-drag is passed to WindowSwap instead.
 /// Each screen and desktop keeps its own enlarged window. It stays enlarged while focus moves
 /// elsewhere; only the shortcut or another ⌃⌥-click puts it back exactly.
 @MainActor final class WindowZoom {
@@ -16,6 +17,12 @@ import Carbon
     private var clickTap: CFMachPort?
     private var tapRetry: Timer?
     private var swallowingClick = false
+    private var clickStart = CGPoint.zero
+    private var dragging = false
+    /// ⌃⌥-drag is handed off here (for swapping); a ⌃⌥-click without movement enlarges.
+    var onDragBegan: ((CGPoint) -> Void)?
+    var onDragMoved: ((CGPoint) -> Void)?
+    var onDragEnded: (() -> Void)?
 
     init() {
         hotkey = GridHotKey(keyCode: kVK_Return, id: 2) { [weak self] in self?.toggle() }
@@ -175,12 +182,22 @@ import Carbon
             guard modifiers == [.maskControl, .maskAlternate],
                   NSWorkspace.shared.frontmostApplication?.processIdentifier != getpid() else { break }
             swallowingClick = true
-            toggle(at: event.location)
+            clickStart = event.location
+            dragging = false
             return nil
         case .leftMouseDragged where swallowingClick:
+            let point = event.location
+            if !dragging, hypot(point.x - clickStart.x, point.y - clickStart.y) > 5 {
+                dragging = true
+                onDragBegan?(clickStart)
+            }
+            if dragging { onDragMoved?(point) }
             return nil
         case .leftMouseUp where swallowingClick:
             swallowingClick = false
+            // Releasing without moving is a click: enlarge or restore.
+            if dragging { onDragEnded?() } else { toggle(at: clickStart) }
+            dragging = false
             return nil
         default: break
         }

@@ -39,6 +39,9 @@ final class ActionItem: NSMenuItem {
         zoom = WindowZoom()
         swap = WindowSwap()
         swap.isExcluded = { [weak self] in self?.zoom.isEnlarged($0) ?? false }
+        zoom.onDragBegan = { [weak self] in self?.swap.begin(at: $0) }
+        zoom.onDragMoved = { [weak self] in self?.swap.move(to: $0) }
+        zoom.onDragEnded = { [weak self] in self?.swap.end() }
         quickAdd = QuickAddController(manager: manager)
         quickAddHotkey = GridHotKey(keyCode: kVK_ANSI_N, id: 3) { [weak self] in self?.showQuickAdd() }
         // Only release builds carry an update feed; builds from source update with scripts/update.sh.

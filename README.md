@@ -31,7 +31,7 @@ Press **Control–Option–N** anywhere to open a search panel of your apps, wit
 
 ### Swap two windows by dragging
 
-Drag a window by its title bar and pause over another window. A frosted outline marks where your window will land and a dashed outline marks where the other window will go; release to swap them exactly. Dragging across windows without pausing is an ordinary move. Enlarged and full-screen windows never swap.
+Hold **Control–Option** and drag a window from anywhere inside it. The window follows the pointer; move it over another window and the two trade places live: the other window slides into your window's original spot and yours takes on its size. Release there to keep the swap. Release anywhere else, even after a small nudge, and the window returns exactly to where it started. A Control–Option click without dragging enlarges the window instead, and ordinary title-bar drags move windows as usual. Enlarged and full-screen windows never swap.
 
 ### Enlarge a window temporarily
 

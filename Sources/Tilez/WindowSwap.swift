@@ -1,136 +1,169 @@
 import AppKit
 import ApplicationServices
 
-/// Drag a window by its title bar and pause over another window to swap them: the dragged
-/// window takes the other's frame and the other takes the dragged window's original frame.
-/// A drag that never pauses over a window stays an ordinary move.
+/// ⌃⌥-drag a window to swap it with another. The window follows the pointer; over another
+/// window, that window slides into the dragged one's original frame and the dragged one takes
+/// its size. Releasing there completes the swap; releasing anywhere else puts the window back
+/// exactly where it started. Plain drags are untouched and move windows as usual.
 @MainActor final class WindowSwap {
-    private struct Drag { let element: AXUIElement; let number: UInt32?; let origin: CGRect }
-    private struct Hover { let number: UInt32; let pid: pid_t; let frame: CGRect }
-    private struct Target { let element: AXUIElement; let frame: CGRect }
+    private struct Drag { let element: AXUIElement; let number: UInt32?; let origin: CGRect; let grab: CGPoint }
+    private struct Hover: Equatable { let number: UInt32; let pid: pid_t }
+    private struct Target { let number: UInt32; let element: AXUIElement; let frame: CGRect }
     private var drag: Drag?
-    private var hover: Hover?
     private var target: Target?
+    private var pointer = CGPoint.zero
     private var lookup: Task<Void, Never>?
-    private var dwell: Task<Void, Never>?
-    private var lastCheck = Date.distantPast
-    private var monitor: Any?
-    private let destination = SwapPreview(dashed: false)
-    private let returning = SwapPreview(dashed: true)
+    /// The window the drag is heading toward (nil for none), which the pause then confirms.
+    private var intent: UInt32?
+    private var hoverTask: Task<Void, Never>?
+    private var lastHoverCheck = Date.distantPast
+    // Moves are coalesced: one AX write in flight, then the latest pointer position.
+    private var moving = false
+    private var needsMove = false
+    private var appliedSize: CGSize?
     /// Enlarged windows keep their own restore frame, so they never take part in a swap.
     var isExcluded: (AXUIElement) -> Bool = { _ in false }
 
-    init() {
-        monitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .leftMouseDragged, .leftMouseUp]) { [weak self] event in
-            MainActor.assumeIsolated { self?.handle(event) }
-        }
-    }
-
-    private func handle(_ event: NSEvent) {
-        switch event.type {
-        case .leftMouseDown: begin(at: Display.pointer)
-        case .leftMouseDragged: dragged(to: Display.pointer)
-        case .leftMouseUp: finish()
-        default: break
-        }
-    }
-
-    private func begin(at point: CGPoint) {
-        cancel()
-        guard Accessibility.trusted else { return }
+    func begin(at point: CGPoint) {
+        reset()
+        pointer = point
         lookup = Task { [weak self] in
-            guard let found = (try? await Accessibility.perform { Self.titleBarWindow(at: point) }) ?? nil,
+            guard let found = (try? await Accessibility.perform { Self.window(at: point) }) ?? nil,
                   let self, !self.isExcluded(found.element) else { return }
-            self.drag = Drag(element: found.element, number: found.number, origin: found.frame)
+            let o = found.frame
+            self.drag = Drag(element: found.element, number: found.number, origin: o,
+                             grab: CGPoint(x: (point.x - o.minX) / max(o.width, 1), y: (point.y - o.minY) / max(o.height, 1)))
+            self.appliedSize = o.size
+            NSRunningApplication(processIdentifier: found.pid)?.activate()
+            _ = try? await Accessibility.perform { AXUIElementPerformAction(found.element, kAXRaiseAction as CFString) }
+            self.update()
         }
     }
 
-    private func dragged(to point: CGPoint) {
-        guard let drag, Date().timeIntervalSince(lastCheck) > 0.04 else { return }
-        lastCheck = Date()
-        let under = Self.window(below: point, excluding: drag.number)
-        guard under?.number != hover?.number else { return }
-        // Moving onto a different window (or off all of them) starts the pause over.
-        hover = under
-        target = nil
-        destination.hide(); returning.hide()
-        dwell?.cancel()
-        guard let under else { return }
-        dwell = Task { [weak self] in
-            try? await Task.sleep(nanoseconds: 300_000_000)
-            guard !Task.isCancelled else { return }
-            await self?.arm(under, for: drag)
-        }
+    func move(to point: CGPoint) {
+        pointer = point
+        update()
     }
 
-    /// The pause completed: confirm the dragged window really moved and find the target's AX window.
-    private func arm(_ under: Hover, for drag: Drag) async {
-        let found = try? await Accessibility.perform { () -> Target? in
-            guard let now = Accessibility.rect(drag.element),
-                  abs(now.minX - drag.origin.minX) + abs(now.minY - drag.origin.minY) > 20,
-                  let element = Self.axWindow(pid: under.pid, number: under.number),
-                  Accessibility.value(element, "AXFullScreen") as? Bool != true,
-                  let frame = Accessibility.rect(element) else { return nil }
-            return Target(element: element, frame: frame)
-        }
-        guard let found = found ?? nil, hover?.number == under.number, self.drag != nil, !isExcluded(found.element) else { return }
-        target = found
-        destination.show(found.frame)
-        returning.show(drag.origin)
-    }
-
-    private func finish() {
-        defer { cancel() }
-        guard let drag, let target else { return }
-        let origin = drag.origin
+    func end() {
+        lookup?.cancel(); hoverTask?.cancel()
+        guard let drag else { reset(); return }
+        // Over another window the swap completes; anywhere else the window goes home.
+        let destination = target?.frame ?? drag.origin
+        reset()
         Task {
-            // The app may still be settling its own drag; apply once more after it lets go.
             for attempt in 0..<2 {
-                if attempt > 0 { try? await Task.sleep(nanoseconds: 150_000_000) }
-                _ = try? await Accessibility.perform {
-                    Accessibility.setFrame(drag.element, to: target.frame)
-                    Accessibility.setFrame(target.element, to: origin)
-                }
+                if attempt > 0 { try? await Task.sleep(nanoseconds: 120_000_000) }
+                _ = try? await Accessibility.perform { Accessibility.setFrame(drag.element, to: destination) }
             }
         }
     }
 
-    private func cancel() {
-        lookup?.cancel(); dwell?.cancel()
-        drag = nil; hover = nil; target = nil
-        destination.hide(); returning.hide()
+    private func reset() {
+        lookup?.cancel(); hoverTask?.cancel()
+        drag = nil; target = nil; intent = nil
+        needsMove = false; appliedSize = nil
     }
 
-    /// A standard window whose title area (its top 60 points, outside any control) is under `point`.
-    nonisolated private static func titleBarWindow(at point: CGPoint) -> (element: AXUIElement, number: UInt32?, frame: CGRect)? {
+    private func update() {
+        guard let drag else { return }
+        checkHover(for: drag)
+        needsMove = true
+        pump()
+    }
+
+    private func pump() {
+        guard !moving, needsMove, let drag else { return }
+        needsMove = false
+        moving = true
+        let size = target?.frame.size ?? drag.origin.size
+        let origin = CGPoint(x: pointer.x - drag.grab.x * size.width, y: pointer.y - drag.grab.y * size.height)
+        let resize = appliedSize != size
+        appliedSize = size
+        Task { [weak self] in
+            _ = try? await Accessibility.perform {
+                if resize { Accessibility.setFrame(drag.element, to: CGRect(origin: origin, size: size)) }
+                else { Self.setPosition(drag.element, origin) }
+            }
+            guard let self else { return }
+            self.moving = false
+            self.pump()
+        }
+    }
+
+    /// The displaced window no longer sits under the pointer, so its original frame keeps it
+    /// targeted; other windows are found from WindowServer's front-to-back list.
+    private func checkHover(for drag: Drag) {
+        guard Date().timeIntervalSince(lastHoverCheck) > 0.03 else { return }
+        lastHoverCheck = Date()
+        let hover: Hover?
+        if let target, target.frame.contains(pointer) {
+            hover = Hover(number: target.number, pid: 0)
+        } else {
+            hover = Self.window(below: pointer, excluding: [drag.number, target?.number].compactMap { $0 })
+        }
+        guard hover?.number != intent else { return }
+        intent = hover?.number
+        hoverTask?.cancel()
+        // A short pause keeps windows from shuffling while the pointer passes over them.
+        hoverTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 120_000_000)
+            guard !Task.isCancelled else { return }
+            await self?.retarget(hover, for: drag)
+        }
+    }
+
+    private func retarget(_ hover: Hover?, for drag: Drag) async {
+        guard self.drag != nil, hover?.number != target?.number else { return }
+        if let old = target {
+            target = nil
+            _ = try? await Accessibility.perform { Accessibility.setFrame(old.element, to: old.frame) }
+        }
+        if let hover {
+            let found = try? await Accessibility.perform { () -> Target? in
+                guard let element = Self.axWindow(pid: hover.pid, number: hover.number),
+                      Accessibility.value(element, "AXFullScreen") as? Bool != true,
+                      let frame = Accessibility.rect(element) else { return nil }
+                return Target(number: hover.number, element: element, frame: frame)
+            }
+            if let found = found ?? nil, self.drag != nil, !isExcluded(found.element) {
+                target = found
+                _ = try? await Accessibility.perform { Accessibility.setFrame(found.element, to: drag.origin) }
+            }
+        }
+        update()
+    }
+
+    /// A standard, resizable window under `point`, anywhere in its frame.
+    nonisolated private static func window(at point: CGPoint) -> (element: AXUIElement, pid: pid_t, number: UInt32?, frame: CGRect)? {
         var hit: AXUIElement?
         guard AXUIElementCopyElementAtPosition(AXUIElementCreateSystemWide(), Float(point.x), Float(point.y), &hit) == .success,
               let hit else { return nil }
         var pid: pid_t = 0
         guard AXUIElementGetPid(hit, &pid) == .success, pid != getpid() else { return nil }
-        let role = Accessibility.value(hit, kAXRoleAttribute) as? String ?? ""
-        guard ![kAXButtonRole, kAXTextFieldRole, kAXPopUpButtonRole, kAXMenuButtonRole, kAXCheckBoxRole, kAXRadioButtonRole].contains(role) else { return nil }
         let window = Accessibility.value(hit, kAXWindowAttribute).flatMap {
             CFGetTypeID($0) == AXUIElementGetTypeID() ? ($0 as! AXUIElement) : nil
         } ?? hit
+        var resizable: DarwinBoolean = false
         guard Accessibility.value(window, kAXSubroleAttribute) as? String == kAXStandardWindowSubrole,
               Accessibility.value(window, "AXFullScreen") as? Bool != true,
-              let frame = Accessibility.rect(window), frame.contains(point), point.y < frame.minY + 60 else { return nil }
-        return (window, Desktops.windowNumber(window), frame)
+              AXUIElementIsAttributeSettable(window, kAXSizeAttribute as CFString, &resizable) == .success, resizable.boolValue,
+              let frame = Accessibility.rect(window) else { return nil }
+        return (window, pid, Desktops.windowNumber(window), frame)
     }
 
     /// WindowServer's front-to-back list finds the window under the pointer without AX IPC.
-    nonisolated private static func window(below point: CGPoint, excluding number: UInt32?) -> Hover? {
+    nonisolated private static func window(below point: CGPoint, excluding numbers: [UInt32]) -> Hover? {
         let records = CGWindowListCopyWindowInfo([.optionOnScreenOnly, .excludeDesktopElements], kCGNullWindowID) as? [[String: Any]] ?? []
         for record in records {
             guard (record[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,
                   (record[kCGWindowAlpha as String] as? NSNumber)?.doubleValue ?? 1 > 0,
-                  let windowNumber = (record[kCGWindowNumber as String] as? NSNumber)?.uint32Value, windowNumber != number,
+                  let number = (record[kCGWindowNumber as String] as? NSNumber)?.uint32Value, !numbers.contains(number),
                   let pid = (record[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value, pid != getpid(),
                   let raw = record[kCGWindowBounds as String] as? NSDictionary,
                   let frame = CGRect(dictionaryRepresentation: raw), frame.width > 100, frame.height > 80,
                   frame.contains(point) else { continue }
-            return Hover(number: windowNumber, pid: pid, frame: frame)
+            return Hover(number: number, pid: pid)
         }
         return nil
     }
@@ -141,43 +174,10 @@ import ApplicationServices
         guard let windows = Accessibility.value(app, kAXWindowsAttribute) as? [AXUIElement] else { return nil }
         return windows.first { Desktops.windowNumber($0) == number }
     }
-}
 
-/// A frosted outline over a window frame: solid where the dragged window will land,
-/// dashed where the other window will go.
-@MainActor private final class SwapPreview {
-    private let dashed: Bool
-    private var panel: NSPanel?
-    init(dashed: Bool) { self.dashed = dashed }
-
-    func show(_ frame: CGRect) {
-        if panel == nil {
-            let panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
-            panel.isOpaque = false; panel.backgroundColor = .clear
-            panel.hasShadow = false; panel.ignoresMouseEvents = true
-            panel.level = .floating
-            panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .ignoresCycle]
-            panel.contentView = SwapPreviewView(dashed: dashed)
-            self.panel = panel
-        }
-        panel?.setFrame(Display.cocoa(frame), display: true)
-        panel?.orderFrontRegardless()
-    }
-
-    func hide() { panel?.orderOut(nil) }
-}
-
-private final class SwapPreviewView: NSView {
-    private let dashed: Bool
-    init(dashed: Bool) { self.dashed = dashed; super.init(frame: .zero) }
-    required init?(coder: NSCoder) { fatalError("Not supported") }
-
-    override func draw(_ dirtyRect: NSRect) {
-        let path = NSBezierPath(roundedRect: bounds.insetBy(dx: 3, dy: 3), xRadius: 14, yRadius: 14)
-        NSColor.white.withAlphaComponent(dashed ? 0.06 : 0.14).setFill(); path.fill()
-        NSColor.white.withAlphaComponent(dashed ? 0.55 : 0.8).setStroke()
-        path.lineWidth = 2.5
-        if dashed { path.setLineDash([10, 7], count: 2, phase: 0) }
-        path.stroke()
+    nonisolated private static func setPosition(_ element: AXUIElement, _ origin: CGPoint) {
+        var point = CGPoint(x: origin.x.rounded(), y: origin.y.rounded())
+        guard let value = AXValueCreate(.cgPoint, &point) else { return }
+        AXUIElementSetAttributeValue(element, kAXPositionAttribute as CFString, value)
     }
 }
