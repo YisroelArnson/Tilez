@@ -22,9 +22,11 @@ enum GridLaunchError: LocalizedError {
 
 /// Reuses only target-desktop windows. New windows may inherit an app's full-screen Space;
 /// prepare those exact new windows and return them to the captured destination before tiling.
+/// `gathering` (a workspace) instead brings each bound window from wherever it is and never opens one.
 @MainActor enum GridLauncher {
     static func open(_ request: DesktopGrid, display capturedDisplay: Display, desktop capturedDesktop: Desktop, manager: WindowManager,
-                     original: DesktopGrid? = nil, destinationChanged: (Display, Desktop) -> Void = { _, _ in }, progress: @escaping (String) -> Void,
+                     original: DesktopGrid? = nil, gathering: Bool = false,
+                     destinationChanged: (Display, Desktop) -> Void = { _, _ in }, progress: @escaping (String) -> Void,
                      prepared: @escaping (Int, GridWindowBinding) -> Void) async throws -> GridLaunchResult {
         var display = capturedDisplay
         try Task.checkCancellation()
@@ -76,7 +78,7 @@ enum GridLaunchError: LocalizedError {
         for choice in appOrder {
             try checkLocation()
             manager.suppressUntil = Date().addingTimeInterval(30)
-            progress("Opening \(choice.name)…")
+            progress(gathering ? "Bringing back \(choice.name)…" : "Opening \(choice.name)…")
             // Snapshot WindowServer before launch/reopen so inherited full-screen windows can
             // be distinguished from pre-existing windows on unrelated desktops.
             let runningApp = NSRunningApplication.runningApplications(withBundleIdentifier: choice.bundleID).first
@@ -86,6 +88,7 @@ enum GridLaunchError: LocalizedError {
             if let running = NSRunningApplication.runningApplications(withBundleIdentifier: choice.bundleID).first {
                 app = running; wasRunning = true
             } else {
+                if gathering { throw GridLaunchError.windowMissing(choice.name) }
                 guard let url = NSWorkspace.shared.urlForApplication(withBundleIdentifier: choice.bundleID) else {
                     throw GridLaunchError.missingApp(choice.name)
                 }
@@ -106,6 +109,7 @@ enum GridLaunchError: LocalizedError {
                 let live = manager.windows.filter { $0.pid == pid }
                 for window in live { seenWindows[window.id] = window }
                 return live.filter { window in
+                    if gathering { return indices.contains { request.slots[$0].binding?.windowID == window.id } }
                     if eligible(window) { return true }
                     // Creating a full-screen window can temporarily hide the original
                     // desktop from AX. Keep its exact bound windows in the count.
@@ -139,6 +143,7 @@ enum GridLaunchError: LocalizedError {
                                                 available: live.map(\.id), initial: initialIDs)
                 }, requestNew: {
                     try checkLocation()
+                    if gathering { throw GridLaunchError.windowMissing(choice.name) }
                     // Some apps publish New Window only while active. Their new windows may
                     // inherit full screen, which is handled below using exact WindowServer IDs.
                     if !app.isActive {

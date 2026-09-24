@@ -7,7 +7,7 @@ public struct GridApp: Codable, Equatable, Hashable, Sendable {
 }
 
 /// A binding identifies one live window, including the process launch that owns it.
-public struct GridWindowBinding: Codable, Equatable {
+public struct GridWindowBinding: Codable, Hashable {
     public var windowID: String
     public var processSession: String
     public init(windowID: String, processSession: String) {

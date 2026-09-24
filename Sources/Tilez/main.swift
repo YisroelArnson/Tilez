@@ -25,6 +25,9 @@ final class ActionItem: NSMenuItem {
     private var quickAdd: QuickAddController!
     private var quickAddHotkey: GridHotKey!
     private var realignHotkey: GridHotKey!
+    private var workspaces: WorkspaceStore!
+    private var workspacePanel: WorkspacePanelController!
+    private var workspaceHotkeys: [GridHotKey] = []
     private let updateReminder = UpdateReminder()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -47,6 +50,27 @@ final class ActionItem: NSMenuItem {
         quickAdd = QuickAddController(manager: manager)
         quickAddHotkey = GridHotKey(keyCode: kVK_ANSI_N, id: 3) { [weak self] in self?.showQuickAdd() }
         realignHotkey = GridHotKey(keyCode: kVK_ANSI_R, id: 4) { [weak self] in self?.realign() }
+        workspaces = WorkspaceStore(manager: manager)
+        overlay.model.workspaces = workspaces
+        quickAdd.workspaces = workspaces
+        workspacePanel = WorkspacePanelController(store: workspaces)
+        workspacePanel.prepare = { [weak self] display in
+            guard let zoom = self?.zoom, zoom.hasEnlarged(on: display) else { return }
+            await zoom.restore(on: display)
+        }
+        overlay.model.onOpenWorkspace = { [weak self] workspace in
+            guard let self else { return }
+            let display = self.overlay.model.display
+            self.overlay.close(restoreFocus: false)
+            self.workspacePanel.open(workspace, on: display)
+        }
+        workspaceHotkeys = [
+            GridHotKey(keyCode: kVK_ANSI_W, id: 5) { [weak self] in self?.showWorkspaces { $0.showList(on: $1) } },
+            GridHotKey(keyCode: kVK_ANSI_S, id: 6) { [weak self] in self?.showWorkspaces { $0.quickSave(on: $1) } },
+            GridHotKey(keyCode: kVK_ANSI_S, id: 7, modifiers: controlKey | optionKey | shiftKey) { [weak self] in
+                self?.showWorkspaces { $0.showSave(on: $1) }
+            },
+        ]
         // Only release builds carry an update feed; builds from source update with scripts/update.sh.
         if Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil {
             updateReminder.onChange = { [weak self] version in self?.overlay.model.availableUpdate = version }
@@ -75,6 +99,9 @@ final class ActionItem: NSMenuItem {
         } else if !realignHotkey.registered {
             overlay.model.message = "⌃⌥R is already in use, so windows can’t be realigned with it."
             overlay.model.isError = true
+        } else if let taken = zip(["⌃⌥W", "⌃⌥S", "⌃⌥⇧S"], workspaceHotkeys).first(where: { !$0.1.registered })?.0 {
+            overlay.model.message = "\(taken) is already in use. Open and save workspaces from the grid’s Save menu."
+            overlay.model.isError = true
         }
     }
     /// Template artwork follows the app icon's three panes and adapts to the menu bar.
@@ -95,10 +122,19 @@ final class ActionItem: NSMenuItem {
     /// Quick Add opens where the grid would, after that screen's enlarged window returns to its pane.
     private func showQuickAdd() {
         if quickAdd.isShown { quickAdd.close(); return }
+        workspacePanel.close()
         if overlay.isShown { overlay.model.cancel(); overlay.close(restoreFocus: false) }
         guard let target = overlay.targetScreen(nil), let display = Display.all.first(where: { $0.screen == target }) else { return }
         guard zoom.hasEnlarged(on: display) else { quickAdd.show(on: display); return }
         Task { await zoom.restore(on: display); quickAdd.show(on: display) }
+    }
+    /// Workspace shortcuts act on the screen the grid would open on, never while the grid is editing.
+    private func showWorkspaces(_ action: (WorkspacePanelController, Display) -> Void) {
+        if workspacePanel.isShown { workspacePanel.close(); return }
+        if overlay.isShown { overlay.model.cancel(); overlay.close(restoreFocus: false) }
+        quickAdd.close()
+        guard let target = overlay.targetScreen(nil), let display = Display.all.first(where: { $0.screen == target }) else { return }
+        action(workspacePanel, display)
     }
     /// With the grid open this tidies its panes; otherwise the screen's windows move directly,
     /// after an enlarged window returns to its pane.
@@ -115,6 +151,7 @@ final class ActionItem: NSMenuItem {
     /// That screen's enlarged window returns to its pane first so the grid captures the real layout.
     private func showGrid(on screen: NSScreen? = nil) {
         quickAdd.close()
+        workspacePanel.close()
         // Opening the grid also checks for updates if it has been a while, so the pill appears promptly.
         if !overlay.isShown, let updater = updater?.updater, updater.canCheckForUpdates,
            (updater.lastUpdateCheckDate ?? .distantPast) < Date().addingTimeInterval(-6 * 3600) {

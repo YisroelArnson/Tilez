@@ -128,7 +128,7 @@ final class GridHotKey {
     private let id: UInt32
     var action: (() -> Void)?
     private(set) var registered = false
-    init(keyCode: Int = kVK_Space, id: UInt32 = 1, action: @escaping () -> Void) {
+    init(keyCode: Int = kVK_Space, id: UInt32 = 1, modifiers: Int = controlKey | optionKey, action: @escaping () -> Void) {
         self.action = action; self.id = id
         var type = EventTypeSpec(eventClass: OSType(kEventClassKeyboard), eventKind: UInt32(kEventHotKeyPressed))
         let installed = InstallEventHandler(GetApplicationEventTarget(), { _, event, context in
@@ -142,7 +142,7 @@ final class GridHotKey {
             return noErr
         }, 1, &type, Unmanaged.passUnretained(self).toOpaque(), &handler)
         guard installed == noErr else { return }
-        registered = RegisterEventHotKey(UInt32(keyCode), UInt32(controlKey | optionKey),
+        registered = RegisterEventHotKey(UInt32(keyCode), UInt32(modifiers),
             EventHotKeyID(signature: 0x51475244, id: id), GetApplicationEventTarget(), 0, &reference) == noErr
     }
     deinit {

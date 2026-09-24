@@ -39,7 +39,7 @@ private struct PointerHover<Content: View>: View {
     }
 }
 
-private struct GridButtonStyle: ButtonStyle {
+struct GridButtonStyle: ButtonStyle {
     var primary = false
     @Environment(\.isEnabled) private var enabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
@@ -160,6 +160,10 @@ struct DesktopGridView: View {
             let warning = dropped > 0 ? "  ·  Removes \(dropped) pane\(dropped == 1 ? "" : "s"); windows stay open" : ""
             return "\(model.draftColumns) × \(model.draftRows)\(warning)  ·  Click or press ↵ to confirm  ·  Esc to cancel"
         }
+        if let workspace = model.shownWorkspace {
+            return "Workspace “\(workspace.name)”" + (model.workspaceModified ? "  ·  Edited  ·  ⌘S saves it" : "")
+                + "  ·  ⌘⇧S saves a new workspace"
+        }
         return "Double-click a pane to choose its app  ·  Add or merge at an edge  ·  Drag an edge or corner to resize  ·  Drag panes to swap"
     }
 
@@ -199,21 +203,11 @@ struct DesktopGridView: View {
                     if !compact { keycap("⌘K") }
                 }
             }.help("Add app (⌘K)").disabled(model.busy)
-            // One control: save on the left, saved grids from the chevron.
+            // One control: save the workspace on the left; workspaces, layouts, and Save As from the chevron.
             HStack(spacing: 0) {
-                Button(action: model.beginSave) { Label("Save", systemImage: "bookmark") }
-                    .buttonStyle(SplitHalfStyle())
-                    .help("Save grid (⌘S)")
-                    .disabled(model.grid.filledCount == 0 || model.busy)
-                    .popover(isPresented: $model.saving, arrowEdge: .bottom) { savePopover }
+                saveButton
                 Rectangle().fill(.black.opacity(0.10)).frame(width: 1, height: 18)
-                Button(action: model.beginSaved) {
-                    Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold))
-                        .accessibilityLabel("Saved grids")
-                }
-                .buttonStyle(SplitHalfStyle(horizontalPadding: 9))
-                .help("Saved grids (⌘O)").disabled(model.busy)
-                .popover(isPresented: $model.showingSaved, arrowEdge: .bottom) { savedPopover }
+                openButton
             }
             .background(Color.white.opacity(0.4), in: RoundedRectangle(cornerRadius: 10))
             .clipShape(RoundedRectangle(cornerRadius: 10))
@@ -229,30 +223,7 @@ struct DesktopGridView: View {
                 }.buttonStyle(GridButtonStyle(primary: true))
                     .disabled((model.grid.filledCount == 0 && model.originalGrid.filledCount == 0) || model.desktop == nil)
             }
-            Menu {
-                Button("Close all panes on Apply (⌘⇧⌫)", role: .destructive, action: model.removeAllPanes)
-                Button("Realign panes (⌘R)", action: model.realign)
-                Button("New empty grid (⌘N)", action: model.newGrid)
-                Button("Undo grid edit (⌘Z)", action: model.undo)
-                Button("Undo last window arrangement") { model.manager.undo() }
-                    .disabled(model.manager.undoLabel == nil)
-                Divider()
-                Text("Show or hide Tilez: ⌃⌥Space")
-                Text("Enlarge a window, or put it back: ⌃⌥Return or ⌃⌥-click")
-                Text("Quick add a tile: ⌃⌥N")
-                Text("Realign windows: ⌃⌥R")
-                if let check = model.onCheckForUpdates { Button("Check for Updates…", action: check) }
-                Button("Close", action: { model.onDismiss?() })
-                Button("Quit Tilez") { NSApp.terminate(nil) }
-            } label: { Image(systemName: "ellipsis").frame(width: 16) }
-                .menuStyle(.borderlessButton).fixedSize().help("More actions")
-                .padding(.horizontal, 8).frame(minHeight: 34)
-                .background {
-                    PointerHover { hovered in
-                        RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(hovered && !model.busy ? 0.8 : 0))
-                    }
-                }
-                .disabled(model.busy)
+            moreMenu
         }
         .buttonStyle(GridButtonStyle())
         .padding(10)
@@ -603,58 +574,153 @@ struct DesktopGridView: View {
     }
 
     private var savePopover: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Save this grid").font(.system(size: 15, weight: .semibold))
+        let workspace = model.saveKind == .workspace
+        return VStack(alignment: .leading, spacing: 12) {
+            Text(workspace ? "Save as a new workspace" : "Save as a layout").font(.system(size: 15, weight: .semibold))
             TextField("Name", text: $model.saveName).textFieldStyle(.roundedBorder)
                 .focused($nameFocused).onSubmit { model.save() }
-            Text("Use it on any screen or desktop.").font(.system(size: 12)).foregroundStyle(.secondary)
+            if workspace && Display.all.count > 1 {
+                Picker("Save", selection: $model.saveAllScreens) {
+                    Text("This screen").tag(false)
+                    Text("All screens").tag(true)
+                }.pickerStyle(.segmented).labelsHidden()
+            }
+            Text(workspace ? "Keeps these exact windows. Closed windows leave it; nothing reopens."
+                           : "Keeps the apps, not the windows. Opening it opens new windows on any screen or desktop.")
+                .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             Button("Save", action: model.save).buttonStyle(GridButtonStyle(primary: true))
                 .disabled(model.saveName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }.padding(18).frame(width: 280).preferredColorScheme(.light).onAppear { nameFocused = true }
+        }.padding(18).frame(width: 300).preferredColorScheme(.light).onAppear { nameFocused = true }
             .environment(\.gridPointer, nil)
     }
 
     private var savedPopover: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("Saved grids").font(.system(size: 15, weight: .semibold))
-            GridSearchField(placeholder: "Search saved grids…", text: $model.savedSearch, onSubmit: model.confirmSearchSelection)
+            Text("Workspaces and layouts").font(.system(size: 15, weight: .semibold))
+            GridSearchField(placeholder: "Search workspaces and layouts…", text: $model.savedSearch, onSubmit: model.confirmSearchSelection)
                 .frame(height: 20).padding(10)
                 .background(.black.opacity(0.045), in: RoundedRectangle(cornerRadius: 9))
             ScrollViewReader { reader in
                 ScrollView {
                     VStack(spacing: 4) {
-                        ForEach(model.filteredSaved) { item in
-                            HStack {
-                                Button { model.load(item) } label: {
-                                    HStack {
-                                        Image(systemName: "square.grid.2x2").foregroundStyle(gridAccent)
-                                        VStack(alignment: .leading, spacing: 3) {
-                                            Text(item.name).lineLimit(1)
-                                            Text("\(item.grid.columns) × \(item.grid.rows) · \(item.grid.filledCount) apps")
-                                                .font(.system(size: 11)).foregroundStyle(.secondary)
-                                        }
-                                        Spacer()
-                                    }.padding(8).contentShape(Rectangle())
-                                }.buttonStyle(AppRowStyle(selected: model.selectedSavedGrid?.id == item.id))
-                                    .accessibilityAddTraits(model.selectedSavedGrid?.id == item.id ? [.isSelected] : [])
-                                Button { model.deleteSaved(item.id) } label: { Image(systemName: "trash") }
-                                    .buttonStyle(.plain).foregroundStyle(.secondary).help("Delete saved grid")
-                            }.id(item.id)
+                        let items = model.filteredSaved
+                        ForEach(items) { item in
+                            savedRow(item, heading: firstOfKind(item, in: items))
                         }
-                        if model.filteredSaved.isEmpty {
-                            Text(model.saved.isEmpty ? "Save a grid with ⌘S to reuse it here." : "No matching grids")
+                        if items.isEmpty {
+                            Text(model.hasSavedItems ? "Nothing matches" : "Press ⌘S to save the windows on this screen as a workspace.")
                                 .font(.system(size: 13)).foregroundStyle(.secondary).padding(.vertical, 16)
                         }
                     }
                 }.frame(maxHeight: 270)
-                .onChange(of: model.selectedSavedGrid?.id) { _, id in
+                .onChange(of: model.selectedSavedItem?.id) { _, id in
                     if let id { reader.scrollTo(id) }
                 }
             }
+            HStack(spacing: 8) {
+                Button("New workspace… ⌘⇧S") { model.beginSave(.workspace) }
+                Button("Save as layout…") { model.beginSave(.layout) }.disabled(model.grid.filledCount == 0)
+            }.buttonStyle(GridButtonStyle()).font(.system(size: 12))
             searchHints
         }.padding(16).frame(width: 310).preferredColorScheme(.light)
             .environment(\.gridPointer, nil)
             .onDisappear { model.onFocusGrid?() }
+    }
+
+    private var moreMenu: some View {
+        Menu {
+            Button("Close all panes on Apply (⌘⇧⌫)", role: .destructive, action: model.removeAllPanes)
+            Button("Realign panes (⌘R)", action: model.realign)
+            Button("New empty grid (⌘N)", action: model.newGrid)
+            Button("Undo grid edit (⌘Z)", action: model.undo)
+            Button("Undo last window arrangement") { model.manager.undo() }
+                .disabled(model.manager.undoLabel == nil)
+            Divider()
+            Text("Show or hide Tilez: ⌃⌥Space")
+            Text("Enlarge a window, or put it back: ⌃⌥Return or ⌃⌥-click")
+            Text("Quick add a tile: ⌃⌥N")
+            Text("Realign windows: ⌃⌥R")
+            Text("Open a workspace: ⌃⌥W")
+            Text("Save the workspace: ⌃⌥S, or a new one: ⌃⌥⇧S")
+            if let check = model.onCheckForUpdates { Button("Check for Updates…", action: check) }
+            Button("Close", action: { model.onDismiss?() })
+            Button("Quit Tilez") { NSApp.terminate(nil) }
+        } label: { Image(systemName: "ellipsis").frame(width: 16) }
+            .menuStyle(.borderlessButton).fixedSize().help("More actions")
+            .padding(.horizontal, 8).frame(minHeight: 34)
+            .background {
+                PointerHover { hovered in
+                    RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(hovered && !model.busy ? 0.8 : 0))
+                }
+            }
+            .disabled(model.busy)
+    }
+
+    private func firstOfKind(_ item: GridEditorModel.SavedItem, in items: [GridEditorModel.SavedItem]) -> Bool {
+        items.first(where: { $0.isWorkspace == item.isWorkspace })?.id == item.id
+    }
+
+    @ViewBuilder private func savedRow(_ item: GridEditorModel.SavedItem, heading: Bool) -> some View {
+        let selected = model.selectedSavedItem?.id == item.id
+        let here = item.isWorkspace && item.id == model.shownWorkspace?.id
+        if heading {
+            Text(item.isWorkspace ? "Workspaces · bring back these windows" : "Layouts · open new windows")
+                .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8).padding(.top, 6)
+        }
+        HStack {
+            Button { model.open(item) } label: {
+                HStack {
+                    Image(systemName: item.isWorkspace ? "rectangle.3.group" : "square.grid.2x2").foregroundStyle(gridAccent)
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text(item.name).lineLimit(1)
+                        Text(savedSummary(item)).font(.system(size: 11)).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    if here { Text("Here").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary) }
+                }.padding(8).contentShape(Rectangle())
+            }.buttonStyle(AppRowStyle(selected: selected))
+                .accessibilityAddTraits(selected ? [.isSelected] : [])
+            Button { model.deleteSaved(item.id) } label: { Image(systemName: "trash") }
+                .buttonStyle(.plain).foregroundStyle(.secondary)
+                .help(item.isWorkspace ? "Delete workspace" : "Delete layout")
+        }.id(item.id)
+    }
+
+    private var openButton: some View {
+        Button(action: model.beginSaved) {
+            Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold))
+                .accessibilityLabel("Workspaces and layouts")
+        }
+        .buttonStyle(SplitHalfStyle(horizontalPadding: 9))
+        .help("Workspaces and layouts (⌘O)").disabled(model.busy)
+        .popover(isPresented: $model.showingSaved, arrowEdge: .bottom) { savedPopover }
+    }
+
+    /// A dot marks a shown workspace with unsaved changes.
+    private var saveButton: some View {
+        let help: String = model.shownWorkspace.map { "Save workspace “\($0.name)” (⌘S)" } ?? "Save as a workspace (⌘S)"
+        return Button(action: model.saveWorkspace) {
+            HStack(spacing: 6) {
+                Label("Save", systemImage: "bookmark")
+                if model.workspaceModified {
+                    Circle().fill(Color.primary).frame(width: 6, height: 6).accessibilityLabel("Edited")
+                }
+            }
+        }
+        .buttonStyle(SplitHalfStyle())
+        .help(help)
+        .disabled(model.busy)
+        .popover(isPresented: $model.saving, arrowEdge: .bottom) { savePopover }
+    }
+
+    private func savedSummary(_ item: GridEditorModel.SavedItem) -> String {
+        switch item.kind {
+        case .workspace(let workspace):
+            let windows = "\(workspace.windowCount) window\(workspace.windowCount == 1 ? "" : "s")"
+            return workspace.screens.count > 1 ? "\(windows) on \(workspace.screens.count) screens" : windows
+        case .layout(let layout): return "\(layout.grid.columns) × \(layout.grid.rows) · \(layout.grid.filledCount) apps"
+        }
     }
 
     private var searchHints: some View {
@@ -714,9 +780,9 @@ struct DesktopGridView: View {
     private var keyboardHints: String {
         if model.busy { return "Esc  Stop opening windows" }
         if model.choosingApp || model.showingSaved { return "↑ ↓  Select result   ·   ↵  Confirm   ·   Esc  Back to grid" }
-        if model.saving { return "↵  Save grid   ·   Esc  Back to grid" }
+        if model.saving { return model.saveKind == .workspace ? "↵  Save workspace   ·   Esc  Back to grid" : "↵  Save layout   ·   Esc  Back to grid" }
         if model.resizing { return "Hover or ← → ↑ ↓  Choose size   ·   ↵  Confirm   ·   Esc  Cancel" }
-        return "Arrows  Select   ·   ⌥Arrows  Split   ·   ⌥⇧Arrows  Merge   ·   ⌘R  Realign   ·   ⌘⇧⌫  Close all   ·   Type / Space  Choose app   ·   G  Size   ·   ⌘S  Save   ·   ⌘O  Load   ·   ↵  Apply   ·   Esc  Close"
+        return "Arrows  Select   ·   ⌥Arrows  Split   ·   ⌥⇧Arrows  Merge   ·   ⌘R  Realign   ·   ⌘⇧⌫  Close all   ·   Type / Space  Choose app   ·   G  Size   ·   ⌘S  Save workspace   ·   ⌘O  Open   ·   ↵  Apply   ·   Esc  Close"
     }
 
     private func keycap(_ text: String) -> some View {

@@ -23,8 +23,19 @@ Press **Control–Option–Space** or click the grid icon in the menu bar. The p
 - **G** turns the toolbar's layout preview into a size picker. Hover or use **←/→** (columns) and **↑/↓** (rows), then click or press **Return** to confirm. **Escape** or **G** again cancels.
 - **⌘K** uses an empty pane or splits the selected pane to make room. **⌘C / ⌘V** copies an app assignment into an empty cell, without sharing its live window binding.
 - **⌘Z** undoes a grid edit. The bar's **…** menu also includes Undo last window arrangement, New empty grid, Close, and Quit.
-- **Save / ⌘S** names an optional reusable grid. **⌘O** or the chevron beside Save opens searchable saved grids: type, use ↑/↓, then Return to load a draft on any desktop. Saved grids contain app choices, not a fixed screen or desktop destination.
+- **Save / ⌘S** saves the workspace this screen is showing, or names a new one when it shows none (see Workspaces below). **⌘⇧S** saves a new workspace. **⌘O** or the chevron beside Save opens a searchable list of workspaces and saved layouts: type, use ↑/↓, then Return. A workspace brings back its windows; a layout loads a draft of apps on any desktop. **Save as layout…** in that list saves the grid's apps as a reusable layout, which contains app choices, not windows or a fixed screen or desktop.
 - **Escape** closes the app picker first, then the overlay. While opening windows it stops the request; windows already created stay available.
+
+### Workspaces
+
+A **workspace** is a set of open windows kept in one arrangement, on one screen or several. A **saved layout** is its opposite: apps only, and opening it always opens new windows.
+
+- **Open a workspace** with **Control–Option–W**, or from the grid's **⌘O** list. Its exact windows come back into their panes from wherever they are: minimized, on another desktop, or on another screen. A one-screen workspace comes to the screen you're on; a multi-screen workspace returns to each of its screens at once. Other windows already on those screens stay where they are.
+- **A workspace never opens a window.** When one of its windows closes, or its app quits, the window leaves the workspace for good and a neighboring pane grows into its space. When the last one closes, the workspace is gone.
+- **Save** with **Control–Option–S** (or **⌘S** in the grid). That saves the workspace the screen is showing. When it isn't showing one, you name a new one. **Control–Option–Shift–S** (or **⌘⇧S**) always saves a new workspace; with more than one display, choose **This screen** or **All screens**. A new workspace with an existing name replaces it.
+- **Rearranging, resizing, or swapping** windows marks the workspace as edited (a dot on the grid's Save button) until you save. Closing a window, or adding one with **Quick Add**, updates the workspace by itself. Quick Add's new window joins the workspace its screen is showing. A window can belong to several workspaces.
+- A screen shows a workspace from when you open or save it on that screen's current desktop until you open a different workspace or a saved layout there.
+- Pulling windows off other desktops uses the same desktop bridge as the grid (macOS 26.4+). Full-screen desktops can't show a workspace; leave full screen there first.
 
 ### Quick add a tile
 

@@ -337,8 +337,9 @@ private func checkMenuPanelGeometry() {
         checkPaneLayouts()
         checkSavedSetups()
         checkActiveLayouts()
+        checkWorkspaces()
         checkMenuPanelGeometry()
-        print("PASS: 31 geometry, matching, creation, visibility, saved-setup, active-layout, and menu-panel scenarios, \(assertionCount) assertions.")
+        print("PASS: 32 geometry, matching, creation, visibility, saved-setup, active-layout, workspace, and menu-panel scenarios, \(assertionCount) assertions.")
     }
 }
 
@@ -576,4 +577,97 @@ func checkPaneLayouts() {
         } catch is CancellationError {} catch { expect(false, "Unexpected error") }
         print("PASS: zero-delay settled placements, delayed opening transitions, bounded constraints, and cancellation")
     } catch { fatalError("Unexpected settling failure: \(error)") }
+}
+
+func checkWorkspaces() {
+    let app = GridApp(bundleID: "chat.test", name: "Chat")
+    func binding(_ index: Int) -> GridWindowBinding { GridWindowBinding(windowID: "1:window-\(index)", processSession: "1|launch") }
+    func pane(_ index: Int) -> GridSlot { GridSlot(app: app, binding: binding(index)) }
+    let left = CGRect(x: 0, y: 0, width: 0.5, height: 1)
+    let topRight = CGRect(x: 0.5, y: 0, width: 0.5, height: 0.5)
+    let bottomRight = CGRect(x: 0.5, y: 0.5, width: 0.5, height: 0.5)
+    let three = DesktopGrid(panes: [pane(0), pane(1), pane(2)], frames: [left, topRight, bottomRight])
+
+    // Saving keeps only real windows; empty panes and new-window placeholders never join.
+    let withHole = DesktopGrid(panes: [pane(0), GridSlot(), GridSlot(app: app, opensNewWindow: true)], frames: [left, topRight, bottomRight])
+    let saved = Workspace(name: "Coding", screens: [WorkspaceScreen(displayID: "A", arranging: withHole)!])
+    expectEqual(saved.windowCount, 1)
+    expect(WorkspaceScreen(displayID: "A", arranging: .emptyDesktop) == nil, "A screen with no windows isn't part of a workspace")
+    let data = try! JSONEncoder().encode(saved)
+    expectEqual(try! JSONDecoder().decode(Workspace.self, from: data), saved)
+
+    // A closed window leaves for good, and its neighbor grows into the space.
+    let workspace = Workspace(name: "Coding", screens: [WorkspaceScreen(displayID: "A", arranging: three)!])
+    let closedOne = workspace.keeping { $0 != binding(2) }!
+    expectEqual(closedOne.windowCount, 2)
+    let grown = closedOne.screens[0].grid.normalizedFrames
+    expect(Geometry.approximatelyEqual(grown[1], CGRect(x: 0.5, y: 0, width: 0.5, height: 1), tolerance: 0.001), "The pane above grows into the closed window's space")
+    expect(workspace.keeping { _ in false } == nil, "A workspace ends when its last window closes")
+    expectEqual(workspace.keeping { _ in true }, workspace)
+
+    // One screen follows you; several screens return to their own displays.
+    expectEqual(workspace.destinations(connected: ["A", "B"], current: "B").map(\.displayID), ["B"])
+    let spanning = Workspace(name: "Everything", screens: [WorkspaceScreen(displayID: "A", arranging: three)!,
+        WorkspaceScreen(displayID: "B", arranging: DesktopGrid(panes: [pane(3)], frames: [CGRect(x: 0, y: 0, width: 1, height: 1)]))!])
+    expectEqual(spanning.destinations(connected: ["A", "B"], current: "A").map(\.displayID), ["A", "B"])
+    expect(spanning.destinations(connected: ["B"], current: "B").map(\.displayID) == ["B"], "A disconnected screen's windows stay put")
+    let spanningClosed = spanning.keeping { $0 != binding(3) }!
+    expect(spanningClosed.screens.map(\.displayID) == ["A"], "A screen whose windows all closed leaves the workspace")
+
+    // Modified: moved, missing, or extra windows; exact placement within tolerance isn't.
+    expectFalse(workspace.isModified(on: "Z", showing: three), "A one-screen workspace compares against any screen showing it")
+    var nudged = three
+    nudged.resizeDivider(nudged.dividers.first { $0.vertical }!, to: 0.505)
+    expectFalse(workspace.isModified(on: "A", showing: nudged))
+    nudged.resizeDivider(nudged.dividers.first { $0.vertical }!, to: 0.6)
+    expect(workspace.isModified(on: "A", showing: nudged), "Moved windows make it modified")
+    var missing = three
+    missing.removePane(2)
+    expect(workspace.isModified(on: "A", showing: missing), "A window pulled away makes it modified")
+    let extra = DesktopGrid(panes: [pane(0), pane(1), pane(2), pane(9)], frames: [left, topRight, bottomRight, left])
+    expect(workspace.isModified(on: "A", showing: extra), "Saving would add the extra window")
+    expect(spanning.isModified(on: "C", showing: three), "A screen outside a multi-screen workspace never matches it")
+
+    // Saving replaces that screen and keeps the others.
+    let resaved = spanning.saving(DesktopGrid(panes: [pane(5)], frames: [left]), on: "B")!
+    expectEqual(resaved.screens.map(\.displayID), ["A", "B"])
+    expectEqual(resaved.screen(on: "B")!.grid.slots.map(\.binding), [binding(5)])
+    expectEqual(resaved.screen(on: "A"), spanning.screen(on: "A"))
+    expect(workspace.saving(missing, on: "B")!.screens.map(\.displayID) == ["B"], "A one-screen workspace moves to the screen it's saved from")
+    expectEqual(spanning.saving(.emptyDesktop, on: "B")!.screens.map(\.displayID), ["A"])
+    expect(workspace.saving(.emptyDesktop, on: "A") == nil, "Nothing left to save")
+
+    // Quick Add joins: the workspace takes the split, and unrelated windows stay out.
+    var arranged = DesktopGrid(panes: [pane(0), pane(1), pane(2), pane(8)],
+                               frames: [left, topRight, bottomRight, CGRect(x: 0.1, y: 0.1, width: 0.2, height: 0.2)])
+    let newPane = arranged.split(0, toward: .bottom)!
+    arranged.slots[newPane] = pane(7)
+    let joined = workspace.joining(binding(7), arranged: arranged, on: "A")
+    expectEqual(Set(joined.bindings), Set([binding(0), binding(1), binding(2), binding(7)]))
+    expectFalse(joined.isModified(on: "A", showing: DesktopGrid(panes: [arranged.slots[0], arranged.slots[1], arranged.slots[2], arranged.slots[4]],
+        frames: [arranged.normalizedFrames[0], topRight, bottomRight, arranged.normalizedFrames[4]])), "The join takes on the new split")
+    let partlyAway = DesktopGrid(panes: [pane(0), pane(7), pane(8)], frames: [left, topRight, bottomRight])
+    let joinedAway = workspace.joining(binding(7), arranged: partlyAway, on: "A")
+    expect(Set(joinedAway.bindings) == Set([binding(0), binding(1), binding(2), binding(7)]),
+           "Members that are minimized or on another desktop stay in the workspace when a window joins")
+    expect(joinedAway.screens[0].grid.normalizedFrames.allSatisfy { $0.width > 0.2 && $0.height > 0.2 } && joinedAway.screens[0].grid.isValid,
+           "The workspace makes room by splitting its own largest pane")
+    expect(workspace.joining(binding(99), arranged: partlyAway, on: "A") == workspace, "A window that isn't arranged doesn't join")
+    let joinedElsewhere = spanning.joining(binding(7), arranged: DesktopGrid(panes: [pane(7)], frames: [left]), on: "C")
+    expectEqual(joinedElsewhere.screens.map(\.displayID), ["A", "B", "C"])
+
+    // Shown: per screen and desktop, replaced by the next workspace or cleared by a layout.
+    var shown = ShownWorkspaces()
+    shown.show(workspace.id, on: "A", desktop: "A|1")
+    expectEqual(shown.workspace(on: "A", desktop: "A|1"), workspace.id)
+    expect(shown.workspace(on: "A", desktop: "A|2") == nil, "Another desktop on that screen isn't showing it")
+    shown.show(spanning.id, on: "A", desktop: "A|1")
+    shown.show(spanning.id, on: "B", desktop: "B|1")
+    expectEqual(shown.workspace(on: "A", desktop: "A|1"), spanning.id)
+    expectEqual(shown.displays(showing: spanning.id), ["A", "B"])
+    shown.clear("A")
+    expectEqual(shown.displays(showing: spanning.id), ["B"])
+    shown.forget(spanning.id)
+    expect(shown.screens.isEmpty)
+    print("PASS: workspaces keep only live windows, grow neighbors on close, follow one screen or return to several, detect edits, save per screen, join Quick Add windows, and track the shown workspace")
 }

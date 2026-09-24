@@ -50,7 +50,7 @@ MainActor.assumeIsolated {
     model.undo()
     assert(model.hasOpened, "Undo restores the Apply grid state along with live bindings")
     assert(model.grid.slots[0].binding == binding && model.grid.slots[1].app == finder)
-    model.saveName = "Mixed apps"; model.save()
+    model.saveKind = .layout; model.saveName = "Mixed apps"; model.save()
     assert(model.saved.count == 1 && model.saved[0].grid.slots.allSatisfy { $0.binding == nil })
     model.newGrid()
     assert(model.grid.filledCount == 0)
@@ -241,14 +241,16 @@ MainActor.assumeIsolated {
     assert(key(5, "g")); assert(key(125)); assert(key(36))
     assert(model.grid.rows == 3 && !model.resizing && !model.busy, "Return confirms size without opening windows")
     assert(key(6, "z", .command) && model.grid == beforeResize)
-    assert(key(1, "s", .command) && model.saving)
+    assert(key(1, "s", .command) && model.saving && model.saveKind == .workspace, "⌘S names a new workspace when the screen shows none")
     assert(!key(124, "", .shift, editing: true), "Saving preserves normal name editing")
+    model.saveKind = .layout
     model.saveName = "Writing"; model.save()
+    model.saveKind = .layout
     model.saveName = "Reading"; model.save()
     assert(key(31, "o", .command) && model.showingSaved)
-    assert(key(125, editing: true) && model.selectedSavedGrid?.name == "Reading")
+    assert(key(125, editing: true) && model.selectedSavedItem?.name == "Reading")
     model.savedSearch = "wri"
-    assert(model.selectedSavedGrid?.name == "Writing", "Filtering resets the result highlight")
+    assert(model.selectedSavedItem?.name == "Writing", "Filtering resets the result highlight")
     assert(key(36, editing: true) && !model.hasActiveLayer && model.grid.slots.allSatisfy { $0.binding == nil })
     model.grid = DesktopGrid(slots: [GridSlot(app: safari, binding: live)])
     let beforeFill = model.grid

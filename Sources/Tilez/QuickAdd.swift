@@ -16,6 +16,11 @@ private final class QuickAddPanel: NSPanel {
     @Published var highlighted: String?
     /// Its own editor model, so a quick add never touches the grid editor's draft or undo.
     let model: GridEditorModel
+    /// The new window joins the workspace its screen shows.
+    var workspaces: WorkspaceStore? {
+        get { model.workspaces }
+        set { model.workspaces = newValue }
+    }
     private var panel: QuickAddPanel?
     private var previousApp: NSRunningApplication?
     private var resignObserver: NSObjectProtocol?
@@ -121,6 +126,12 @@ private final class QuickAddPanel: NSPanel {
         // addApp selects the new pane and opens its chooser; it declines when every pane is too small.
         guard model.choosingApp else { model.isError = true; return }
         model.assign(choice.app)
+        let index = model.selectedCell
+        model.onApplied = { [weak self] grid in
+            guard let self, let index, grid.slots.indices.contains(index),
+                  let window = grid.slots[index].binding, let display = self.model.display else { return }
+            self.workspaces?.join(window, arranged: grid, on: display)
+        }
         model.openGrid()
         // Keep working in the background; close() would cancel the launch.
         if model.busy { panel?.orderOut(nil) }

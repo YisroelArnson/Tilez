@@ -120,13 +120,17 @@ enum GridDirection {
             removeAllPanes()
             return true
         }
+        if modifiers == [.command, .shift], event.charactersIgnoringModifiers?.lowercased() == "s" {
+            beginSave(.workspace)
+            return true
+        }
         if modifiers == .command {
             switch event.charactersIgnoringModifiers?.lowercased() {
             case "k": addApp()
             case "z": undo()
             case "n": newGrid()
             case "r": realign()
-            case "s": beginSave()
+            case "s": saveWorkspace()
             case "o": beginSaved()
             case "c": copySelectedApp()
             case "v": pasteApp()

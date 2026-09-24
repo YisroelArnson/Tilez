@@ -36,6 +36,17 @@ struct GridAppChoice: Identifiable, Sendable {
     /// A newer version found by a background check, shown as a pill in the grid.
     @Published var availableUpdate: String?
     var hasActiveLayer: Bool { choosingApp || saving || showingSaved || resizing }
+    enum SaveKind { case workspace, layout }
+    @Published var saveKind = SaveKind.workspace
+    @Published var saveAllScreens = false
+    /// Shared with Quick Add and the workspace panel.
+    var workspaces: WorkspaceStore?
+    var onOpenWorkspace: ((Workspace) -> Void)?
+    /// Called with the arranged grid after Apply places its windows.
+    var onApplied: ((DesktopGrid) -> Void)?
+    /// The workspace this screen is showing, which ⌘S saves.
+    @Published private(set) var shownWorkspace: Workspace?
+    private var loadedLayout = false
     private var selections: [String: Int] = [:]
     private(set) var display: Display?
     private(set) var desktop: Desktop?
@@ -77,36 +88,50 @@ struct GridAppChoice: Identifiable, Sendable {
         trusted = Accessibility.trusted
         if desktop == nil { message = "This desktop is unavailable."; isError = true }
         loadApps()
-        guard snapshot == nil, trusted, let desktop else { return }
+        loadedLayout = false
+        updateWorkspaceStatus()
+        guard snapshot == nil, trusted, let desktop, !captured.slots.allSatisfy({ $0.binding == nil }) else { return }
         let initial = grid
-        let pids = Set(captured.slots.compactMap { $0.binding?.windowID.split(separator: ":").first.flatMap { Int32($0) } })
-        guard !pids.isEmpty else { return }
         discoveryTask = Task { [weak self] in
             do {
-                let response = try await Accessibility.snapshot(for: pids)
-                let live = response.windows
+                let panes = try await Self.livePanes(captured, display: display)
                 guard let self, self.discoveryGeneration == generation, !self.busy,
                       self.undoDrafts.isEmpty, self.grid == initial, !self.hasActiveLayer else { return }
-                // Ignore dialogs and panels when AX can identify them. A temporarily
-                // unresponsive app keeps its WindowServer preview instead of disappearing.
-                let byID = Dictionary(uniqueKeysWithValues: live.map { ($0.id, $0) })
-                let panes = captured.slots.enumerated().compactMap { index, slot -> (GridSlot, CGRect)? in
-                    guard let binding = slot.binding else { return nil }
-                    if let window = byID[binding.windowID] {
-                        guard window.availability.document, !window.availability.minimized, !window.availability.hidden else { return nil }
-                        var updated = slot; updated.title = window.title
-                        return (updated, window.availability.fullScreen ? display.bounds : window.frame)
-                    }
-                    let pid = binding.windowID.split(separator: ":").first.flatMap { Int32($0) }
-                    if let pid, response.respondingPIDs.contains(pid) { return nil }
-                    return (slot, capturedFrames[index])
-                }
                 guard Desktops.current(displayID: display.id, includeFullScreen: true)?.number == desktop.number else { return }
                 self.grid = DesktopGrid.visibleDesktop(panes: panes, in: display.bounds)
                 self.originalGrid = self.grid
                 self.selectedCell = min(self.selectedCell ?? 0, self.grid.slots.count - 1)
+                self.updateWorkspaceStatus()
             } catch { /* Preview remains usable if discovery is cancelled or unavailable. */ }
         }
+    }
+
+    /// Ignore dialogs and panels when AX can identify them, and minimized or hidden windows. A
+    /// temporarily unresponsive app keeps its WindowServer preview instead of disappearing.
+    static func livePanes(_ captured: DesktopGrid, display: Display) async throws -> [(GridSlot, CGRect)] {
+        let capturedFrames = captured.frames(in: display.bounds)
+        let pids = Set(captured.slots.compactMap { $0.binding?.windowID.split(separator: ":").first.flatMap { Int32($0) } })
+        guard !pids.isEmpty else { return [] }
+        let response = try await Accessibility.snapshot(for: pids)
+        let byID = Dictionary(uniqueKeysWithValues: response.windows.map { ($0.id, $0) })
+        return captured.slots.enumerated().compactMap { index, slot -> (GridSlot, CGRect)? in
+            guard let binding = slot.binding else { return nil }
+            if let window = byID[binding.windowID] {
+                guard window.availability.document, !window.availability.minimized, !window.availability.hidden else { return nil }
+                var updated = slot; updated.title = window.title
+                return (updated, window.availability.fullScreen ? display.bounds : window.frame)
+            }
+            let pid = binding.windowID.split(separator: ":").first.flatMap { Int32($0) }
+            if let pid, response.respondingPIDs.contains(pid) { return nil }
+            return (slot, capturedFrames[index])
+        }
+    }
+
+    /// The windows a person can see on `desktop` within `display`, as the grid shows them.
+    static func visibleDesktop(display: Display, desktop: Desktop, manager: WindowManager) async throws -> DesktopGrid {
+        let captured = captureDesktop(display: display, desktop: desktop, manager: manager)
+        guard Accessibility.trusted else { return captured }
+        return DesktopGrid.visibleDesktop(panes: try await livePanes(captured, display: display), in: display.bounds)
     }
 
     /// Every normal window on `desktop` within `display`, front to back, bound to its live window.
@@ -314,19 +339,79 @@ struct GridAppChoice: Identifiable, Sendable {
     }
     func save() {
         let name = saveName.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !busy, !name.isEmpty, grid.filledCount > 0 else { return }
+        guard !busy, !name.isEmpty else { return }
+        if saveKind == .workspace {
+            let allScreens = saveAllScreens
+            closeLayers()
+            commitWorkspace { store, display in try await store.saveNew(named: name, allScreens: allScreens, from: display) }
+            return
+        }
+        guard grid.filledCount > 0 else { return }
         saved.append(SavedGrid(name: name, grid: grid))
         defaults.set(try? JSONEncoder().encode(saved), forKey: "savedGridsV2")
-        closeLayers(); message = "Saved “\(name)”"
+        closeLayers(); message = "Saved layout “\(name)”"
+    }
+    /// ⌘S: save the workspace this screen is showing, or name a new one when it shows none.
+    func saveWorkspace() {
+        guard !busy else { return }
+        guard shownWorkspace != nil else { beginSave(.workspace); return }
+        closeLayers()
+        commitWorkspace { store, display in try await store.saveShown(on: display) }
+    }
+    /// A workspace keeps the windows on screen, so unapplied edits are applied first.
+    private func commitWorkspace(_ save: @escaping (WorkspaceStore, Display) async throws -> Workspace) {
+        guard let workspaces, let display else { return }
+        let run = { [weak self] in
+            guard let self else { return }
+            self.busy = true; self.isError = false; self.message = "Saving workspace…"
+            self.task = Task { @MainActor [weak self] in
+                do {
+                    let workspace = try await save(workspaces, display)
+                    guard let self else { return }
+                    self.busy = false; self.task = nil
+                    self.begin(on: display)
+                    self.message = "Saved workspace “\(workspace.name)”"
+                } catch {
+                    guard let self else { return }
+                    self.busy = false; self.task = nil
+                    self.message = error is CancellationError ? "Stopped." : error.localizedDescription
+                    self.isError = !(error is CancellationError)
+                }
+            }
+        }
+        if grid != originalGrid { apply(then: run) } else { run() }
+    }
+    /// Unapplied grid edits or windows that moved since the workspace was saved.
+    var workspaceModified: Bool {
+        guard let shownWorkspace, let display else { return false }
+        return grid != originalGrid || shownWorkspace.isModified(on: display.id, showing: originalGrid)
+    }
+    func updateWorkspaceStatus() {
+        shownWorkspace = display.flatMap { workspaces?.shownWorkspace(on: $0) }
     }
     func load(_ item: SavedGrid) {
         guard !busy else { return }
         edit { $0 = item.grid.template }
         selectedCell = grid.slots.firstIndex(where: { $0.app == nil }) ?? 0
+        loadedLayout = true
         closeLayers()
+    }
+    func open(_ item: SavedItem) {
+        switch item.kind {
+        case .layout(let layout): load(layout)
+        case .workspace(let workspace):
+            guard !busy else { return }
+            closeLayers(); onOpenWorkspace?(workspace)
+        }
     }
     func deleteSaved(_ id: UUID) {
         guard !busy else { return }
+        if let workspaces, workspaces.workspaces.contains(where: { $0.id == id }) {
+            objectWillChange.send()
+            workspaces.remove(id)
+            updateWorkspaceStatus()
+            return
+        }
         saved.removeAll { $0.id == id }
         defaults.set(try? JSONEncoder().encode(saved), forKey: "savedGridsV2")
     }
@@ -338,10 +423,11 @@ struct GridAppChoice: Identifiable, Sendable {
     func closeLayers() {
         choosingApp = false; saving = false; showingSaved = false; resizing = false
     }
-    func beginSave() {
-        guard !busy, grid.filledCount > 0 else { return }
+    func beginSave(_ kind: SaveKind) {
+        guard !busy, kind == .workspace || grid.filledCount > 0 else { return }
         closeLayers()
-        saveName = "\(grid.columns) × \(grid.rows) grid"
+        saveKind = kind; saveAllScreens = false
+        saveName = kind == .layout ? "\(grid.columns) × \(grid.rows) grid" : workspaces?.suggestedName ?? "Workspace"
         saving = true
     }
     func beginSaved() {
@@ -365,11 +451,21 @@ struct GridAppChoice: Identifiable, Sendable {
     var selectedAppChoice: GridAppChoice? {
         filteredApps.first { $0.id == selectedAppID } ?? filteredApps.first
     }
-    var filteredSaved: [SavedGrid] {
-        let query = savedSearch.trimmingCharacters(in: .whitespacesAndNewlines)
-        return query.isEmpty ? saved : saved.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    /// Workspaces, then saved layouts, in one searchable list.
+    struct SavedItem: Identifiable {
+        enum Kind { case workspace(Workspace), layout(SavedGrid) }
+        let kind: Kind
+        var id: UUID { switch kind { case .workspace(let w): return w.id; case .layout(let l): return l.id } }
+        var name: String { switch kind { case .workspace(let w): return w.name; case .layout(let l): return l.name } }
+        var isWorkspace: Bool { if case .workspace = kind { return true }; return false }
     }
-    var selectedSavedGrid: SavedGrid? {
+    var hasSavedItems: Bool { !saved.isEmpty || workspaces?.workspaces.isEmpty == false }
+    var filteredSaved: [SavedItem] {
+        let query = savedSearch.trimmingCharacters(in: .whitespacesAndNewlines)
+        let items = (workspaces?.workspaces ?? []).map { SavedItem(kind: .workspace($0)) } + saved.map { SavedItem(kind: .layout($0)) }
+        return query.isEmpty ? items : items.filter { $0.name.localizedCaseInsensitiveContains(query) }
+    }
+    var selectedSavedItem: SavedItem? {
         filteredSaved.first { $0.id == selectedSavedID } ?? filteredSaved.first
     }
     func moveSearchSelection(_ delta: Int) {
@@ -381,13 +477,13 @@ struct GridAppChoice: Identifiable, Sendable {
         } else if showingSaved {
             let results = filteredSaved
             guard !results.isEmpty else { return }
-            let index = results.firstIndex { $0.id == selectedSavedGrid?.id } ?? 0
+            let index = results.firstIndex { $0.id == selectedSavedItem?.id } ?? 0
             selectedSavedID = results[max(0, min(results.count - 1, index + delta))].id
         }
     }
     func confirmSearchSelection() {
         if choosingApp, let choice = selectedAppChoice { assign(choice.app) }
-        else if showingSaved, let item = selectedSavedGrid { load(item) }
+        else if showingSaved, let item = selectedSavedItem { open(item) }
     }
     func cancel() { task?.cancel(); discoveryTask?.cancel() }
     func icon(for app: GridApp) -> NSImage {
@@ -454,7 +550,10 @@ struct GridAppChoice: Identifiable, Sendable {
         }
     }
 
-    func openGrid() {
+    func openGrid() { apply(then: nil) }
+
+    /// `next` runs after the windows are placed, in place of closing the grid.
+    private func apply(then next: (() -> Void)?) {
         guard !busy, grid.isValid, let display, let desktop,
               grid.filledCount > 0 || originalGrid.filledCount > 0 else { return }
         guard Desktops.current(displayID: display.id, includeFullScreen: true)?.number == desktop.number else {
@@ -483,7 +582,13 @@ struct GridAppChoice: Identifiable, Sendable {
                         self.grid.slots[index].binding = binding; self.persist()
                     })
                 self.grid = result.grid; self.persist()
-                if result.exact {
+                // A saved layout opened here replaces the workspace this screen was showing.
+                if self.loadedLayout, let display = self.display { self.workspaces?.layoutOpened(on: display) }
+                self.onApplied?(result.grid)
+                if let next {
+                    // After this task finishes, so `next` can start its own.
+                    Task { @MainActor in next() }
+                } else if result.exact {
                     self.message = ""; self.onFinished?()
                 } else {
                     self.message = result.message; self.isError = true
