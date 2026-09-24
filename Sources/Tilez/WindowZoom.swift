@@ -83,6 +83,7 @@ import Carbon
     func restoreBeforeQuit() {
         for (key, window) in zoomed {
             unwatch(window.observer)
+            WindowMotion.stop(window.element)
             Accessibility.setFrame(window.element, to: window.original)
             zoomed[key] = nil
         }
@@ -110,18 +111,16 @@ import Carbon
         let target = display.bounds.insetBy(dx: 10, dy: 10)
         zoomed[key] = Zoomed(element: window.element, original: window.frame,
                              observer: watch(pid: window.pid, window: window.element))
-        _ = try? await Accessibility.perform {
-            Accessibility.setFrame(window.element, to: target)
-            AXUIElementPerformAction(window.element, kAXRaiseAction as CFString)
-        }
-        // A clicked window's app may be behind the active one.
+        // Bring it forward first (a clicked window's app may be behind the active one), then grow it.
+        _ = try? await Accessibility.perform { AXUIElementPerformAction(window.element, kAXRaiseAction as CFString) }
         NSRunningApplication(processIdentifier: window.pid)?.activate()
+        await WindowMotion.move(window.element, to: target)
     }
 
     private func putBack(_ key: String) async {
         guard let window = zoomed.removeValue(forKey: key) else { return }
         unwatch(window.observer)
-        _ = try? await Accessibility.perform { Accessibility.setFrame(window.element, to: window.original) }
+        await WindowMotion.move(window.element, to: window.original)
     }
 
     nonisolated private static func focusedWindow(pid: pid_t) -> Candidate? {

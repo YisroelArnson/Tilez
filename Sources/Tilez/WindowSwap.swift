@@ -21,6 +21,18 @@ import ApplicationServices
     private var moving = false
     private var needsMove = false
     private var appliedSize: CGSize?
+    // The dragged window follows the pointer at once, but eases between its own and a target's size.
+    private var sizeFrom = CGSize.zero, sizeTo = CGSize.zero, sizeStart = Date.distantPast
+    private var currentSize: CGSize {
+        let t = WindowMotion.eased(Date().timeIntervalSince(sizeStart) / WindowMotion.duration)
+        return CGSize(width: sizeFrom.width + (sizeTo.width - sizeFrom.width) * t,
+                      height: sizeFrom.height + (sizeTo.height - sizeFrom.height) * t)
+    }
+    private var sizeSettled: Bool { Date().timeIntervalSince(sizeStart) >= WindowMotion.duration }
+    private func ease(toSize size: CGSize) {
+        sizeFrom = currentSize; sizeTo = size
+        sizeStart = WindowMotion.reduceMotion ? .distantPast : Date()
+    }
     /// Enlarged windows keep their own restore frame, so they never take part in a swap.
     var isExcluded: (AXUIElement) -> Bool = { _ in false }
 
@@ -34,6 +46,7 @@ import ApplicationServices
             self.drag = Drag(element: found.element, number: found.number, origin: o,
                              grab: CGPoint(x: (point.x - o.minX) / max(o.width, 1), y: (point.y - o.minY) / max(o.height, 1)))
             self.appliedSize = o.size
+            self.sizeFrom = o.size; self.sizeTo = o.size; self.sizeStart = .distantPast
             NSRunningApplication(processIdentifier: found.pid)?.activate()
             _ = try? await Accessibility.perform { AXUIElementPerformAction(found.element, kAXRaiseAction as CFString) }
             self.update()
@@ -51,12 +64,7 @@ import ApplicationServices
         // Over another window the swap completes; anywhere else the window goes home.
         let destination = target?.frame ?? drag.origin
         reset()
-        Task {
-            for attempt in 0..<2 {
-                if attempt > 0 { try? await Task.sleep(nanoseconds: 120_000_000) }
-                _ = try? await Accessibility.perform { Accessibility.setFrame(drag.element, to: destination) }
-            }
-        }
+        Task { await WindowMotion.move(drag.element, to: destination) }
     }
 
     private func reset() {
@@ -76,17 +84,19 @@ import ApplicationServices
         guard !moving, needsMove, let drag else { return }
         needsMove = false
         moving = true
-        let size = target?.frame.size ?? drag.origin.size
+        let size = currentSize
         let origin = CGPoint(x: pointer.x - drag.grab.x * size.width, y: pointer.y - drag.grab.y * size.height)
         let resize = appliedSize != size
         appliedSize = size
         Task { [weak self] in
             _ = try? await Accessibility.perform {
                 if resize { Accessibility.setFrame(drag.element, to: CGRect(origin: origin, size: size)) }
-                else { Self.setPosition(drag.element, origin) }
+                else { WindowMotion.setPosition(drag.element, origin) }
             }
             guard let self else { return }
             self.moving = false
+            // Keep stepping a size change even while the pointer is still.
+            if !self.sizeSettled { try? await Task.sleep(nanoseconds: 8_000_000); self.needsMove = true }
             self.pump()
         }
     }
@@ -117,7 +127,7 @@ import ApplicationServices
         guard self.drag != nil, hover?.number != target?.number else { return }
         if let old = target {
             target = nil
-            _ = try? await Accessibility.perform { Accessibility.setFrame(old.element, to: old.frame) }
+            Task { await WindowMotion.move(old.element, to: old.frame) }
         }
         if let hover {
             let found = try? await Accessibility.perform { () -> Target? in
@@ -128,9 +138,10 @@ import ApplicationServices
             }
             if let found = found ?? nil, self.drag != nil, !isExcluded(found.element) {
                 target = found
-                _ = try? await Accessibility.perform { Accessibility.setFrame(found.element, to: drag.origin) }
+                Task { await WindowMotion.move(found.element, to: drag.origin) }
             }
         }
+        ease(toSize: target?.frame.size ?? drag.origin.size)
         update()
     }
 
@@ -173,11 +184,5 @@ import ApplicationServices
         AXUIElementSetMessagingTimeout(app, 1)
         guard let windows = Accessibility.value(app, kAXWindowsAttribute) as? [AXUIElement] else { return nil }
         return windows.first { Desktops.windowNumber($0) == number }
-    }
-
-    nonisolated private static func setPosition(_ element: AXUIElement, _ origin: CGPoint) {
-        var point = CGPoint(x: origin.x.rounded(), y: origin.y.rounded())
-        guard let value = AXValueCreate(.cgPoint, &point) else { return }
-        AXUIElementSetAttributeValue(element, kAXPositionAttribute as CFString, value)
     }
 }

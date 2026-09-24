@@ -98,6 +98,7 @@ struct DesktopGridView: View {
     @State private var activeResize: PaneResize?
     @FocusState private var nameFocused: Bool
     @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         GeometryReader { proxy in
@@ -265,18 +266,26 @@ struct DesktopGridView: View {
 
     private func gridCanvas(width: CGFloat, height: CGFloat) -> some View {
         let frames = model.grid.frames(in: CGRect(x: 0, y: 0, width: width, height: height))
+        // While a swap drag hovers another pane, both are drawn where the swap would put them.
+        // Hover still hit-tests the original frames, so returning to your own spot cancels it.
+        func place(_ index: Int) -> Int {
+            guard let source = dragSource, let target = dragTarget, !repeatDrag else { return index }
+            return index == source ? target : index == target ? source : index
+        }
         return ZStack(alignment: .topLeading) {
             ForEach(model.grid.slots.indices, id: \.self) { index in
-                let frame = frames[index]
+                let frame = frames[place(index)]
                 cell(index, compact: frame.height < 170 || frame.width < 220)
                     .frame(width: frame.width, height: frame.height)
                     .overlay {
-                        if !model.busy && (hoveredCell == index || model.selectedCell == index) {
+                        if !model.busy && dragSource == nil && (hoveredCell == index || model.selectedCell == index) {
                             edgeButtons(index)
                         }
                     }
                     .offset(x: frame.minX, y: frame.minY)
                     .opacity(dragSource == index ? 0.45 : 1)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: dragTarget)
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.16), value: repeatDrag)
                     .zIndex(model.selectedCell == index ? Double(frames.count + 1) : Double(frames.count - index))
                     .simultaneousGesture(DragGesture(minimumDistance: 6, coordinateSpace: .named("grid"))
                         .onChanged { value in
@@ -306,8 +315,12 @@ struct DesktopGridView: View {
                                 DispatchQueue.main.async { suppressCellClick = false }
                                 return
                             }
-                            if let source = dragSource, let target = dragTarget { model.move(from: source, to: target, repeating: repeatDrag) }
-                            dragSource = nil; dragTarget = nil; dragTranslation = .zero
+                            // The preview already shows the swap, so the drop itself doesn't animate.
+                            var instant = Transaction(); instant.disablesAnimations = true
+                            withTransaction(instant) {
+                                if let source = dragSource, let target = dragTarget { model.move(from: source, to: target, repeating: repeatDrag) }
+                                dragSource = nil; dragTarget = nil; dragTranslation = .zero
+                            }
                             DispatchQueue.main.async { suppressCellClick = false }
                         })
             }
