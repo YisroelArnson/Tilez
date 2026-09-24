@@ -170,6 +170,13 @@ final class WindowManager: ObservableObject {
         baseline = Dictionary(uniqueKeysWithValues: windows.map { ($0.id, WindowState(window: $0, frame: $0.frame)) })
     }
 
+    /// Record where `windows` are now as one undo step, before the caller moves them itself.
+    func recordArrangement(_ windows: [ManagedWindow], label: String) {
+        pushUndo(label, states: windows.map { pendingManual[$0.id] ?? WindowState(window: $0, frame: $0.frame) })
+        pendingManual.removeAll()
+        suppressUntil = Date().addingTimeInterval(1)
+    }
+
     /// Grid placement yields between windows so Escape and editor input remain responsive.
     @MainActor func applyGrid(_ changes: [(ManagedWindow, CGRect)]) async throws {
         trusted = Accessibility.trusted

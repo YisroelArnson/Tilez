@@ -125,6 +125,7 @@ enum GridDirection {
             case "k": addApp()
             case "z": undo()
             case "n": newGrid()
+            case "r": realign()
             case "s": beginSave()
             case "o": beginSaved()
             case "c": copySelectedApp()

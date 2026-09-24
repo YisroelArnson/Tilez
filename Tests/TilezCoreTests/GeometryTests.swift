@@ -526,6 +526,28 @@ func checkPaneLayouts() {
     expect(near(gapped.normalizedFrames[0].maxX, 0.592) && near(gapped.normalizedFrames[1].minX, 0.6),
            "A free side stops just short of the pane it would cover")
     expectEqual(gapped.dividers.count, 1)
+    // Drifted windows, like a captured desktop: three columns, the left one split.
+    var drifted = DesktopGrid(panes: (0..<4).map(slot), frames: [
+        CGRect(x: 0, y: 0, width: 0.327, height: 0.515), CGRect(x: 0.004, y: 0.505, width: 0.327, height: 0.495),
+        CGRect(x: 0.337, y: 0.023, width: 0.335, height: 0.967), CGRect(x: 0.673, y: 0.004, width: 0.325, height: 0.993)])
+    expect(drifted.mergeCandidates(0, toward: .bottom).isEmpty, "Overlapping, offset panes don't line up before realigning")
+    expect(drifted.realign())
+    let third = CGFloat(1) / 3, g: CGFloat = 0.004
+    let tidy = [CGRect(x: 0, y: 0, width: third - g, height: 0.5 - g), CGRect(x: 0, y: 0.5 + g, width: third - g, height: 0.5 - g),
+                CGRect(x: third + g, y: 0, width: third - 2 * g, height: 1), CGRect(x: 2 * third + g, y: 0, width: third - g, height: 1)]
+    expect(zip(drifted.normalizedFrames, tidy).allSatisfy { Geometry.approximatelyEqual($0, $1, tolerance: 0.0001) },
+           "Realign snaps edges to shared lines, even thirds and halves, and the screen: \(drifted.normalizedFrames)")
+    expectEqual(drifted.mergeCandidates(0, toward: .bottom), [1])
+    let realigned = drifted
+    drifted.realign()
+    expectEqual(drifted, realigned)
+    var holed = DesktopGrid(panes: [slot(0), slot(1)], frames: [CGRect(x: 0, y: 0, width: 0.3, height: 1), CGRect(x: 0.5, y: 0.01, width: 0.49, height: 0.98)])
+    holed.realign()
+    expect(near(holed.normalizedFrames[0].maxX, 0.3) && near(holed.normalizedFrames[1].minX, 0.5)
+           && holed.normalizedFrames[1] == CGRect(x: 0.5, y: 0, width: 0.5, height: 1), "Realign keeps a wide hole and reaches the screen edges")
+    var legacy = DesktopGrid(columns: 2, rows: 2)
+    legacy.realign()
+    expectEqual(legacy, DesktopGrid(columns: 2, rows: 2))
     let start = Date()
     var edit = six
     for index in 0..<500 {
@@ -534,7 +556,7 @@ func checkPaneLayouts() {
     }
     let elapsed = Date().timeIntervalSince(start)
     expect(elapsed < 1, "500 divider updates should fit within one second; got \(elapsed)")
-    print(String(format: "PASS: live pane geometry, empty/full/six-window desktops, unequal and overlapping windows, split/remove/T-junction resizing, edge and corner resizing, column merges, divider reset, exact bindings, legacy templates, new-window isolation; 500 divider edits %.1f ms", elapsed * 1000))
+    print(String(format: "PASS: live pane geometry, empty/full/six-window desktops, unequal and overlapping windows, split/remove/T-junction resizing, edge and corner resizing, column merges, divider reset, realign, exact bindings, legacy templates, new-window isolation; 500 divider edits %.1f ms", elapsed * 1000))
 }
 
 @MainActor private func checkWindowSettling() async {

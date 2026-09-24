@@ -19,6 +19,7 @@ Press **Control–Option–Space** or click the grid icon in the menu bar. The p
 - **Option–Arrow** splits the selected pane toward that arrow (left, right, above, or below) and opens the app chooser for the new pane. Type an app name and press Return to assign it. **⌘Z** undoes the split after dismissing the chooser.
 - **Type an app name** to search for the selected cell. **↑/↓** highlights a result; **Return** assigns it; **Escape** goes back. **1–9** opens a cell’s picker, **Space** opens the selected cell’s picker, and **Delete** removes its pane. To start a search with the reserved **G** key or a cell number, press Space first.
 - **Option–Shift–Arrow** merges the selected pane with the pane or panes beside it in that direction, when they line up into one rectangle. The selected pane keeps its app; absorbed windows close on Apply, and **⌘Z** undoes the merge.
+- **⌘R** realigns panes that have drifted out of line, such as windows captured from the desktop. Edges within a few percent of each other snap onto one shared line with an even gap, panes near the screen edge reach it, and near-even splits settle on halves, thirds, or quarters. The arrangement stays the same, larger holes are kept, and **⌘Z** undoes it. Also available under **… → Realign panes**.
 - **G** turns the toolbar's layout preview into a size picker. Hover or use **←/→** (columns) and **↑/↓** (rows), then click or press **Return** to confirm. **Escape** or **G** again cancels.
 - **⌘K** uses an empty pane or splits the selected pane to make room. **⌘C / ⌘V** copies an app assignment into an empty cell, without sharing its live window binding.
 - **⌘Z** undoes a grid edit. The bar's **…** menu also includes Undo last window arrangement, New empty grid, Close, and Quit.
@@ -28,6 +29,10 @@ Press **Control–Option–Space** or click the grid icon in the menu bar. The p
 ### Quick add a tile
 
 Press **Control–Option–N** anywhere to open a search panel of your apps, with recently added apps at the top. Type to filter, use ↑/↓ to choose, and press Return (or click) to open the app as a new tile. Tilez fills an empty pane if the desktop has one; otherwise it splits the largest pane along its longer side and fits the new window there. Every other window stays where it is. Escape, or clicking elsewhere, closes the panel.
+
+### Realign windows
+
+Press **Control–Option–R** anywhere to tidy the windows on the current screen and desktop without opening the grid. It works like **⌘R** in the grid: edges that nearly line up snap onto shared lines with an even gap, windows near the screen edge reach it, and near-even splits settle on halves, thirds, or quarters. Windows glide into place and keep their arrangement; wider holes, minimized, hidden, and full-screen windows are left alone. An enlarged window on that screen returns to its pane first. **… → Undo last window arrangement** puts everything back. With the grid open, the shortcut realigns its panes instead.
 
 ### Swap two windows by dragging
 
@@ -69,7 +74,7 @@ bash scripts/release.sh 2.1.0
 
 It builds Tilez (version 2.1.0, build number = commit count), signs it and the embedded Sparkle updater with your Developer ID and the hardened runtime, packages `dist.noindex/Tilez.dmg` with an Applications shortcut, notarizes and staples it, signs it for Sparkle, writes `dist.noindex/appcast.xml`, tags `v2.1.0`, and publishes a GitHub release with both files. It stops first if there are uncommitted changes, the tag exists, or `main` isn't pushed.
 
-People who installed the DMG get the update automatically: Sparkle checks `releases/latest/download/appcast.xml`, and **… → Check for Updates…** checks right away. Builds from source have no feed and keep updating with `scripts/update.sh`. The site's Download button links to `releases/latest/download/Tilez.dmg`.
+People who installed the DMG get the update automatically: Sparkle checks `releases/latest/download/appcast.xml` daily (and when the grid opens, if the last check was over six hours ago). A found update appears as a **Tilez x.y.z is available · Update** pill at the bottom of the grid instead of interrupting with an alert, and **… → Check for Updates…** checks right away. Builds from source have no feed and keep updating with `scripts/update.sh`. The site's Download button links to `releases/latest/download/Tilez.dmg`.
 
 One-time setup:
 

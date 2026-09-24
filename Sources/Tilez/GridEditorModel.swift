@@ -33,6 +33,8 @@ struct GridAppChoice: Identifiable, Sendable {
     var onFinished: (() -> Void)?
     var onFocusGrid: (() -> Void)?
     var onCheckForUpdates: (() -> Void)?
+    /// A newer version found by a background check, shown as a pill in the grid.
+    @Published var availableUpdate: String?
     var hasActiveLayer: Bool { choosingApp || saving || showingSaved || resizing }
     private var selections: [String: Int] = [:]
     private(set) var display: Display?
@@ -65,7 +67,7 @@ struct GridAppChoice: Identifiable, Sendable {
         self.display = display
         desktop = Desktops.current(displayID: display.id, includeFullScreen: true)
         locationKey = desktop?.id ?? display.id
-        let captured = snapshot ?? desktop.map { captureDesktop(display: display, desktop: $0) } ?? .emptyDesktop
+        let captured = snapshot ?? desktop.map { Self.captureDesktop(display: display, desktop: $0, manager: manager) } ?? .emptyDesktop
         let capturedFrames = captured.frames(in: display.bounds)
         grid = snapshot ?? DesktopGrid.visibleDesktop(panes: Array(zip(captured.slots, capturedFrames)), in: display.bounds)
         originalGrid = grid
@@ -107,7 +109,8 @@ struct GridAppChoice: Identifiable, Sendable {
         }
     }
 
-    private func captureDesktop(display: Display, desktop: Desktop) -> DesktopGrid {
+    /// Every normal window on `desktop` within `display`, front to back, bound to its live window.
+    static func captureDesktop(display: Display, desktop: Desktop, manager: WindowManager) -> DesktopGrid {
         let running = NSWorkspace.shared.runningApplications.filter {
             $0.activationPolicy == .regular && !$0.isHidden && $0.processIdentifier != getpid()
         }
@@ -259,11 +262,22 @@ struct GridAppChoice: Identifiable, Sendable {
         edit { $0.resetDivider(divider) }
         closeLayers()
     }
+    /// Tidy panes that drifted out of line back onto shared edges, keeping the arrangement.
+    func realign() {
+        guard !busy else { return }
+        closeLayers()
+        let gap = CGSize(width: 10 / (display?.bounds.width ?? 1250), height: 10 / (display?.bounds.height ?? 1250))
+        let before = grid
+        var aligned = true
+        edit { aligned = $0.realign(gap: gap) }
+        if !aligned { message = "These panes are too far apart to line up." }
+        else if grid == before { message = "Panes are already aligned." }
+    }
     /// Merging closes absorbed windows on Apply, the same as removing their panes.
     func merge(_ index: Int, toward edge: PaneEdge) {
         guard !busy, grid.slots.indices.contains(index) else { return }
         guard !grid.mergeCandidates(index, toward: edge).isEmpty else {
-            message = "Those panes don’t line up. Drag a divider to match them first."; isError = false
+            message = "Those panes don’t line up. Press ⌘R to realign, or drag a divider to match them."; isError = false
             return
         }
         var merged: Int?

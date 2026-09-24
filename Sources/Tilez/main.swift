@@ -24,6 +24,8 @@ final class ActionItem: NSMenuItem {
     private var updater: SPUStandardUpdaterController?
     private var quickAdd: QuickAddController!
     private var quickAddHotkey: GridHotKey!
+    private var realignHotkey: GridHotKey!
+    private let updateReminder = UpdateReminder()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.setActivationPolicy(.accessory)
@@ -44,9 +46,11 @@ final class ActionItem: NSMenuItem {
         zoom.onDragEnded = { [weak self] in self?.swap.end() }
         quickAdd = QuickAddController(manager: manager)
         quickAddHotkey = GridHotKey(keyCode: kVK_ANSI_N, id: 3) { [weak self] in self?.showQuickAdd() }
+        realignHotkey = GridHotKey(keyCode: kVK_ANSI_R, id: 4) { [weak self] in self?.realign() }
         // Only release builds carry an update feed; builds from source update with scripts/update.sh.
         if Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil {
-            updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+            updateReminder.onChange = { [weak self] version in self?.overlay.model.availableUpdate = version }
+            updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: updateReminder)
             overlay.model.onCheckForUpdates = { [weak self] in
                 self?.overlay.close(restoreFocus: false)
                 NSApp.activate(ignoringOtherApps: true)
@@ -67,6 +71,9 @@ final class ActionItem: NSMenuItem {
             overlay.model.isError = true
         } else if !quickAddHotkey.registered {
             overlay.model.message = "⌃⌥N is already in use, so Quick Add is unavailable."
+            overlay.model.isError = true
+        } else if !realignHotkey.registered {
+            overlay.model.message = "⌃⌥R is already in use, so windows can’t be realigned with it."
             overlay.model.isError = true
         }
     }
@@ -93,10 +100,26 @@ final class ActionItem: NSMenuItem {
         guard zoom.hasEnlarged(on: display) else { quickAdd.show(on: display); return }
         Task { await zoom.restore(on: display); quickAdd.show(on: display) }
     }
+    /// With the grid open this tidies its panes; otherwise the screen's windows move directly,
+    /// after an enlarged window returns to its pane.
+    private func realign() {
+        if overlay.isShown { overlay.model.realign(); return }
+        quickAdd.close()
+        guard let target = overlay.targetScreen(nil), let display = Display.all.first(where: { $0.screen == target }) else { return }
+        Task {
+            if zoom.hasEnlarged(on: display) { await zoom.restore(on: display) }
+            await WindowRealign.run(on: display, manager: manager)
+        }
+    }
     @objc private func toggleGrid() { showGrid(on: statusItem.button?.window?.screen) }
     /// That screen's enlarged window returns to its pane first so the grid captures the real layout.
     private func showGrid(on screen: NSScreen? = nil) {
         quickAdd.close()
+        // Opening the grid also checks for updates if it has been a while, so the pill appears promptly.
+        if !overlay.isShown, let updater = updater?.updater, updater.canCheckForUpdates,
+           (updater.lastUpdateCheckDate ?? .distantPast) < Date().addingTimeInterval(-6 * 3600) {
+            updater.checkForUpdatesInBackground()
+        }
         let target = overlay.targetScreen(screen)
         guard !overlay.isShown, let display = Display.all.first(where: { $0.screen == target }),
               zoom.hasEnlarged(on: display) else { overlay.toggle(on: target); return }
@@ -131,3 +154,16 @@ let app = NSApplication.shared
 let delegate = MainActor.assumeIsolated { AppDelegate() }
 app.delegate = delegate
 app.run()
+
+/// Scheduled update checks show as a pill in the grid instead of an alert over whatever you're
+/// doing; the pill's Update button opens Sparkle's usual update window.
+@MainActor final class UpdateReminder: NSObject, @preconcurrency SPUStandardUserDriverDelegate {
+    var onChange: ((String?) -> Void)?
+    var supportsGentleScheduledUpdateReminders: Bool { true }
+    func standardUserDriverShouldHandleShowingScheduledUpdate(_ update: SUAppcastItem, andInImmediateFocus immediateFocus: Bool) -> Bool { false }
+    func standardUserDriverWillHandleShowingUpdate(_ handleShowingUpdate: Bool, forUpdate update: SUAppcastItem, state: SPUUserUpdateState) {
+        if !handleShowingUpdate { onChange?(update.displayVersionString) }
+    }
+    func standardUserDriverDidReceiveUserAttention(forUpdate update: SUAppcastItem) { onChange?(nil) }
+    func standardUserDriverWillFinishUpdateSession() { onChange?(nil) }
+}

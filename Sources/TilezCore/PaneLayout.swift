@@ -217,6 +217,61 @@ extension DesktopGrid {
         resizeDivider(divider, to: (start + end) / 2)
     }
 
+    /// Snap nearly-aligned pane edges onto shared lines, keeping the arrangement.
+    /// Edges within `tolerance` of each other become one line: facing edges become a divider
+    /// with `gap` between the panes, edges near the screen reach it, and interior lines settle
+    /// on nearby even fractions (halves, thirds, quarters). Holes wider than `tolerance` stay.
+    /// Returns false, leaving the layout alone, when snapping would collapse a pane.
+    @discardableResult public mutating func realign(gap: CGSize = CGSize(width: 0.008, height: 0.008),
+                                                    tolerance: CGFloat = 0.05) -> Bool {
+        guard let paneFrames else { return true } // Legacy equal grids are already even.
+        var frames = paneFrames
+        for vertical in [true, false] {
+            let spacing = vertical ? gap.width : gap.height
+            // (value, pane, isLeadingEdge)
+            let edges = frames.indices.flatMap { i -> [(CGFloat, Int, Bool)] in
+                vertical ? [(frames[i].minX, i, true), (frames[i].maxX, i, false)]
+                         : [(frames[i].minY, i, true), (frames[i].maxY, i, false)]
+            }.sorted { $0.0 < $1.0 }
+            var clusters: [[(CGFloat, Int, Bool)]] = []
+            for edge in edges {
+                // Never join a pane's two sides, and don't let a run of close edges drift far.
+                if let cluster = clusters.last, edge.0 - cluster.last!.0 <= tolerance,
+                   edge.0 - cluster[0].0 <= tolerance * 2, !cluster.contains(where: { $0.1 == edge.1 }) {
+                    clusters[clusters.count - 1].append(edge)
+                } else { clusters.append([edge]) }
+            }
+            var starts = frames.map { vertical ? $0.minX : $0.minY }
+            var ends = frames.map { vertical ? $0.maxX : $0.maxY }
+            for cluster in clusters {
+                let leading = cluster.contains { $0.2 }, trailing = cluster.contains { !$0.2 }
+                let divider = leading && trailing
+                let line: CGFloat
+                if cluster[0].0 <= tolerance { line = 0 }
+                else if cluster.last!.0 >= 1 - tolerance { line = 1 }
+                else {
+                    let mean = cluster.reduce(CGFloat(0)) { total, edge in
+                        total + edge.0 + (divider ? (edge.2 ? -spacing : spacing) / 2 : 0)
+                    } / CGFloat(cluster.count)
+                    let even = (mean * 12).rounded() / 12
+                    line = abs(even - mean) <= 0.015 ? even : mean
+                }
+                let inset = divider && line > 0 && line < 1 ? spacing / 2 : 0
+                for (_, pane, isLeading) in cluster {
+                    if isLeading { starts[pane] = line + inset } else { ends[pane] = line - inset }
+                }
+            }
+            for i in frames.indices {
+                let length = ends[i] - starts[i]
+                guard length >= 0.02, length.isFinite else { return false }
+                if vertical { frames[i].origin.x = starts[i]; frames[i].size.width = length }
+                else { frames[i].origin.y = starts[i]; frames[i].size.height = length }
+            }
+        }
+        self.paneFrames = frames
+        return true
+    }
+
     /// Drag one or two sides of a pane (two for a corner) by a normalized offset.
     /// A side shared with neighbors moves their divider, keeping the panes tiled. A free side,
     /// at the screen edge or facing a gap, moves alone and stops just short of any pane it

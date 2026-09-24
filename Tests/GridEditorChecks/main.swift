@@ -379,6 +379,17 @@ MainActor.assumeIsolated {
     assert(model.grid == beforeMismatch && !model.message.isEmpty, "Panes that don't line up are left alone")
     model.undo()
     assert(model.grid == live)
+    let drifted = DesktopGrid(panes: [GridSlot(), GridSlot()],
+        frames: [CGRect(x: 0.01, y: 0, width: 0.48, height: 0.97), CGRect(x: 0.5, y: 0.02, width: 0.49, height: 0.98)])
+    model.grid = drifted
+    let realignKey = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0,
+        windowNumber: 0, context: nil, characters: "r", charactersIgnoringModifiers: "r", isARepeat: false, keyCode: 15)!
+    assert(model.handleKey(realignKey, editingText: false))
+    assert(model.grid.normalizedFrames[0].minX == 0 && model.grid.normalizedFrames[1].maxY == 1
+           && model.grid.normalizedFrames[1].minX - model.grid.normalizedFrames[0].maxX > 0, "⌘R realigns drifted panes")
+    model.undo()
+    assert(model.grid == drifted, "Realign is one undo step")
+    model.grid = live
     model.removePane(0)
     assert(model.grid.slots.count == 5 && model.grid.windowsToClose == [panes[0].0.binding!])
     assert(manager.windows.isEmpty, "Draft edits must not perform window operations")
@@ -399,7 +410,7 @@ MainActor.assumeIsolated {
     let captureElapsed = Date().timeIntervalSince(captureStart)
     assert(captureElapsed < 0.15, "Live desktop capture should not wait for AX discovery")
     model.endEditing()
-    print(String(format: "PASS: live desktop replacement, split/new-window intent, divider undo/reset, corner drags, keyboard merges, deferred removal/close, cancellation, empty desktop; 60 drag updates %.1f ms, live capture %.1f ms", elapsed * 1000, captureElapsed * 1000))
+    print(String(format: "PASS: live desktop replacement, split/new-window intent, divider undo/reset, corner drags, keyboard merges, realign, deferred removal/close, cancellation, empty desktop; 60 drag updates %.1f ms, live capture %.1f ms", elapsed * 1000, captureElapsed * 1000))
 }
 
 // Quick Add lists recently added apps first (newest on top), then names starting with the query.

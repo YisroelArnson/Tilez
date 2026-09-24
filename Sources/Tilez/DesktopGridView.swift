@@ -231,6 +231,7 @@ struct DesktopGridView: View {
             }
             Menu {
                 Button("Close all panes on Apply (⌘⇧⌫)", role: .destructive, action: model.removeAllPanes)
+                Button("Realign panes (⌘R)", action: model.realign)
                 Button("New empty grid (⌘N)", action: model.newGrid)
                 Button("Undo grid edit (⌘Z)", action: model.undo)
                 Button("Undo last window arrangement") { model.manager.undo() }
@@ -239,6 +240,7 @@ struct DesktopGridView: View {
                 Text("Show or hide Tilez: ⌃⌥Space")
                 Text("Enlarge a window, or put it back: ⌃⌥Return or ⌃⌥-click")
                 Text("Quick add a tile: ⌃⌥N")
+                Text("Realign windows: ⌃⌥R")
                 if let check = model.onCheckForUpdates { Button("Check for Updates…", action: check) }
                 Button("Close", action: { model.onDismiss?() })
                 Button("Quit Tilez") { NSApp.terminate(nil) }
@@ -662,6 +664,21 @@ struct DesktopGridView: View {
 
     private var footer: some View {
         VStack(spacing: 10) {
+            if let version = model.availableUpdate, let update = model.onCheckForUpdates {
+                HStack(spacing: 12) {
+                    Image(systemName: "arrow.down.circle.fill").font(.system(size: 16))
+                    Text("Tilez \(version) is available")
+                    Button("Update", action: update).buttonStyle(GridButtonStyle(primary: true))
+                }
+                .font(.system(size: 13, weight: .medium))
+                .padding(.leading, 16).padding(.trailing, 6).padding(.vertical, 6)
+                .background {
+                    GridGlass(material: .popover).overlay(Color.white.opacity(reduceTransparency ? 1 : 0.25)).clipShape(Capsule())
+                }
+                .overlay(Capsule().strokeBorder(.white.opacity(0.8)))
+                .shadow(color: .black.opacity(0.16), radius: 16, y: 6)
+                .preferredColorScheme(.light)
+            }
             if model.desktop?.isFullScreen == true && model.grid != model.originalGrid {
                 Text("Apply will leave full screen to arrange these panes on this display.")
                     .font(.system(size: 12)).foregroundStyle(.white)
@@ -699,7 +716,7 @@ struct DesktopGridView: View {
         if model.choosingApp || model.showingSaved { return "↑ ↓  Select result   ·   ↵  Confirm   ·   Esc  Back to grid" }
         if model.saving { return "↵  Save grid   ·   Esc  Back to grid" }
         if model.resizing { return "Hover or ← → ↑ ↓  Choose size   ·   ↵  Confirm   ·   Esc  Cancel" }
-        return "Arrows  Select   ·   ⌥Arrows  Split   ·   ⌥⇧Arrows  Merge   ·   ⌘⇧⌫  Close all   ·   Type / Space  Choose app   ·   G  Size   ·   ⌘S  Save   ·   ⌘O  Load   ·   ↵  Apply   ·   Esc  Close"
+        return "Arrows  Select   ·   ⌥Arrows  Split   ·   ⌥⇧Arrows  Merge   ·   ⌘R  Realign   ·   ⌘⇧⌫  Close all   ·   Type / Space  Choose app   ·   G  Size   ·   ⌘S  Save   ·   ⌘O  Load   ·   ↵  Apply   ·   Esc  Close"
     }
 
     private func keycap(_ text: String) -> some View {
