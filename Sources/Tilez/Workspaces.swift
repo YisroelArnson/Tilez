@@ -49,6 +49,37 @@ enum WorkspaceError: LocalizedError {
         return (1...).lazy.map { "Workspace \($0)" }.first { !names.contains($0.lowercased()) }!
     }
 
+    /// ⌃⌥1 opens the first workspace in the list, ⌃⌥2 the second, and so on.
+    func workspace(number: Int) -> Workspace? {
+        let current = current()
+        return current.indices.contains(number - 1) ? current[number - 1] : nil
+    }
+
+    /// Reordering renumbers the shortcuts.
+    func move(fromOffsets source: IndexSet, toOffset destination: Int) {
+        workspaces.move(fromOffsets: source, toOffset: destination)
+        persist()
+    }
+
+    func move(_ id: UUID, by delta: Int) {
+        guard let index = workspaces.firstIndex(where: { $0.id == id }) else { return }
+        let target = max(0, min(workspaces.count - 1, index + delta))
+        guard target != index else { return }
+        workspaces.insert(workspaces.remove(at: index), at: target)
+        persist()
+    }
+
+    /// False for an empty name or one another workspace already has, since saving under a
+    /// name replaces that workspace.
+    @discardableResult func rename(_ id: UUID, to name: String) -> Bool {
+        let name = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty, let index = workspaces.firstIndex(where: { $0.id == id }),
+              !workspaces.contains(where: { $0.id != id && $0.name.localizedCaseInsensitiveCompare(name) == .orderedSame }) else { return false }
+        workspaces[index].name = name
+        persist()
+        return true
+    }
+
     func remove(_ id: UUID) {
         workspaces.removeAll { $0.id == id }
         shown.forget(id)

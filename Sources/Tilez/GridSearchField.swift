@@ -11,6 +11,8 @@ struct GridSearchField: NSViewRepresentable {
     /// Optional ↑/↓ and Escape handling for fields that aren't under the grid's key monitor.
     var onMove: ((Int) -> Void)? = nil
     var onCancel: (() -> Void)? = nil
+    /// Optional ⌘↑/⌘↓ handling, for moving the highlighted result up or down its list.
+    var onReorder: ((Int) -> Void)? = nil
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -74,6 +76,8 @@ struct GridSearchField: NSViewRepresentable {
             case #selector(NSResponder.moveUp(_:)) where parent.onMove != nil: parent.onMove?(-1)
             case #selector(NSResponder.moveDown(_:)) where parent.onMove != nil: parent.onMove?(1)
             case #selector(NSResponder.cancelOperation(_:)) where parent.onCancel != nil: parent.onCancel?()
+            case #selector(NSResponder.moveToBeginningOfDocument(_:)) where parent.onReorder != nil: parent.onReorder?(-1)
+            case #selector(NSResponder.moveToEndOfDocument(_:)) where parent.onReorder != nil: parent.onReorder?(1)
             default: return false
             }
             return true

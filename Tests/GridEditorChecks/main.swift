@@ -434,3 +434,43 @@ MainActor.assumeIsolated {
     assert(quick.selected?.app.name == "Slack", "Typing resets the highlight to the best match")
     print("PASS: quick add ranks recent apps first, then prefix matches, and follows arrow selection")
 }
+
+// The workspace list's order is the ⌃⌥1–9 numbering; renaming never takes another workspace's name.
+MainActor.assumeIsolated {
+    let storage = GridMemoryDefaults(suiteName: nil)!
+    let manager = WindowManager(preferences: Preferences(defaults: storage), backgroundArrangements: false)
+    let app = GridApp(bundleID: "com.apple.Safari", name: "Safari")
+    func workspace(_ name: String) -> Workspace {
+        let pane = GridSlot(app: app, binding: GridWindowBinding(windowID: "1:window-\(name.count)", processSession: "closed"))
+        return Workspace(name: name, screens: [WorkspaceScreen(displayID: "A", arranging: DesktopGrid(panes: [pane], frames: [CGRect(x: 0, y: 0, width: 1, height: 1)]))!])
+    }
+    storage.set(try! JSONEncoder().encode([workspace("Coding"), workspace("Writing"), workspace("Email")]), forKey: "workspacesV1")
+    let store = WorkspaceStore(manager: manager, defaults: storage)
+    assert(store.workspaces.map(\.name) == ["Coding", "Writing", "Email"])
+    store.move(fromOffsets: IndexSet(integer: 2), toOffset: 0)
+    assert(store.workspaces.map(\.name) == ["Email", "Coding", "Writing"], "Dragging Email to the top makes it ⌃⌥1")
+    store.move(store.workspaces[0].id, by: 1)
+    assert(store.workspaces.map(\.name) == ["Coding", "Email", "Writing"], "⌘↓ moves it down one")
+    store.move(store.workspaces[2].id, by: 1)
+    assert(store.workspaces.map(\.name) == ["Coding", "Email", "Writing"], "The last one can't move further down")
+    assert(store.rename(store.workspaces[1].id, to: "  Inbox "), "Names are trimmed")
+    assert(!store.rename(store.workspaces[1].id, to: "coding"), "Another workspace's name is refused")
+    assert(!store.rename(store.workspaces[1].id, to: "   "), "An empty name is refused")
+    assert(store.rename(store.workspaces[0].id, to: "CODING"), "A workspace can change its own name's case")
+    assert(store.suggestedName == "Workspace 1")
+    let reopened = WorkspaceStore(manager: manager, defaults: storage)
+    assert(reopened.workspaces.map(\.name) == ["CODING", "Inbox", "Writing"], "Order and names survive restart")
+    assert(reopened.workspace(number: 1) == nil && reopened.workspaces.isEmpty,
+           "Workspaces whose windows have all closed are gone, so nothing is numbered")
+
+    // Thumbnails draw each pane where it sits.
+    let left = CGRect(x: 0, y: 0, width: 0.5, height: 1), right = CGRect(x: 0.5, y: 0, width: 0.5, height: 1)
+    let two = Workspace(name: "Two", screens: [WorkspaceScreen(displayID: "none", arranging: DesktopGrid(
+        panes: [GridSlot(app: app, binding: GridWindowBinding(windowID: "1:window-1", processSession: "s")),
+                GridSlot(app: app, binding: GridWindowBinding(windowID: "1:window-2", processSession: "s"))], frames: [left, right]))!])
+    let renderer = ImageRenderer(content: WorkspaceThumbnail(workspace: two, height: 40, maxWidth: 200))
+    renderer.scale = 2
+    guard let image = renderer.cgImage else { fatalError("Workspace thumbnail did not render") }
+    assert(image.width > image.height && image.height == 80, "A screen keeps its display's shape")
+    print("PASS: workspace reordering renumbers shortcuts, renaming is trimmed and unique, order persists, closed workspaces drop out, thumbnails render")
+}

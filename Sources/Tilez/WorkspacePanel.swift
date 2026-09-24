@@ -22,6 +22,8 @@ private final class WorkspacePanel: NSPanel {
     @Published private(set) var listed: [Workspace] = []
     /// The workspace the screen shows when the panel opened.
     @Published private(set) var shownID: UUID?
+    @Published var renamingID: UUID?
+    @Published var renameText = ""
     let store: WorkspaceStore
     /// Puts back an enlarged window on that screen before its layout is read or changed.
     var prepare: ((Display) async -> Void)?
@@ -54,8 +56,66 @@ private final class WorkspacePanel: NSPanel {
         guard !busy else { return }
         listed = store.current()
         shownID = store.shownWorkspace(on: display)?.id
-        query = ""; highlighted = nil
+        query = ""; highlighted = nil; renamingID = nil
         present(.open, on: display)
+    }
+
+    /// The list with one workspace's name ready to edit.
+    func showRename(_ id: UUID, on display: Display) {
+        showList(on: display)
+        beginRename(id)
+    }
+
+    /// The list's order is the ⌃⌥1–9 numbering. Reordering needs the whole list, not a search.
+    var canReorder: Bool { query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+
+    func reorder(fromOffsets source: IndexSet, toOffset destination: Int) {
+        guard canReorder else { return }
+        store.move(fromOffsets: source, toOffset: destination)
+        listed = store.workspaces
+    }
+
+    /// ⌘↑/⌘↓ moves the highlighted workspace, keeping it highlighted.
+    func moveSelected(_ delta: Int) {
+        guard canReorder, let id = selected?.id else { return }
+        store.move(id, by: delta)
+        listed = store.workspaces
+        highlighted = id
+    }
+
+    func beginRename(_ id: UUID) {
+        guard let workspace = listed.first(where: { $0.id == id }) else { return }
+        highlighted = id
+        renameText = workspace.name
+        renamingID = id
+    }
+
+    func commitRename() {
+        guard let id = renamingID else { return }
+        if store.rename(id, to: renameText) {
+            listed = store.workspaces
+            endRename()
+        } else {
+            NSSound.beep()
+        }
+    }
+
+    /// Typing goes back to the search field.
+    func endRename() {
+        renamingID = nil
+        DispatchQueue.main.async { [weak self] in
+            func field(in view: NSView?) -> NSTextField? {
+                guard let view else { return nil }
+                if let field = view as? NSTextField, field.isEditable { return field }
+                return view.subviews.lazy.compactMap { field(in: $0) }.first
+            }
+            if let search = field(in: self?.panel?.contentView) { self?.panel?.makeFirstResponder(search) }
+        }
+    }
+
+    /// Its position in the list, while it has a ⌃⌥ shortcut.
+    func number(of workspace: Workspace) -> Int? {
+        store.workspaces.firstIndex { $0.id == workspace.id }.flatMap { $0 < 9 ? $0 + 1 : nil }
     }
 
     func showSave(on display: Display) {
@@ -104,6 +164,7 @@ private final class WorkspacePanel: NSPanel {
     func delete(_ id: UUID) {
         store.remove(id)
         listed = store.current()
+        if renamingID == id { renamingID = nil }
         if shownID == id { shownID = nil }
     }
 
@@ -165,7 +226,7 @@ private final class WorkspacePanel: NSPanel {
                 return nil
             }
         }
-        let size = CGSize(width: 560, height: mode == .open ? 420 : mode == .save ? 196 : 76)
+        let size = CGSize(width: 620, height: mode == .open ? 460 : mode == .save ? 196 : 76)
         let screen = display.screen.visibleFrame
         panel?.setFrame(CGRect(x: screen.midX - size.width / 2, y: screen.maxY - screen.height * 0.18 - size.height,
                                width: size.width, height: size.height), display: true)
@@ -222,57 +283,86 @@ private struct WorkspacePanelView: View {
             HStack(spacing: 12) {
                 Image(systemName: "rectangle.3.group").font(.system(size: 20, weight: .medium)).foregroundStyle(.secondary)
                 GridSearchField(placeholder: "Open a workspace…", text: $controller.query, onSubmit: { controller.open() },
-                                fontSize: 22, onMove: controller.move, onCancel: { controller.close() })
+                                fontSize: 22, onMove: controller.move, onCancel: { controller.close() },
+                                onReorder: controller.moveSelected)
                     .frame(height: 30)
             }
             .padding(.horizontal, 20).frame(height: 64)
             Divider().opacity(0.5)
-            let results = controller.results
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(spacing: 2) {
-                        ForEach(results) { workspace in row(workspace, selected: controller.selected?.id == workspace.id).id(workspace.id) }
-                        if results.isEmpty {
-                            Text(controller.listed.isEmpty ? "No workspaces yet. Press ⌃⌥⇧S to save the windows on this screen as one."
-                                                           : "No workspaces match “\(controller.query)”")
-                                .font(.system(size: 13)).foregroundStyle(.secondary).multilineTextAlignment(.center)
-                                .padding(.vertical, 24).padding(.horizontal, 20)
-                        }
-                    }.padding(8)
-                }
-                .onChange(of: controller.highlighted) { _, id in if let id { proxy.scrollTo(id) } }
-            }
+            list
             Divider().opacity(0.5)
-            Text("↑ ↓  Select   ·   ↵  Open   ·   ⌃⌥S  Save   ·   ⌃⌥⇧S  Save as new   ·   Esc  Close")
+            Text("↵  Open   ·   Drag or ⌘↑ ⌘↓  Reorder, which renumbers ⌃⌥1–9   ·   ⌃⌥⇧S  Save new   ·   Esc  Close")
                 .font(.system(size: 11)).foregroundStyle(.secondary).frame(height: 30)
         }
     }
 
-    private func row(_ workspace: Workspace, selected: Bool) -> some View {
-        HStack(spacing: 4) {
-            Button { controller.open(workspace) } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: workspace.screens.count > 1 ? "rectangle.on.rectangle" : "rectangle.split.3x1")
-                        .font(.system(size: 18)).frame(width: 30)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(workspace.name).font(.system(size: 15, weight: .medium)).lineLimit(1)
-                        Text(summary(workspace)).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
-                    }
-                    Spacer()
-                    if controller.shownID == workspace.id {
-                        Text("On this screen").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-                    }
+    private var list: some View {
+        let results = controller.results
+        let controller = controller
+        let reorder: ((IndexSet, Int) -> Void)? = controller.canReorder ? { controller.reorder(fromOffsets: $0, toOffset: $1) } : nil
+        return ScrollViewReader { proxy in
+            List {
+                ForEach(results) { workspace in
+                    row(workspace, selected: controller.selected?.id == workspace.id)
+                        .id(workspace.id)
+                        .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                        .listRowInsets(EdgeInsets(top: 1, leading: 8, bottom: 1, trailing: 8))
                 }
-                .padding(.horizontal, 12).frame(height: 48)
-                .background(Color.black.opacity(selected ? 0.1 : 0), in: RoundedRectangle(cornerRadius: 10))
-                .contentShape(Rectangle())
+                .onMove(perform: reorder)
+                if results.isEmpty {
+                    Text(controller.listed.isEmpty ? "No workspaces yet. Press ⌃⌥⇧S to save the windows on this screen as one."
+                                                   : "No workspaces match “\(controller.query)”")
+                        .font(.system(size: 13)).foregroundStyle(.secondary).multilineTextAlignment(.center)
+                        .frame(maxWidth: .infinity).padding(.vertical, 24)
+                        .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                }
             }
-            .buttonStyle(.plain)
-            .accessibilityAddTraits(selected ? [.isSelected] : [])
-            Button { controller.delete(workspace.id) } label: { Image(systemName: "trash").frame(width: 28, height: 28) }
+            .listStyle(.plain).scrollContentBackground(.hidden).padding(.vertical, 6)
+            .onChange(of: controller.highlighted) { _, id in if let id { proxy.scrollTo(id) } }
+        }
+    }
+
+    /// Clicking opens it; dragging the row reorders the list.
+    private func row(_ workspace: Workspace, selected: Bool) -> some View {
+        let renaming = controller.renamingID == workspace.id
+        return HStack(spacing: 10) {
+            Text(controller.number(of: workspace).map { "\($0)" } ?? "")
+                .font(.system(size: 13, weight: .semibold, design: .rounded)).foregroundStyle(.secondary)
+                .frame(width: 14)
+            WorkspaceThumbnail(workspace: workspace, height: 30, maxWidth: 96).frame(width: 96)
+            VStack(alignment: .leading, spacing: 2) {
+                if renaming {
+                    GridSearchField(placeholder: "Workspace name", text: $controller.renameText, onSubmit: controller.commitRename,
+                                    fontSize: 15, onCancel: controller.endRename)
+                        .frame(height: 20)
+                } else {
+                    Text(workspace.name).font(.system(size: 15, weight: .medium)).lineLimit(1)
+                }
+                Text(summary(workspace)).font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+            }
+            Spacer(minLength: 4)
+            if controller.shownID == workspace.id {
+                Text("On this screen").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+            }
+            if let number = controller.number(of: workspace) {
+                Text("⌃⌥\(number)").font(.system(size: 11, weight: .medium, design: .rounded)).foregroundStyle(.secondary)
+            }
+            Button { renaming ? controller.commitRename() : controller.beginRename(workspace.id) } label: {
+                Image(systemName: renaming ? "checkmark" : "pencil").frame(width: 24, height: 28)
+            }
+            .buttonStyle(.plain).foregroundStyle(.secondary).help(renaming ? "Save name" : "Rename")
+            .accessibilityLabel(renaming ? "Save name" : "Rename \(workspace.name)")
+            Button { controller.delete(workspace.id) } label: { Image(systemName: "trash").frame(width: 24, height: 28) }
                 .buttonStyle(.plain).foregroundStyle(.secondary).help("Delete workspace")
                 .accessibilityLabel("Delete \(workspace.name)")
         }
+        .padding(.horizontal, 10).frame(height: 50)
+        .background(Color.black.opacity(selected ? 0.1 : 0), in: RoundedRectangle(cornerRadius: 10))
+        .contentShape(Rectangle())
+        .onTapGesture { if !renaming { controller.open(workspace) } }
+        .accessibilityElement(children: .contain)
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
+        .accessibilityAction { controller.open(workspace) }
     }
 
     private func summary(_ workspace: Workspace) -> String {

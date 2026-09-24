@@ -28,6 +28,7 @@ final class ActionItem: NSMenuItem {
     private var workspaces: WorkspaceStore!
     private var workspacePanel: WorkspacePanelController!
     private var workspaceHotkeys: [GridHotKey] = []
+    private var numberHotkeys: [GridHotKey] = []
     private let updateReminder = UpdateReminder()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -64,6 +65,16 @@ final class ActionItem: NSMenuItem {
             self.overlay.close(restoreFocus: false)
             self.workspacePanel.open(workspace, on: display)
         }
+        overlay.model.onRenameWorkspace = { [weak self] workspace in
+            guard let self, let display = self.overlay.model.display else { return }
+            self.overlay.close(restoreFocus: false)
+            self.workspacePanel.showRename(workspace.id, on: display)
+        }
+        // ⌃⌥1–9 switch to the workspace at that position in the list.
+        let digits = [kVK_ANSI_1, kVK_ANSI_2, kVK_ANSI_3, kVK_ANSI_4, kVK_ANSI_5, kVK_ANSI_6, kVK_ANSI_7, kVK_ANSI_8, kVK_ANSI_9]
+        numberHotkeys = digits.enumerated().map { index, key in
+            GridHotKey(keyCode: key, id: UInt32(11 + index)) { [weak self] in self?.openWorkspace(number: index + 1) }
+        }
         workspaceHotkeys = [
             GridHotKey(keyCode: kVK_ANSI_W, id: 5) { [weak self] in self?.showWorkspaces { $0.showList(on: $1) } },
             GridHotKey(keyCode: kVK_ANSI_S, id: 6) { [weak self] in self?.showWorkspaces { $0.quickSave(on: $1) } },
@@ -99,7 +110,8 @@ final class ActionItem: NSMenuItem {
         } else if !realignHotkey.registered {
             overlay.model.message = "⌃⌥R is already in use, so windows can’t be realigned with it."
             overlay.model.isError = true
-        } else if let taken = zip(["⌃⌥W", "⌃⌥S", "⌃⌥⇧S"], workspaceHotkeys).first(where: { !$0.1.registered })?.0 {
+        } else if let taken = zip(["⌃⌥W", "⌃⌥S", "⌃⌥⇧S"] + (1...9).map { "⌃⌥\($0)" }, workspaceHotkeys + numberHotkeys)
+                    .first(where: { !$0.1.registered })?.0 {
             overlay.model.message = "\(taken) is already in use. Open and save workspaces from the grid’s Save menu."
             overlay.model.isError = true
         }
@@ -129,12 +141,20 @@ final class ActionItem: NSMenuItem {
         Task { await zoom.restore(on: display); quickAdd.show(on: display) }
     }
     /// Workspace shortcuts act on the screen the grid would open on, never while the grid is editing.
-    private func showWorkspaces(_ action: (WorkspacePanelController, Display) -> Void) {
-        if workspacePanel.isShown { workspacePanel.close(); return }
+    /// Pressing the panel's own shortcut again closes it; a number switches even while it's open.
+    private func showWorkspaces(toggles: Bool = true, _ action: (WorkspacePanelController, Display) -> Void) {
+        if workspacePanel.isShown {
+            workspacePanel.close(restoreFocus: toggles)
+            if toggles { return }
+        }
         if overlay.isShown { overlay.model.cancel(); overlay.close(restoreFocus: false) }
         quickAdd.close()
         guard let target = overlay.targetScreen(nil), let display = Display.all.first(where: { $0.screen == target }) else { return }
         action(workspacePanel, display)
+    }
+    private func openWorkspace(number: Int) {
+        guard let workspace = workspaces.workspace(number: number) else { NSSound.beep(); return }
+        showWorkspaces(toggles: false) { panel, display in panel.open(workspace, on: display) }
     }
     /// With the grid open this tidies its panes; otherwise the screen's windows move directly,
     /// after an enlarged window returns to its pane.

@@ -42,6 +42,7 @@ struct GridAppChoice: Identifiable, Sendable {
     /// Shared with Quick Add and the workspace panel.
     var workspaces: WorkspaceStore?
     var onOpenWorkspace: ((Workspace) -> Void)?
+    var onRenameWorkspace: ((Workspace) -> Void)?
     /// Called with the arranged grid after Apply places its windows.
     var onApplied: ((DesktopGrid) -> Void)?
     /// The workspace this screen is showing, which ⌘S saves.
@@ -387,6 +388,7 @@ struct GridAppChoice: Identifiable, Sendable {
         return grid != originalGrid || shownWorkspace.isModified(on: display.id, showing: originalGrid)
     }
     func updateWorkspaceStatus() {
+        _ = workspaces?.current() // Drops closed windows before the strip draws them.
         shownWorkspace = display.flatMap { workspaces?.shownWorkspace(on: $0) }
     }
     func load(_ item: SavedGrid) {
@@ -399,10 +401,16 @@ struct GridAppChoice: Identifiable, Sendable {
     func open(_ item: SavedItem) {
         switch item.kind {
         case .layout(let layout): load(layout)
-        case .workspace(let workspace):
-            guard !busy else { return }
-            closeLayers(); onOpenWorkspace?(workspace)
+        case .workspace(let workspace): openWorkspace(workspace)
         }
+    }
+    func openWorkspace(_ workspace: Workspace) {
+        guard !busy else { return }
+        closeLayers(); onOpenWorkspace?(workspace)
+    }
+    func renameWorkspace(_ workspace: Workspace) {
+        guard !busy else { return }
+        closeLayers(); onRenameWorkspace?(workspace)
     }
     func deleteSaved(_ id: UUID) {
         guard !busy else { return }

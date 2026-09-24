@@ -167,12 +167,20 @@ struct DesktopGridView: View {
         return "Double-click a pane to choose its app  ·  Add or merge at an edge  ·  Drag an edge or corner to resize  ·  Drag panes to swap"
     }
 
+    /// Workspace thumbnails sit to the left of the controls when there's room.
     private var toolbar: some View {
         ViewThatFits(in: .horizontal) {
-            bar(compact: false)
+            HStack(alignment: .top, spacing: 12) { workspaceStrip; bar(compact: false) }
+            HStack(alignment: .top, spacing: 12) { workspaceStrip; bar(compact: true) }
             bar(compact: true)
         }
         .padding(.horizontal, 24)
+    }
+
+    @ViewBuilder private var workspaceStrip: some View {
+        if let store = model.workspaces {
+            WorkspaceStrip(store: store, model: model)
+        }
     }
 
     private func bar(compact: Bool) -> some View {
@@ -640,7 +648,7 @@ struct DesktopGridView: View {
             Text("Enlarge a window, or put it back: ⌃⌥Return or ⌃⌥-click")
             Text("Quick add a tile: ⌃⌥N")
             Text("Realign windows: ⌃⌥R")
-            Text("Open a workspace: ⌃⌥W")
+            Text("Open a workspace: ⌃⌥W, or ⌃⌥1–9")
             Text("Save the workspace: ⌃⌥S, or a new one: ⌃⌥⇧S")
             if let check = model.onCheckForUpdates { Button("Check for Updates…", action: check) }
             Button("Close", action: { model.onDismiss?() })
@@ -961,4 +969,67 @@ private struct GridSizePicker: View {
 private struct PaneResize: Equatable {
     let index: Int
     let edges: [PaneEdge]
+}
+
+/// The first nine workspaces, numbered for ⌃⌥1–9. Click one to open it; the one this screen
+/// shows is outlined. Right-click to rename, reorder, or delete.
+private struct WorkspaceStrip: View {
+    @ObservedObject var store: WorkspaceStore
+    @ObservedObject var model: GridEditorModel
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    var body: some View {
+        let shown = store.workspaces.prefix(9)
+        if !shown.isEmpty {
+            HStack(spacing: 6) {
+                ForEach(Array(shown.enumerated()), id: \.element.id) { index, workspace in
+                    tile(workspace, number: index + 1)
+                }
+                if store.workspaces.count > 9 {
+                    Button(action: model.beginSaved) { Image(systemName: "ellipsis").frame(width: 24, height: 48) }
+                        .buttonStyle(.plain).help("All workspaces (⌘O)")
+                }
+            }
+            .padding(6)
+            .background {
+                GridGlass(material: .popover)
+                    .overlay(Color.white.opacity(reduceTransparency ? 1 : 0.25))
+                    .clipShape(RoundedRectangle(cornerRadius: 20))
+            }
+            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.white.opacity(0.8)))
+            .shadow(color: .black.opacity(0.16), radius: 22, y: 10)
+            .fixedSize()
+            .disabled(model.busy)
+        }
+    }
+
+    private func tile(_ workspace: Workspace, number: Int) -> some View {
+        let here = model.shownWorkspace?.id == workspace.id
+        return Button { model.openWorkspace(workspace) } label: {
+            VStack(spacing: 4) {
+                WorkspaceThumbnail(workspace: workspace, height: 28, maxWidth: 80)
+                    .frame(height: 28)
+                HStack(spacing: 4) {
+                    Text("\(number)").font(.system(size: 10, weight: .bold, design: .rounded)).foregroundStyle(.secondary)
+                    Text(workspace.name).font(.system(size: 11, weight: .medium)).lineLimit(1)
+                }
+                .frame(maxWidth: 80)
+            }
+            .padding(4)
+            .background(Color.white.opacity(here ? 0.7 : 0), in: RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.black.opacity(here ? 0.35 : 0), lineWidth: 1.5))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("\(workspace.name) · ⌃⌥\(number)")
+        .accessibilityLabel("\(workspace.name), workspace \(number)\(here ? ", on this screen" : "")")
+        .contextMenu {
+            Button("Open (⌃⌥\(number))") { model.openWorkspace(workspace) }
+            Button("Rename…") { model.renameWorkspace(workspace) }
+            Button("Move Left") { store.move(workspace.id, by: -1) }.disabled(number == 1)
+            Button("Move Right") { store.move(workspace.id, by: 1) }.disabled(number == store.workspaces.count)
+            Divider()
+            Button("Delete", role: .destructive) { model.deleteSaved(workspace.id) }
+        }
+    }
 }
