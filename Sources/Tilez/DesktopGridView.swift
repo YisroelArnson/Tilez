@@ -639,6 +639,10 @@ struct DesktopGridView: View {
         Menu {
             Button("Close all panes on Apply (⌘⇧⌫)", role: .destructive, action: model.removeAllPanes)
             Button("Realign panes (⌘R)", action: model.realign)
+            Button("Tile all windows on this screen (⌘T)") { model.tileAll() }
+            ForEach(model.otherScreens) { screen in
+                Button("Bring \(windowCount(screen.windows.count)) from \(screen.name)") { model.bring(from: screen.id) }
+            }
             Button("New empty grid (⌘N)", action: model.newGrid)
             Button("Undo grid edit (⌘Z)", action: model.undo)
             Button("Undo last window arrangement") { model.manager.undo() }
@@ -650,6 +654,9 @@ struct DesktopGridView: View {
             Text("Realign windows: ⌃⌥R")
             Text("Open a workspace: ⌃⌥W, or ⌃⌥1–9")
             Text("Save the workspace: ⌃⌥S, or a new one: ⌃⌥⇧S")
+            if Display.all.count > 1 || model.putBackAutomatically {
+                Toggle("Put windows back automatically when a screen reconnects", isOn: $model.putBackAutomatically)
+            }
             if let check = model.onCheckForUpdates { Button("Check for Updates…", action: check) }
             Button("Close", action: { model.onDismiss?() })
             Button("Quit Tilez") { NSApp.terminate(nil) }
@@ -739,19 +746,29 @@ struct DesktopGridView: View {
     private var footer: some View {
         VStack(spacing: 10) {
             if let version = model.availableUpdate, let update = model.onUpdate {
-                HStack(spacing: 12) {
+                pill {
                     Image(systemName: "arrow.down.circle.fill").font(.system(size: 16))
                     Text("Tilez \(version) is \(model.updateReady ? "ready" : "available")")
                     Button(model.updateReady ? "Restart" : "Update", action: update).buttonStyle(GridButtonStyle(primary: true))
                 }
-                .font(.system(size: 13, weight: .medium))
-                .padding(.leading, 16).padding(.trailing, 6).padding(.vertical, 6)
-                .background {
-                    GridGlass(material: .popover).overlay(Color.white.opacity(reduceTransparency ? 1 : 0.25)).clipShape(Capsule())
+            }
+            if !model.busy && !model.displaced.isEmpty {
+                pill {
+                    appIcons(model.displaced)
+                    Text("\(windowCount(model.displaced.count)) from this screen \(model.displaced.count == 1 ? "is" : "are") on \(model.displacedLocation)")
+                    Button("Put back", action: model.putBack).buttonStyle(GridButtonStyle(primary: true))
                 }
-                .overlay(Capsule().strokeBorder(.white.opacity(0.8)))
-                .shadow(color: .black.opacity(0.16), radius: 16, y: 6)
-                .preferredColorScheme(.light)
+            }
+            let behind = model.busy ? [] : model.behind
+            if !behind.isEmpty {
+                pill {
+                    appIcons(behind)
+                    Text("\(windowCount(behind.count)) hidden behind others")
+                    Button(action: { model.tileAll() }) {
+                        HStack(spacing: 8) { Text("Tile all"); keycap("⌘T").colorScheme(.dark) }
+                    }.buttonStyle(GridButtonStyle(primary: true))
+                        .help("Arrange every window on this screen in an even grid. Apply moves them.")
+                }
             }
             if model.desktop?.isFullScreen == true && model.grid != model.originalGrid {
                 Text("Apply will leave full screen to arrange these panes on this display.")
@@ -784,6 +801,33 @@ struct DesktopGridView: View {
                 .shadow(color: .black.opacity(0.5), radius: 4, y: 1)
         }
     }
+
+    /// The bottom pills share one look: an icon or two, a sentence, and one action.
+    private func pill<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
+        HStack(spacing: 12, content: content)
+            .font(.system(size: 13, weight: .medium))
+            .padding(.leading, 16).padding(.trailing, 6).padding(.vertical, 6)
+            .background {
+                GridGlass(material: .popover).overlay(Color.white.opacity(reduceTransparency ? 1 : 0.25)).clipShape(Capsule())
+            }
+            .overlay(Capsule().strokeBorder(.white.opacity(0.8)))
+            .shadow(color: .black.opacity(0.16), radius: 16, y: 6)
+            .preferredColorScheme(.light)
+    }
+
+    /// Up to four apps' icons, overlapping, for the windows a pill is about.
+    private func appIcons(_ windows: [GridSlot]) -> some View {
+        let apps = windows.compactMap(\.app).reduce(into: [GridApp]()) { apps, app in
+            if !apps.contains(where: { $0.bundleID == app.bundleID }) { apps.append(app) }
+        }
+        return HStack(spacing: -6) {
+            ForEach(apps.prefix(4), id: \.bundleID) { app in
+                Image(nsImage: model.icon(for: app)).resizable().frame(width: 20, height: 20)
+            }
+        }.accessibilityHidden(true)
+    }
+
+    private func windowCount(_ count: Int) -> String { "\(count) window\(count == 1 ? "" : "s")" }
 
     private var keyboardHints: String {
         if model.busy { return "Esc  Stop opening windows" }

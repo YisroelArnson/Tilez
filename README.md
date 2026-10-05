@@ -19,6 +19,8 @@ Press **Control–Option–Space** or click the grid icon in the menu bar. The p
 - **Option–Arrow** splits the selected pane toward that arrow (left, right, above, or below) and opens the app chooser for the new pane. Type an app name and press Return to assign it. **⌘Z** undoes the split after dismissing the chooser.
 - **Type an app name** to search for the selected cell. **↑/↓** highlights a result; **Return** assigns it; **Escape** goes back. **1–9** opens a cell’s picker, **Space** opens the selected cell’s picker, and **Delete** removes its pane. To start a search with the reserved **G** key or a cell number, press Space first.
 - **Option–Shift–Arrow** merges the selected pane with the pane or panes beside it in that direction, when they line up into one rectangle. The selected pane keeps its app; absorbed windows close on Apply, and **⌘Z** undoes the merge.
+- **Windows hidden behind others** stay out of the grid, so a window buried under a tidy layout doesn't become a stray pane. When there are some, a pill at the bottom says how many, with their app icons. **Tile all / ⌘T** arranges every window on the screen, hidden ones included, in an even grid: panes in reading order, sized close to square for the screen's shape, with a short last row stretched to fill it. **⌘Z** undoes it, and Apply moves the windows. Also under **… → Tile all windows on this screen**.
+- **Bring windows from another screen** with **… → Bring N windows from *screen***. They join this screen's windows in an even grid, and Apply moves them here.
 - **⌘R** realigns panes that have drifted out of line, such as windows captured from the desktop. Edges within a few percent of each other snap onto one shared line with an even gap, panes near the screen edge reach it, and near-even splits settle on halves, thirds, or quarters. The arrangement stays the same, larger holes are kept, and **⌘Z** undoes it. Also available under **… → Realign panes**.
 - **G** turns the toolbar's layout preview into a size picker. Hover or use **←/→** (columns) and **↑/↓** (rows), then click or press **Return** to confirm. **Escape** or **G** again cancels.
 - **⌘K** uses an empty pane or splits the selected pane to make room. **⌘C / ⌘V** copies an app assignment into an empty cell, without sharing its live window binding.
@@ -38,6 +40,14 @@ A **workspace** is a set of open windows kept in one arrangement, on one screen 
 - **Rearranging, resizing, or swapping** windows marks the workspace as edited (a dot on the grid's Save button) until you save. Closing a window, or adding one with **Quick Add**, updates the workspace by itself. Quick Add's new window joins the workspace its screen is showing. A window can belong to several workspaces.
 - A screen shows a workspace from when you open or save it on that screen's current desktop until you open a different workspace or a saved layout there.
 - Pulling windows off other desktops uses the same desktop bridge as the grid (macOS 26.4+). When a screen is showing a full-screen app, that screen switches to a regular desktop for the workspace and the app stays in full screen on its own desktop. The workspace's own full-screen windows leave full screen and join the layout.
+
+### Put windows back when a screen reconnects
+
+When a monitor disconnects, macOS moves its windows onto the screens that are left and often doesn't move them back. While more than one screen is connected, Tilez remembers which screen each window is on and where. When a screen comes back and windows that belonged to it are still on another screen, a prompt at the top of that screen offers **Put Back**. They return to their places on the screen's current desktop. Minimized windows, windows of hidden apps, and windows opened while the screen was away stay where they are.
+
+- Check **Always put windows back** in the prompt, or turn on **… → Put windows back automatically when a screen reconnects** in the grid, to skip the prompt.
+- After **Not Now**, the grid on that screen shows a **Put back** pill for 15 minutes.
+- Tilez waits a few seconds after a screen comes or goes, so windows macOS puts back by itself are left alone. The same goes for screens that disconnect while the Mac sleeps.
 
 ### Quick add a tile
 
@@ -145,7 +155,7 @@ The script pulls the latest `main`, rebuilds, quits the running copy, replaces `
 
 The invocation captures a particular display and desktop. Tilez reuses eligible windows there and opens independent windows for remaining cells. New windows can inherit an app's full-screen Space; Tilez identifies those new windows, waits for their transitions, restores them, and moves them back before applying the grid. Existing windows on unrelated desktops are not gathered. A window's identity includes its owning process launch, preventing stale IDs from matching after an app restart.
 
-Each invocation takes a fresh WindowServer snapshot of the visible desktop. Fully covered windows are omitted; partially visible windows retain their actual bounds. Accessibility refinement runs off the UI thread and never overwrites a draft once editing starts. Escape discards the draft. Only explicitly saved templates persist; they include unequal pane geometry but no live window identities. The editor does not run legacy all-app polling or auto-restore monitors.
+Each invocation takes a fresh WindowServer snapshot of the visible desktop. Fully covered windows are omitted from the panes and counted in the Tile all pill; partially visible windows retain their actual bounds. A pane can also hold a window brought from another screen's current desktop; Apply moves it onto this screen and desktop. Accessibility refinement runs off the UI thread and never overwrites a draft once editing starts. Escape discards the draft. Only explicitly saved templates persist; they include unequal pane geometry but no live window identities. The editor does not run legacy all-app polling or auto-restore monitors.
 
 A native macOS full-screen window appears as one pane. Applying it unchanged keeps it full screen. Applying edits first restores that exact window to its regular desktop on the same display, re-reads the usable display bounds, and opens any added panes there. The overlay explains this transition before Apply. Switching desktops while editing dismisses the overlay.
 

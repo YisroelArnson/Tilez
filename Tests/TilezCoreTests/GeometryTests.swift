@@ -293,6 +293,81 @@ private func checkActiveLayouts() {
     expectEqual(ActiveLayouts.reconcile(roundTrip, live: ["launch-1": all]), [first, second])
 }
 
+func checkGathering() {
+    let app = GridApp(bundleID: "terminal.test", name: "Terminal")
+    func binding(_ index: Int) -> GridWindowBinding { GridWindowBinding(windowID: "1:window-\(index)", processSession: "1|launch") }
+    func pane(_ index: Int) -> GridSlot { GridSlot(app: app, binding: binding(index)) }
+
+    // Tiling picks roughly square panes on a 16:10 screen, and stretches a short last row.
+    let wide: CGFloat = 1.6
+    expect(DesktopGrid.tilingShape(count: 2, aspect: wide) == (2, 1))
+    expect(DesktopGrid.tilingShape(count: 3, aspect: wide) == (3, 1), "Three windows sit side by side")
+    expect(DesktopGrid.tilingShape(count: 4, aspect: wide) == (2, 2))
+    expect(DesktopGrid.tilingShape(count: 5, aspect: wide) == (3, 2))
+    expect(DesktopGrid.tilingShape(count: 9, aspect: wide) == (3, 3))
+    expect(DesktopGrid.tilingShape(count: 24, aspect: wide) == (6, 4))
+    expect(DesktopGrid.tilingShape(count: 2, aspect: 0.5625) == (1, 2), "A portrait screen stacks two windows")
+    for aspect in [CGFloat(0.5625), 1.6, 3.56] {
+        for count in 1...30 {
+            let grid = DesktopGrid.tiling((0..<count).map(pane), aspect: aspect, gap: CGSize(width: 0.005, height: 0.008))
+            expect(grid.isValid, "Tiling \(count) at \(aspect) is valid")
+            expectEqual(grid.slots.count, min(count, DesktopGrid.maxTiled))
+            expectEqual(grid.slots.map(\.binding), (0..<min(count, DesktopGrid.maxTiled)).map(binding))
+            let frames = grid.normalizedFrames
+            let covered = frames.reduce(CGFloat(0)) { $0 + $1.width * $1.height }
+            expect(covered > 0.9, "Tiled panes cover the screen, leaving only gaps: \(covered)")
+            for (i, frame) in frames.enumerated() {
+                for other in frames.dropFirst(i + 1) {
+                    expectFalse(frame.insetBy(dx: 0.0001, dy: 0.0001).intersects(other), "Tiled panes never overlap")
+                }
+            }
+        }
+    }
+    let five = DesktopGrid.tiling((0..<5).map(pane), aspect: wide, gap: .zero).normalizedFrames
+    expect(Geometry.approximatelyEqual(five[3], CGRect(x: 0, y: 0.5, width: 0.5, height: 0.5), tolerance: 0.0001), "The last row's panes widen to fill it")
+    expectEqual(DesktopGrid.tiling([], aspect: wide), .emptyDesktop)
+
+    // Reading order: top row left to right, then the next row; a pile keeps front-to-back order.
+    let scattered = DesktopGrid(panes: [pane(0), pane(1), pane(2), pane(3)], frames: [
+        CGRect(x: 0.5, y: 0.52, width: 0.5, height: 0.48), CGRect(x: 0.5, y: 0, width: 0.5, height: 0.5),
+        CGRect(x: 0, y: 0.02, width: 0.5, height: 0.5), CGRect(x: 0, y: 0.5, width: 0.5, height: 0.5)])
+    expectEqual(scattered.readingOrder, [2, 1, 3, 0])
+    let pile = DesktopGrid(panes: [pane(0), pane(1), pane(2)], frames: Array(repeating: CGRect(x: 0.1, y: 0.1, width: 0.6, height: 0.6), count: 3))
+    expectEqual(pile.readingOrder, [0, 1, 2])
+
+    // Screen memory: a window belongs to the last screen that recorded it.
+    let left = CGRect(x: 0, y: 0, width: 0.5, height: 1), right = CGRect(x: 0.5, y: 0, width: 0.5, height: 1)
+    var memory = ScreenMemory()
+    memory.record(DesktopGrid(panes: [pane(0), pane(1), GridSlot()], frames: [left, right, right]), on: "Monitor")
+    memory.record(DesktopGrid(panes: [pane(2)], frames: [left]), on: "Laptop")
+    expect(memory.screens["Monitor"]?.count == 2, "Empty panes aren't windows")
+    memory.record(DesktopGrid(panes: [pane(2), pane(1)], frames: [left, right]), on: "Laptop")
+    expect(memory.screens["Monitor"]?.map(\.slot.binding) == [binding(0)], "Moving a window to another connected screen moves its record")
+    memory.record(.emptyDesktop, on: "Laptop")
+    expect(memory.screens["Laptop"] == nil, "An empty screen has no record")
+
+    // The monitor disconnects; its windows pile onto the laptop, which isn't recorded alone.
+    memory = ScreenMemory()
+    memory.record(DesktopGrid(panes: [pane(0), pane(1)], frames: [left, right]), on: "Monitor")
+    memory.record(DesktopGrid(panes: [pane(5)], frames: [left]), on: "Laptop")
+    var now: [GridWindowBinding: String] = [binding(0): "Laptop", binding(1): "Laptop", binding(5): "Laptop"]
+    let away = memory.displaced(from: "Monitor", location: { now[$0] })!
+    expectEqual(away.slots.map(\.binding), [binding(0), binding(1)])
+    expect(away.normalizedFrames == [left, right], "Windows go back to their remembered frames")
+    expect(away.isValid)
+    expect(memory.displaced(from: "Laptop", location: { now[$0] }) == nil, "Windows still on their screen aren't displaced")
+    now[binding(0)] = "Monitor"
+    now[binding(1)] = nil
+    expect(memory.displaced(from: "Monitor", location: { now[$0] }) == nil, "Windows already back, closed, or minimized stay out")
+    memory.keep { $0 != binding(1) }
+    expect(memory.screens["Monitor"]?.map(\.slot.binding) == [binding(0)], "Closed windows are forgotten")
+    memory.keep { _ in false }
+    expect(memory.screens.isEmpty)
+    let encoded = try! JSONEncoder().encode(ScreenMemory())
+    expectEqual(try! JSONDecoder().decode(ScreenMemory.self, from: encoded), ScreenMemory())
+    print("PASS: even tiling across screen shapes, reading order, and screen memory that survives a disconnect")
+}
+
 private func checkMenuPanelGeometry() {
     // Includes the user's vertically offset display and a smaller display below/left of the origin.
     for visible in [CGRect(x: 822, y: 1243, width: 3008, height: 1662),
@@ -338,8 +413,9 @@ private func checkMenuPanelGeometry() {
         checkSavedSetups()
         checkActiveLayouts()
         checkWorkspaces()
+        checkGathering()
         checkMenuPanelGeometry()
-        print("PASS: 32 geometry, matching, creation, visibility, saved-setup, active-layout, workspace, and menu-panel scenarios, \(assertionCount) assertions.")
+        print("PASS: 33 geometry, matching, creation, visibility, saved-setup, active-layout, workspace, and menu-panel scenarios, \(assertionCount) assertions.")
     }
 }
 

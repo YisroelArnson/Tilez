@@ -391,6 +391,24 @@ MainActor.assumeIsolated {
            && model.grid.normalizedFrames[1].minX - model.grid.normalizedFrames[0].maxX > 0, "⌘R realigns drifted panes")
     model.undo()
     assert(model.grid == drifted, "Realign is one undo step")
+    // Tile all: the grid's panes in reading order, then windows brought from another screen.
+    model.grid = live
+    model.removePane(5)
+    let brought = (6..<9).map { GridSlot(app: app, binding: GridWindowBinding(windowID: "window-\($0)", processSession: "session")) }
+    let beforeTiling = model.grid
+    model.tileAll(adding: brought + [live.slots[5], live.slots[0]])
+    assert(model.grid.slots.compactMap(\.binding) == (live.slots[0..<5] + brought).compactMap(\.binding),
+           "Tiling keeps the grid's windows in reading order, adds brought ones once, and leaves removed windows out")
+    assert(model.grid.windowsToClose == [live.slots[5].binding!], "A removed window still closes on Apply")
+    assert(model.grid.normalizedFrames.allSatisfy { $0.width > 0.2 && $0.height > 0.2 } && model.grid.isValid, "Eight windows tile evenly")
+    assert(model.behind.isEmpty, "A snapshot has no windows behind the grid")
+    assert(manager.windows.isEmpty, "Tiling only edits the draft")
+    let tileKey = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0,
+        windowNumber: 0, context: nil, characters: "t", charactersIgnoringModifiers: "t", isARepeat: false, keyCode: 17)!
+    let tiled = model.grid
+    assert(model.handleKey(tileKey, editingText: false) && model.grid == tiled && !model.message.isEmpty, "⌘T on an even grid says so")
+    model.undo()
+    assert(model.grid == beforeTiling, "Tiling is one undo step")
     model.grid = live
     model.removePane(0)
     assert(model.grid.slots.count == 5 && model.grid.windowsToClose == [panes[0].0.binding!])

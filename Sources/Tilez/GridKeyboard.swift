@@ -130,6 +130,7 @@ enum GridDirection {
             case "z": undo()
             case "n": newGrid()
             case "r": realign()
+            case "t": tileAll()
             case "s": saveWorkspace()
             case "o": beginSaved()
             case "c": copySelectedApp()

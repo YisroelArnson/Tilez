@@ -142,6 +142,17 @@ enum WorkspaceError: LocalizedError {
         let destinations = workspace.destinations(connected: Display.all.map(\.id), current: display.id)
             .sorted { $0.displayID != display.id && $1.displayID == display.id }
         guard !destinations.isEmpty else { throw WorkspaceError.disconnected(workspace.name) }
+        try await arrange(destinations, progress: progress, beforePlacing: { self.shown.forget(workspace.id) }) { target, desktop in
+            self.shown.show(workspace.id, on: target.id, desktop: desktop.id)
+            self.persist()
+        }
+    }
+
+    /// Brings each screen's exact windows to it from wherever they are and arranges them at their
+    /// frames. It never opens a window, and other windows on these screens stay where they are.
+    /// The caller refreshes the windows' apps first.
+    func arrange(_ destinations: [(screen: WorkspaceScreen, displayID: String)], progress: @escaping (String) -> Void,
+                 beforePlacing: () -> Void = {}, placed: (Display, Desktop) -> Void = { _, _ in }) async throws {
         // A full-screen app keeps its own desktop. Switch that screen to a regular desktop and
         // leave the app in full screen; a full-screen window in the workspace leaves full screen
         // when the launcher gathers it.
@@ -171,15 +182,14 @@ enum WorkspaceError: LocalizedError {
             }
             if !away.isEmpty { try? await Desktops.move(away, to: desktop) }
         }
-        shown.forget(workspace.id)
+        beforePlacing()
         for destination in destinations {
             guard let target = Display.all.first(where: { $0.id == destination.displayID }),
                   let desktop = Desktops.current(displayID: target.id, includeFullScreen: true) else { throw DesktopError.unavailable }
             // A window with a minimum size can't match its pane exactly; the workspace still opens.
             _ = try await GridLauncher.open(destination.screen.grid, display: target, desktop: desktop, manager: manager,
                                             gathering: true, progress: progress, prepared: { _, _ in })
-            shown.show(workspace.id, on: target.id, desktop: desktop.id)
-            persist()
+            placed(target, desktop)
         }
         await bringForward(destinations.flatMap { $0.screen.grid.slots.compactMap { $0.binding?.windowID } })
     }

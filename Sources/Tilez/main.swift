@@ -29,6 +29,7 @@ final class ActionItem: NSMenuItem {
     private var workspacePanel: WorkspacePanelController!
     private var workspaceHotkeys: [GridHotKey] = []
     private var numberHotkeys: [GridHotKey] = []
+    private var screenMemory: ScreenMemoryController!
     private let updateReminder = UpdateReminder()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -64,6 +65,13 @@ final class ActionItem: NSMenuItem {
             let display = self.overlay.model.display
             self.overlay.close(restoreFocus: false)
             self.workspacePanel.open(workspace, on: display)
+        }
+        // Windows macOS moved off a screen while it was disconnected can go back when it returns.
+        screenMemory = ScreenMemoryController(store: workspaces)
+        overlay.model.displacedWindows = { [weak self] in self?.screenMemory.displaced(on: $0) }
+        overlay.model.onPutBack = { [weak self] display in
+            self?.overlay.close(restoreFocus: false)
+            self?.screenMemory.putBack(on: [display.id])
         }
         overlay.model.onRenameWorkspace = { [weak self] workspace in
             guard let self, let display = self.overlay.model.display else { return }

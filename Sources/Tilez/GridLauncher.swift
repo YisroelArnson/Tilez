@@ -69,6 +69,8 @@ enum GridLaunchError: LocalizedError {
                 && Display.containing(window.frame)?.id == display.id
         }
         try checkLocation()
+        // Desktops other screens show now. A pane can hold a window brought from one of them.
+        let otherScreens = Set(Display.all.filter { $0.id != display.id }.compactMap { Desktops.current(displayID: $0.id)?.number })
         var resolved = request
         var seenWindows: [String: ManagedWindow] = [:]
         var requestedPIDs: Set<pid_t> = []
@@ -112,10 +114,13 @@ enum GridLaunchError: LocalizedError {
                     if gathering { return indices.contains { request.slots[$0].binding?.windowID == window.id } }
                     if eligible(window) { return true }
                     // Creating a full-screen window can temporarily hide the original
-                    // desktop from AX. Keep its exact bound windows in the count.
+                    // desktop from AX. Keep its exact bound windows in the count, along with
+                    // bound windows brought here from another screen.
                     if indices.contains(where: { request.slots[$0].binding?.windowID == window.id }),
-                       window.availability.document,
-                       window.number.map({ Desktops.spaces(for: $0).contains(desktop.number) }) == true { return true }
+                       window.availability.document, let number = window.number {
+                        let spaces = Desktops.spaces(for: number)
+                        if spaces.contains(desktop.number) || !spaces.isDisjoint(with: otherScreens) { return true }
+                    }
                     guard let number = window.number, !initialNumbers.contains(number),
                           window.availability.document else { return false }
                     return window.availability.resizable || window.availability.fullScreen
@@ -198,6 +203,7 @@ enum GridLaunchError: LocalizedError {
                     _ = try await Accessibility.prepareForTiling(window, preserveFullScreen: false)
                     _ = try await candidates()
                 }
+                try await bringOntoScreen(seenWindows[id] ?? window, display: display, desktop: desktop)
                 targets.append(seenWindows[id] ?? window)
             }
             try await Desktops.move(targets, to: desktop)
@@ -285,5 +291,20 @@ enum GridLaunchError: LocalizedError {
         let constrained = unsettled.count
         return GridLaunchResult(grid: resolved, exact: constrained == 0,
             message: "\(constrained) window\(constrained == 1 ? " has" : "s have") a minimum size or couldn’t be moved. Try fewer rows or columns.")
+    }
+
+    /// A window showing on another screen moves onto this one, which puts it on this screen's
+    /// current desktop without the desktop bridge. The pane's frame is set afterwards.
+    private static func bringOntoScreen(_ window: ManagedWindow, display: Display, desktop: Desktop) async throws {
+        guard window.availability.accessible, !window.availability.fullScreen, !window.availability.minimized,
+              let number = window.number, !Desktops.spaces(for: number).contains(desktop.number),
+              Display.containing(window.frame)?.id != display.id else { return }
+        let size = CGSize(width: min(window.frame.width, display.bounds.width), height: min(window.frame.height, display.bounds.height))
+        let target = CGRect(origin: CGPoint(x: display.bounds.midX - size.width / 2, y: display.bounds.midY - size.height / 2), size: size)
+        guard try await Accessibility.perform({ Accessibility.move(window, to: target) }) else { return }
+        for _ in 0..<15 {
+            if Desktops.spaces(for: number).contains(desktop.number) { return }
+            try await Task.sleep(nanoseconds: 100_000_000)
+        }
     }
 }
