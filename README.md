@@ -97,7 +97,7 @@ bash scripts/release.sh 2.1.0
 
 It builds Tilez (version 2.1.0, build number = commit count), signs it and the embedded Sparkle updater with your Developer ID and the hardened runtime, packages `dist.noindex/Tilez.dmg` with an Applications shortcut, notarizes and staples it, signs it for Sparkle, writes `dist.noindex/appcast.xml`, tags `v2.1.0`, and publishes a GitHub release with both files. It stops first if there are uncommitted changes, the tag exists, or `main` isn't pushed.
 
-People who installed the DMG get the update automatically: Sparkle checks `releases/latest/download/appcast.xml` daily (and when the grid opens, if the last check was over six hours ago). A found update appears as a **Tilez x.y.z is available · Update** pill at the bottom of the grid instead of interrupting with an alert, and **… → Check for Updates…** checks right away. Builds from source have no feed and keep updating with `scripts/update.sh`. The site's Download button links to `releases/latest/download/Tilez.dmg`.
+People who installed the DMG get the update automatically: Sparkle checks `releases/latest/download/appcast.xml` daily (and when the grid opens, if the last check was over an hour ago). A found update appears as a **Tilez x.y.z is available · Update** pill at the bottom of the grid instead of interrupting with an alert, and **… → Check for Updates…** checks right away. With automatic updates on, Sparkle downloads the update first; the pill then reads **ready · Restart**, and the menu item becomes **Restart to Install Tilez x.y.z**. Builds from source have no feed and keep updating with `scripts/update.sh`. The site's Download button links to `releases/latest/download/Tilez.dmg`.
 
 One-time setup:
 

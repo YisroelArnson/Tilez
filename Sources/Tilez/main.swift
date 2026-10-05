@@ -98,9 +98,16 @@ final class ActionItem: NSMenuItem {
             }
             updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: updateReminder, userDriverDelegate: updateReminder)
             overlay.model.onCheckForUpdates = { [weak self] in
-                self?.overlay.close(restoreFocus: false)
+                guard let self, let updater = self.updater else { return }
+                // While an update downloads in the background, Sparkle ignores a new check.
+                guard updater.updater.canCheckForUpdates else {
+                    self.overlay.model.message = "Tilez is downloading an update. It will appear here when it’s ready."
+                    self.overlay.model.isError = false
+                    return
+                }
+                self.overlay.close(restoreFocus: false)
                 NSApp.activate(ignoringOtherApps: true)
-                self?.updater?.checkForUpdates(nil)
+                updater.checkForUpdates(nil)
             }
             overlay.model.onUpdate = { [weak self] in
                 if let install = self?.updateReminder.install { install() } else { self?.overlay.model.onCheckForUpdates?() }

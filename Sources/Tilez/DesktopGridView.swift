@@ -657,7 +657,10 @@ struct DesktopGridView: View {
             if Display.all.count > 1 || model.putBackAutomatically {
                 Toggle("Put windows back automatically when a screen reconnects", isOn: $model.putBackAutomatically)
             }
-            if let check = model.onCheckForUpdates { Button("Check for Updates…", action: check) }
+            // A downloaded update holds Sparkle's session open until it installs, so checking again would do nothing.
+            if model.updateReady, let version = model.availableUpdate, let update = model.onUpdate {
+                Button("Restart to Install Tilez \(version)", action: update)
+            } else if let check = model.onCheckForUpdates { Button("Check for Updates…", action: check) }
             Button("Close", action: { model.onDismiss?() })
             Button("Quit Tilez") { NSApp.terminate(nil) }
         } label: { Image(systemName: "ellipsis").frame(width: 16) }
