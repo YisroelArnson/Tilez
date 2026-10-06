@@ -99,7 +99,7 @@ struct DesktopGridView: View {
             // Controls stay at native point sizes; only the grid grows with the desktop.
             let canvas = proxy.size
             let top = max(Space.lg, min(Space.xxl + Space.lg, canvas.height * 0.04))
-            let gridTop = top + Metrics.barHeight + Space.sm + Self.hintHeight + Space.lg
+            let gridTop = top + Metrics.barHeight + Space.lg
             let availableHeight = max(160, canvas.height - gridTop - Self.footerReserve)
             let aspect = (model.display?.bounds.width ?? canvas.width) / max(1, model.display?.bounds.height ?? canvas.height)
             let width = min(max(320, canvas.width * 0.90), availableHeight * aspect)
@@ -107,14 +107,7 @@ struct DesktopGridView: View {
             ZStack(alignment: .top) {
                 Color.black.opacity(0.12).ignoresSafeArea()
                     .onTapGesture { if model.choosingApp { model.choosingApp = false } else { model.dismissLayer() } }
-                VStack(spacing: Space.sm) {
-                    toolbar
-                    Text(toolbarHint)
-                        .font(.system(size: 12, weight: .medium)).foregroundStyle(.white.opacity(0.95))
-                        .shadow(color: .black.opacity(0.4), radius: 3, y: 1)
-                        .lineLimit(1).frame(height: Self.hintHeight)
-                }
-                .padding(.top, top).zIndex(2)
+                toolbar.padding(.top, top).zIndex(2)
                 gridCanvas(width: width, height: gridHeight)
                     .frame(width: width, height: gridHeight)
                     .padding(.top, gridTop).zIndex(1)
@@ -151,23 +144,8 @@ struct DesktopGridView: View {
         .onExitCommand { model.dismissLayer() }
     }
 
-    private static let hintHeight: CGFloat = 16
     /// Room below the grid for a pill and the keyboard hints.
     private static let footerReserve: CGFloat = Space.xxl * 3
-
-    private var toolbarHint: String {
-        if model.busy { return "Applying your layout…" }
-        if model.resizing {
-            let dropped = model.grid.slots.count - model.draftColumns * model.draftRows
-            let warning = dropped > 0 ? "  ·  Removes \(dropped) pane\(dropped == 1 ? "" : "s"); windows stay open" : ""
-            return "\(model.draftColumns) × \(model.draftRows)\(warning)  ·  Click or press ↵ to confirm  ·  Esc to cancel"
-        }
-        if let workspace = model.shownWorkspace {
-            return "Workspace “\(workspace.name)”" + (model.workspaceModified ? "  ·  Edited  ·  ⌘S saves it" : "")
-                + "  ·  ⌘⇧S saves a new workspace"
-        }
-        return "Double-click a pane to choose its app  ·  Add or merge at an edge  ·  Drag an edge or corner to resize  ·  Drag panes to swap"
-    }
 
     /// One bar: workspaces, the grid's size, then saving and everything else. Return applies
     /// and ⌘K adds a pane, so neither needs a button.
@@ -201,6 +179,11 @@ struct DesktopGridView: View {
                            select: model.resize(columns:rows:))
             Text("\(model.draftColumns) × \(model.draftRows)")
                 .font(.system(size: 12, weight: .medium)).monospacedDigit().foregroundStyle(.secondary)
+            let dropped = model.grid.slots.count - model.draftColumns * model.draftRows
+            if dropped > 0 {
+                Text("Removes \(dropped) pane\(dropped == 1 ? "" : "s"); windows stay open")
+                    .font(.system(size: 11)).foregroundStyle(.secondary)
+            }
         }
         .padding(Space.md).preferredColorScheme(.light)
         .environment(\.gridPointer, nil)
@@ -608,18 +591,18 @@ struct DesktopGridView: View {
 
     private var saveButton: some View {
         Button(action: model.beginSaved) {
-            HStack(spacing: Space.xs + Space.xxs) {
-                Image(systemName: "bookmark")
-                Text("Save")
-                if model.workspaceModified {
-                    Circle().fill(Color.primary).frame(width: 6, height: 6).accessibilityLabel("Edited")
+            Image(systemName: "rectangle.3.group")
+                .overlay(alignment: .topTrailing) {
+                    if model.workspaceModified {
+                        Circle().fill(Color.primary).frame(width: 6, height: 6).offset(x: Space.xs, y: -Space.xxs)
+                    }
                 }
-                Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
-            }
         }
-        .buttonStyle(QuietButtonStyle(selected: model.showingSaved || model.saving, trailing: Space.md))
-        .help("Save, and your workspaces and layouts (⌘S, ⌘O)").disabled(model.busy)
-        .accessibilityLabel("Save, workspaces, and layouts")
+        .buttonStyle(QuietButtonStyle(selected: model.showingSaved || model.saving))
+        .help(model.shownWorkspace.map { "Workspace “\($0.name)”\(model.workspaceModified ? ", edited" : "") · Save, workspaces, and layouts (⌘S, ⌘O)" }
+              ?? "Save, workspaces, and layouts (⌘S, ⌘O)")
+        .disabled(model.busy)
+        .accessibilityLabel(model.workspaceModified ? "Workspaces and layouts, unsaved changes" : "Workspaces and layouts")
         .popover(isPresented: Binding(get: { model.showingSaved || model.saving }, set: { if !$0 { model.closeLayers() } }),
                  arrowEdge: .bottom) {
             Group {
