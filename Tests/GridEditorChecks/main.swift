@@ -17,7 +17,7 @@ MainActor.assumeIsolated {
         renderer.scale = 3
         guard let image = renderer.cgImage else { fatalError("Layout preview did not render") }
         let bitmap = NSBitmapImageRep(cgImage: image)
-        for (index, frame) in grid.frames(in: CGRect(x: 5, y: 5, width: 75, height: 49), gap: 2).enumerated() {
+        for (index, frame) in grid.frames(in: CGRect(origin: .zero, size: GridLayoutPreview.size), gap: 1.5).enumerated() {
             let color = bitmap.colorAt(x: Int(frame.midX * 3), y: Int(frame.midY * 3))!.usingColorSpace(.deviceRGB)!
             let isFilled = color.redComponent < 0.5
             assert(isFilled == (grid.slots[index].app != nil), "Preview must draw actual pane positions: \(stage), pane \(index)")

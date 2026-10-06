@@ -8,6 +8,7 @@ struct WorkspaceThumbnail: View {
     let workspace: Workspace
     var height: CGFloat = 40
     var maxWidth: CGFloat = 132
+    var cornerRadius: CGFloat = 5
 
     var body: some View {
         let aspects = workspace.screens.map { screen -> CGFloat in
@@ -29,13 +30,13 @@ struct WorkspaceThumbnail: View {
     private func screen(_ screen: WorkspaceScreen, size: CGSize) -> some View {
         let frames = screen.grid.normalizedFrames
         return ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: 5).fill(Color.black.opacity(0.12))
+            RoundedRectangle(cornerRadius: cornerRadius).fill(Color.black.opacity(0.1))
             ForEach(screen.grid.slots.indices, id: \.self) { index in
                 let frame = frames[index]
                 let pane = CGRect(x: frame.minX * size.width + 1, y: frame.minY * size.height + 1,
                                   width: max(1, frame.width * size.width - 2), height: max(1, frame.height * size.height - 2))
                 ZStack {
-                    RoundedRectangle(cornerRadius: 3).fill(Color.white.opacity(0.85))
+                    RoundedRectangle(cornerRadius: max(1.5, cornerRadius - 2)).fill(Color.white.opacity(0.9))
                     if let app = screen.grid.slots[index].app, pane.width > 9, pane.height > 9 {
                         Image(nsImage: AppIcons.icon(for: app)).resizable().interpolation(.high)
                             .frame(width: min(18, pane.width - 3, pane.height - 3), height: min(18, pane.width - 3, pane.height - 3))

@@ -5,18 +5,6 @@ import TilezCore
 // Light control surfaces use black; desktop selections use white for contrast.
 private let gridAccent = Color.black
 
-struct GridGlass: NSViewRepresentable {
-    var material: NSVisualEffectView.Material = .hudWindow
-    func makeNSView(context: Context) -> NSVisualEffectView {
-        let view = NSVisualEffectView()
-        view.blendingMode = .behindWindow
-        view.state = .active
-        view.material = material
-        return view
-    }
-    func updateNSView(_ view: NSVisualEffectView, context: Context) { view.material = material }
-}
-
 /// The overlay's pointer, polled by `PointerTracker` in the `gridRootSpace` coordinate space.
 /// SwiftUI's own hover never fires in the overlay panel, so controls read this instead.
 private struct GridPointerKey: EnvironmentKey { static let defaultValue: CGPoint? = nil }
@@ -41,38 +29,65 @@ private struct PointerHover<Content: View>: View {
 
 struct GridButtonStyle: ButtonStyle {
     var primary = false
+    /// Capsule-shaped, for buttons inside a pill.
+    var capsule = false
     @Environment(\.isEnabled) private var enabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
-        configuration.label
+        let shape = RoundedRectangle(cornerRadius: capsule ? Metrics.control / 2 : Metrics.controlRadius)
+        return configuration.label
             .font(.system(size: 13, weight: .medium))
             .foregroundStyle(primary ? Color.white : Color.primary)
-            .padding(.horizontal, 12).frame(minHeight: 34)
+            .padding(.horizontal, Space.md).frame(minHeight: Metrics.control)
             .background {
                 PointerHover { hovered in
                     let hovered = hovered && enabled
-                    RoundedRectangle(cornerRadius: 10).fill(primary
+                    shape.fill(primary
                         ? gridAccent.opacity(configuration.isPressed ? 0.7 : hovered ? 0.8 : 1)
-                        : Color.white.opacity(configuration.isPressed ? 0.95 : hovered ? 0.8 : 0.4))
+                        : Color.white.opacity(configuration.isPressed ? 0.95 : hovered ? 0.8 : 0.45))
                 }
             }
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(primary ? Color.clear : Color.white.opacity(0.6)))
             .opacity(enabled ? 1 : 0.4)
             .scaleEffect(configuration.isPressed && !reduceMotion && NSEvent.pressedMouseButtons != 0 ? 0.96 : 1)
+    }
+}
+
+/// A control that rests clear and fills on hover, for icon buttons and workspace chips.
+/// `selected` keeps the fill, marking the workspace this screen shows.
+private struct QuietButtonStyle: ButtonStyle {
+    var selected = false
+    var leading: CGFloat = Space.sm
+    var trailing: CGFloat = Space.sm
+    @Environment(\.isEnabled) private var enabled
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: .medium))
+            .foregroundStyle(Color.primary)
+            .padding(.leading, leading).padding(.trailing, trailing)
+            .frame(minWidth: Metrics.control, minHeight: Metrics.control)
+            .background {
+                PointerHover { hovered in
+                    RoundedRectangle(cornerRadius: Metrics.controlRadius).fill(Color.white.opacity(
+                        configuration.isPressed ? 0.95 : selected ? 0.85 : hovered && enabled ? 0.6 : 0))
+                }
+            }
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .opacity(enabled ? 1 : 0.4)
+            .contentShape(Rectangle())
     }
 }
 
 /// Half of a split button. The container draws the resting fill; each half adds hover and
 /// press on top so the whole control matches `GridButtonStyle` (40% → 80% → 95% white).
 private struct SplitHalfStyle: ButtonStyle {
-    var horizontalPadding: CGFloat = 12
+    var horizontalPadding: CGFloat = Space.md
     @Environment(\.isEnabled) private var enabled
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 13, weight: .medium))
             .foregroundStyle(Color.primary)
-            .padding(.horizontal, horizontalPadding).frame(minHeight: 34)
+            .padding(.horizontal, horizontalPadding).frame(minHeight: Metrics.control)
             .background {
                 PointerHover { hovered in
                     Rectangle().fill(Color.white.opacity(configuration.isPressed ? 0.92 : hovered && enabled ? 0.67 : 0))
@@ -104,21 +119,21 @@ struct DesktopGridView: View {
         GeometryReader { proxy in
             // Controls stay at native point sizes; only the grid grows with the desktop.
             let canvas = proxy.size
-            let top = max(20, min(48, canvas.height * 0.055))
-            let gridTop = top + 100
-            let availableHeight = max(160, canvas.height - gridTop - 94)
+            let top = max(Space.lg, min(Space.xxl + Space.lg, canvas.height * 0.04))
+            let gridTop = top + Metrics.barHeight + Space.sm + Self.hintHeight + Space.lg
+            let availableHeight = max(160, canvas.height - gridTop - Self.footerReserve)
             let aspect = (model.display?.bounds.width ?? canvas.width) / max(1, model.display?.bounds.height ?? canvas.height)
             let width = min(max(320, canvas.width * 0.90), availableHeight * aspect)
             let gridHeight = width / aspect
             ZStack(alignment: .top) {
                 Color.black.opacity(0.12).ignoresSafeArea()
                     .onTapGesture { if model.choosingApp { model.choosingApp = false } else { model.dismissLayer() } }
-                VStack(spacing: 0) {
+                VStack(spacing: Space.sm) {
                     toolbar
                     Text(toolbarHint)
                         .font(.system(size: 12, weight: .medium)).foregroundStyle(.white.opacity(0.95))
                         .shadow(color: .black.opacity(0.4), radius: 3, y: 1)
-                        .padding(.top, 10)
+                        .lineLimit(1).frame(height: Self.hintHeight)
                 }
                 .padding(.top, top).zIndex(2)
                 gridCanvas(width: width, height: gridHeight)
@@ -127,7 +142,7 @@ struct DesktopGridView: View {
                 VStack {
                     Spacer()
                     footer
-                }.padding(.bottom, 20).padding(.horizontal, 24).zIndex(3)
+                }.padding(.bottom, Space.lg).padding(.horizontal, Space.xl).zIndex(3)
             }
             .frame(width: canvas.width, height: canvas.height)
             .coordinateSpace(name: gridRootSpace)
@@ -153,6 +168,10 @@ struct DesktopGridView: View {
         .onExitCommand { model.dismissLayer() }
     }
 
+    private static let hintHeight: CGFloat = 16
+    /// Room below the grid for a pill and the keyboard hints.
+    private static let footerReserve: CGFloat = Space.xxl * 3
+
     private var toolbarHint: String {
         if model.busy { return "Applying your layout…" }
         if model.resizing {
@@ -167,82 +186,70 @@ struct DesktopGridView: View {
         return "Double-click a pane to choose its app  ·  Add or merge at an edge  ·  Drag an edge or corner to resize  ·  Drag panes to swap"
     }
 
-    /// Workspace thumbnails sit to the left of the controls when there's room.
+    /// One bar: workspaces, then editing, then saving and applying. Narrow screens drop the
+    /// workspace names first, then shorten labels, then leave workspaces to ⌘O.
     private var toolbar: some View {
         ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top, spacing: 12) { workspaceStrip; bar(compact: false) }
-            HStack(alignment: .top, spacing: 12) { workspaceStrip; bar(compact: true) }
-            bar(compact: true)
+            bar(chips: .named, compact: false)
+            bar(chips: .numbered, compact: false)
+            bar(chips: .numbered, compact: true)
+            bar(chips: .hidden, compact: true)
         }
-        .padding(.horizontal, 24)
+        .padding(.horizontal, Space.xl)
     }
 
-    @ViewBuilder private var workspaceStrip: some View {
-        if let store = model.workspaces {
-            WorkspaceStrip(store: store, model: model)
-        }
-    }
-
-    private func bar(compact: Bool) -> some View {
-        HStack(spacing: compact ? 8 : 12) {
-            // G turns the layout preview into a size picker in place; both share one footprint.
-            ZStack {
-                if model.resizing {
-                    GridSizePicker(columns: model.draftColumns, rows: model.draftRows,
-                                   hover: { c, r in model.draftColumns = c; model.draftRows = r },
-                                   select: model.resize(columns:rows:))
-                } else {
-                    Button(action: model.beginResize) {
-                        GridLayoutPreview(grid: model.grid, selectedCell: model.selectedCell)
-                            .overlay {
-                                PointerHover { hovered in
-                                    RoundedRectangle(cornerRadius: 9).strokeBorder(Color.black.opacity(hovered && !model.busy ? 0.25 : 0))
-                                }
-                            }
-                    }.buttonStyle(.plain).help("Grid size (G)").disabled(model.busy)
-                        .accessibilityLabel("Current layout, \(model.grid.slots.count) panes. Choose grid size")
-                }
-            }.animation(.easeOut(duration: 0.12), value: model.resizing)
-            Rectangle().fill(.black.opacity(0.10)).frame(width: 1, height: 28)
-            Button(action: model.addApp) {
-                HStack(spacing: 9) {
-                    Image(systemName: "plus")
-                    Text(compact ? "Add" : "Add pane")
-                    if !compact { keycap("⌘K") }
-                }
-            }.help("Add app (⌘K)").disabled(model.busy)
-            // One control: save the workspace on the left; workspaces, layouts, and Save As from the chevron.
+    private func bar(chips: WorkspaceChips.Labels, compact: Bool) -> some View {
+        HStack(spacing: Space.xs) {
+            if chips != .hidden, let store = model.workspaces {
+                WorkspaceChips(store: store, model: model, labels: chips)
+            }
+            Button(action: model.beginResize) {
+                GridLayoutPreview(grid: model.grid, selectedCell: model.selectedCell)
+            }
+            .buttonStyle(QuietButtonStyle(selected: model.resizing, leading: Space.xs, trailing: Space.xs))
+            .help("Grid size (G)").disabled(model.busy)
+            .accessibilityLabel("Current layout, \(model.grid.slots.count) panes. Choose grid size")
+            .popover(isPresented: $model.resizing, arrowEdge: .bottom) { sizePopover }
+            Button(action: model.addApp) { Label(compact ? "Add" : "Add pane", systemImage: "plus") }
+                .buttonStyle(QuietButtonStyle(trailing: Space.md))
+                .help("Add a pane (⌘K)").disabled(model.busy)
+            BarSeparator().padding(.horizontal, Space.xs)
+            // Save the workspace on the left; workspaces, layouts, and Save As from the chevron.
             HStack(spacing: 0) {
                 saveButton
-                Rectangle().fill(.black.opacity(0.10)).frame(width: 1, height: 18)
                 openButton
             }
-            .background(Color.white.opacity(0.4), in: RoundedRectangle(cornerRadius: 10))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Color.white.opacity(0.6)))
+            .clipShape(RoundedRectangle(cornerRadius: Metrics.controlRadius))
             if model.busy {
-                Button("Stop", action: model.cancel)
+                Button("Stop", action: model.cancel).buttonStyle(GridButtonStyle())
             } else {
                 Button(action: model.openGrid) {
-                    HStack(spacing: 12) {
+                    HStack(spacing: Space.sm) {
                         Text("Apply")
                         Image(systemName: "return")
                     }
                 }.buttonStyle(GridButtonStyle(primary: true))
                     .disabled((model.grid.filledCount == 0 && model.originalGrid.filledCount == 0) || model.desktop == nil)
+                    .padding(.leading, Space.xs)
             }
             moreMenu
         }
-        .buttonStyle(GridButtonStyle())
-        .padding(10)
-        .background {
-            GridGlass(material: .popover)
-                .overlay(Color.white.opacity(reduceTransparency ? 1 : 0.25))
-                .clipShape(RoundedRectangle(cornerRadius: 20))
+        .padding(Metrics.barPadding)
+        .glassSurface(RoundedRectangle(cornerRadius: Metrics.barRadius), reduceTransparency: reduceTransparency)
+        .fixedSize()
+    }
+
+    private var sizePopover: some View {
+        VStack(spacing: Space.sm) {
+            GridSizePicker(columns: model.draftColumns, rows: model.draftRows,
+                           hover: { c, r in model.draftColumns = c; model.draftRows = r },
+                           select: model.resize(columns:rows:))
+            Text("\(model.draftColumns) × \(model.draftRows)")
+                .font(.system(size: 12, weight: .medium)).monospacedDigit().foregroundStyle(.secondary)
         }
-        .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.white.opacity(0.8)))
-        .shadow(color: .black.opacity(0.16), radius: 22, y: 10)
-        .fixedSize(horizontal: true, vertical: true)
+        .padding(Space.md).preferredColorScheme(.light)
+        .environment(\.gridPointer, nil)
+        .onDisappear { model.onFocusGrid?() }
     }
 
     private func gridCanvas(width: CGFloat, height: CGFloat) -> some View {
@@ -309,11 +316,11 @@ struct DesktopGridView: View {
                 dividerHandle(divider, width: width, height: height).zIndex(Double(frames.count + 2))
             }
             if let source = dragSource, model.grid.slots.indices.contains(source), let app = model.grid.slots[source].app {
-                HStack(spacing: 10) {
+                HStack(spacing: Space.md) {
                     Image(nsImage: model.icon(for: app)).resizable().frame(width: 36, height: 36)
                     Text(app.name).font(.system(size: 15, weight: .medium))
                     if repeatDrag { Image(systemName: "plus.circle.fill").foregroundStyle(gridAccent) }
-                }.padding(12).background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+                }.padding(Space.md).background(.regularMaterial, in: RoundedRectangle(cornerRadius: Metrics.paneRadius + Space.xs))
                     .shadow(radius: 12, y: 5)
                     .position(x: frames[source].midX + dragTranslation.width, y: frames[source].midY + dragTranslation.height)
                     .allowsHitTesting(false).zIndex(1000)
@@ -457,10 +464,10 @@ struct DesktopGridView: View {
         let app = model.grid.slots[index].app
         let selected = model.selectedCell == index || dragTarget == index
         return ZStack {
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: Metrics.paneRadius)
                 // A dark tint keeps white icons and labels legible over light windows.
                 .fill(reduceTransparency ? Color(white: 0.25) : Color.black.opacity(hoveredCell == index ? 0.55 : 0.45))
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: Metrics.paneRadius)
                 .strokeBorder(selected ? Color.white : .white.opacity(0.45), lineWidth: selected ? 3 : 1)
                 .shadow(color: .black.opacity(selected ? 0.75 : 0), radius: 2)
             // Clicking a pane only selects it; double-click or its center opens the chooser.
@@ -472,7 +479,7 @@ struct DesktopGridView: View {
                 .accessibilityAddTraits(selected ? [.isSelected, .isButton] : [.isButton])
                 .accessibilityAction { model.select(index) }
             Button { if canClickCell { model.choose(index) } } label: {
-                VStack(spacing: compact ? 8 : 10) {
+                VStack(spacing: compact ? Space.sm : Space.md) {
                     if let app {
                         Image(nsImage: model.icon(for: app)).resizable().interpolation(.high)
                             .frame(width: compact ? 32 : 48, height: compact ? 32 : 48)
@@ -489,11 +496,11 @@ struct DesktopGridView: View {
                     }
                 }.foregroundStyle(.white)
                     .shadow(color: .black.opacity(0.25), radius: 3, y: 1)
-                    .padding(.horizontal, 14).padding(.vertical, 10)
-                    .contentShape(RoundedRectangle(cornerRadius: 12))
+                    .padding(.horizontal, Space.md).padding(.vertical, Space.sm)
+                    .contentShape(RoundedRectangle(cornerRadius: Metrics.controlRadius))
             }.buttonStyle(PaneAppButtonStyle(highlighted: hoveredCell == index)).disabled(model.busy)
                 .frame(maxWidth: max(0, (compact ? 180 : 320)))
-                .padding(.horizontal, 28)
+                .padding(.horizontal, Space.xl)
                 .help(app == nil ? "Choose an app" : "Change app")
                 .accessibilityLabel("Pane \(index + 1), \(app?.name ?? "empty"). Choose app")
                 .popover(isPresented: Binding(get: { model.choosingApp && model.selectedCell == index },
@@ -506,7 +513,7 @@ struct DesktopGridView: View {
                     Spacer()
                 }
                 Spacer()
-            }.foregroundStyle(.white).padding(12).allowsHitTesting(false)
+            }.foregroundStyle(.white).padding(Space.md).allowsHitTesting(false)
         }
         .contextMenu {
             Button("Choose app…") { model.choose(index) }
@@ -534,57 +541,51 @@ struct DesktopGridView: View {
 
     private func appPopover(_ index: Int) -> some View {
         let currentApp = model.grid.slots.indices.contains(index) ? model.grid.slots[index].app : nil
-        return VStack(spacing: 10) {
-            HStack(spacing: 8) {
-                Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
-                GridSearchField(placeholder: "Search apps…", text: $model.search, onSubmit: model.confirmSearchSelection)
-                    .frame(height: 20)
-                if !model.search.isEmpty {
-                    Button { model.search = "" } label: { Image(systemName: "xmark.circle.fill") }
-                        .buttonStyle(.plain).foregroundStyle(.secondary)
-                }
-            }.padding(10).background(.black.opacity(0.045), in: RoundedRectangle(cornerRadius: 9))
+        return VStack(spacing: Space.sm) {
+            SearchBox(placeholder: "Search apps…", text: $model.search, onSubmit: model.confirmSearchSelection)
             ScrollViewReader { reader in
                 ScrollView {
-                    LazyVStack(spacing: 2) {
+                    LazyVStack(spacing: Space.xxs) {
                         ForEach(model.filteredApps) { choice in
                             Button { model.assign(choice.app) } label: {
-                                HStack(spacing: 12) {
-                                    Image(nsImage: model.icon(for: choice.app)).resizable().frame(width: 30, height: 30)
-                                    Text(choice.app.name).font(.system(size: 14)).lineLimit(1)
+                                HStack(spacing: Space.md) {
+                                    Image(nsImage: model.icon(for: choice.app)).resizable().frame(width: 24, height: 24)
+                                    Text(choice.app.name).font(.system(size: 13)).lineLimit(1)
                                     Spacer()
                                     if currentApp == choice.app { Image(systemName: "checkmark").foregroundStyle(gridAccent) }
-                                }.padding(.horizontal, 8).padding(.vertical, 7).contentShape(Rectangle())
+                                }.padding(.horizontal, Space.sm).frame(height: Self.rowHeight).contentShape(Rectangle())
                             }.buttonStyle(AppRowStyle(selected: model.selectedAppChoice?.id == choice.id))
                                 .id(choice.id)
                                 .accessibilityAddTraits(model.selectedAppChoice?.id == choice.id ? [.isSelected] : [])
                         }
                         if model.filteredApps.isEmpty {
-                            if model.loadingApps { ProgressView("Loading apps…").padding(20) }
-                            else { Text("No apps found").foregroundStyle(.secondary).padding(20) }
+                            if model.loadingApps { ProgressView("Loading apps…").padding(Space.lg) }
+                            else { Text("No apps found").foregroundStyle(.secondary).padding(Space.lg) }
                         }
                     }
-                }.frame(height: min(280, CGFloat(max(1, model.filteredApps.count)) * 47))
+                }.frame(height: min(7 * (Self.rowHeight + Space.xxs), CGFloat(max(1, model.filteredApps.count)) * (Self.rowHeight + Space.xxs)))
                 .onChange(of: model.selectedAppChoice?.id) { _, id in
                     if let id { reader.scrollTo(id) }
                 }
             }
-            searchHints
             if currentApp != nil {
                 Divider()
                 Button("Remove pane", role: .destructive) { model.removePane(index) }
-                    .buttonStyle(.plain).foregroundStyle(.secondary).frame(maxWidth: .infinity, alignment: .leading).padding(6)
+                    .buttonStyle(.plain).font(.system(size: 13)).foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, Space.sm)
                     .help("Closes this window when you apply the layout")
             }
-        }.padding(12).frame(width: 280).preferredColorScheme(.light)
+        }.padding(Space.md).frame(width: 280).preferredColorScheme(.light)
             .environment(\.gridPointer, nil)
             .onDisappear { model.onFocusGrid?() }
     }
 
+    static let rowHeight: CGFloat = 36
+
     private var savePopover: some View {
         let workspace = model.saveKind == .workspace
-        return VStack(alignment: .leading, spacing: 12) {
-            Text(workspace ? "Save as a new workspace" : "Save as a layout").font(.system(size: 15, weight: .semibold))
+        return VStack(alignment: .leading, spacing: Space.md) {
+            Text(workspace ? "Save as a new workspace" : "Save as a layout").font(.system(size: 14, weight: .semibold))
             TextField("Name", text: $model.saveName).textFieldStyle(.roundedBorder)
                 .focused($nameFocused).onSubmit { model.save() }
             if workspace && Display.all.count > 1 {
@@ -598,41 +599,9 @@ struct DesktopGridView: View {
                 .font(.system(size: 12)).foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
             Button("Save", action: model.save).buttonStyle(GridButtonStyle(primary: true))
                 .disabled(model.saveName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        }.padding(18).frame(width: 300).preferredColorScheme(.light).onAppear { nameFocused = true }
+                .frame(maxWidth: .infinity, alignment: .trailing)
+        }.padding(Space.lg).frame(width: 300).preferredColorScheme(.light).onAppear { nameFocused = true }
             .environment(\.gridPointer, nil)
-    }
-
-    private var savedPopover: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Workspaces and layouts").font(.system(size: 15, weight: .semibold))
-            GridSearchField(placeholder: "Search workspaces and layouts…", text: $model.savedSearch, onSubmit: model.confirmSearchSelection)
-                .frame(height: 20).padding(10)
-                .background(.black.opacity(0.045), in: RoundedRectangle(cornerRadius: 9))
-            ScrollViewReader { reader in
-                ScrollView {
-                    VStack(spacing: 4) {
-                        let items = model.filteredSaved
-                        ForEach(items) { item in
-                            savedRow(item, heading: firstOfKind(item, in: items))
-                        }
-                        if items.isEmpty {
-                            Text(model.hasSavedItems ? "Nothing matches" : "Press ⌘S to save the windows on this screen as a workspace.")
-                                .font(.system(size: 13)).foregroundStyle(.secondary).padding(.vertical, 16)
-                        }
-                    }
-                }.frame(maxHeight: 270)
-                .onChange(of: model.selectedSavedItem?.id) { _, id in
-                    if let id { reader.scrollTo(id) }
-                }
-            }
-            HStack(spacing: 8) {
-                Button("New workspace… ⌘⇧S") { model.beginSave(.workspace) }
-                Button("Save as layout…") { model.beginSave(.layout) }.disabled(model.grid.filledCount == 0)
-            }.buttonStyle(GridButtonStyle()).font(.system(size: 12))
-            searchHints
-        }.padding(16).frame(width: 310).preferredColorScheme(.light)
-            .environment(\.gridPointer, nil)
-            .onDisappear { model.onFocusGrid?() }
     }
 
     private var moreMenu: some View {
@@ -663,46 +632,15 @@ struct DesktopGridView: View {
             } else if let check = model.onCheckForUpdates { Button("Check for Updates…", action: check) }
             Button("Close", action: { model.onDismiss?() })
             Button("Quit Tilez") { NSApp.terminate(nil) }
-        } label: { Image(systemName: "ellipsis").frame(width: 16) }
-            .menuStyle(.borderlessButton).fixedSize().help("More actions")
-            .padding(.horizontal, 8).frame(minHeight: 34)
+        } label: { Image(systemName: "ellipsis") }
+            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("More actions")
+            .frame(width: Metrics.control, height: Metrics.control)
             .background {
                 PointerHover { hovered in
-                    RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(hovered && !model.busy ? 0.8 : 0))
+                    RoundedRectangle(cornerRadius: Metrics.controlRadius).fill(Color.white.opacity(hovered && !model.busy ? 0.6 : 0))
                 }
             }
             .disabled(model.busy)
-    }
-
-    private func firstOfKind(_ item: GridEditorModel.SavedItem, in items: [GridEditorModel.SavedItem]) -> Bool {
-        items.first(where: { $0.isWorkspace == item.isWorkspace })?.id == item.id
-    }
-
-    @ViewBuilder private func savedRow(_ item: GridEditorModel.SavedItem, heading: Bool) -> some View {
-        let selected = model.selectedSavedItem?.id == item.id
-        let here = item.isWorkspace && item.id == model.shownWorkspace?.id
-        if heading {
-            Text(item.isWorkspace ? "Workspaces · bring back these windows" : "Layouts · open new windows")
-                .font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8).padding(.top, 6)
-        }
-        HStack {
-            Button { model.open(item) } label: {
-                HStack {
-                    Image(systemName: item.isWorkspace ? "rectangle.3.group" : "square.grid.2x2").foregroundStyle(gridAccent)
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(item.name).lineLimit(1)
-                        Text(savedSummary(item)).font(.system(size: 11)).foregroundStyle(.secondary)
-                    }
-                    Spacer()
-                    if here { Text("Here").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary) }
-                }.padding(8).contentShape(Rectangle())
-            }.buttonStyle(AppRowStyle(selected: selected))
-                .accessibilityAddTraits(selected ? [.isSelected] : [])
-            Button { model.deleteSaved(item.id) } label: { Image(systemName: "trash") }
-                .buttonStyle(.plain).foregroundStyle(.secondary)
-                .help(item.isWorkspace ? "Delete workspace" : "Delete layout")
-        }.id(item.id)
     }
 
     private var openButton: some View {
@@ -710,16 +648,18 @@ struct DesktopGridView: View {
             Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold))
                 .accessibilityLabel("Workspaces and layouts")
         }
-        .buttonStyle(SplitHalfStyle(horizontalPadding: 9))
+        .buttonStyle(SplitHalfStyle(horizontalPadding: Space.sm))
         .help("Workspaces and layouts (⌘O)").disabled(model.busy)
-        .popover(isPresented: $model.showingSaved, arrowEdge: .bottom) { savedPopover }
+        .popover(isPresented: $model.showingSaved, arrowEdge: .bottom) {
+            SavedList(model: model).onDisappear { model.onFocusGrid?() }
+        }
     }
 
     /// A dot marks a shown workspace with unsaved changes.
     private var saveButton: some View {
         let help: String = model.shownWorkspace.map { "Save workspace “\($0.name)” (⌘S)" } ?? "Save as a workspace (⌘S)"
         return Button(action: model.saveWorkspace) {
-            HStack(spacing: 6) {
+            HStack(spacing: Space.xs) {
                 Label("Save", systemImage: "bookmark")
                 if model.workspaceModified {
                     Circle().fill(Color.primary).frame(width: 6, height: 6).accessibilityLabel("Edited")
@@ -732,34 +672,20 @@ struct DesktopGridView: View {
         .popover(isPresented: $model.saving, arrowEdge: .bottom) { savePopover }
     }
 
-    private func savedSummary(_ item: GridEditorModel.SavedItem) -> String {
-        switch item.kind {
-        case .workspace(let workspace):
-            let windows = "\(workspace.windowCount) window\(workspace.windowCount == 1 ? "" : "s")"
-            return workspace.screens.count > 1 ? "\(windows) on \(workspace.screens.count) screens" : windows
-        case .layout(let layout): return "\(layout.grid.columns) × \(layout.grid.rows) · \(layout.grid.filledCount) apps"
-        }
-    }
-
-    private var searchHints: some View {
-        Text("↑ ↓ Select   ↵ Confirm   Esc Back")
-            .font(.system(size: 11)).foregroundStyle(.secondary)
-    }
-
     private var footer: some View {
-        VStack(spacing: 10) {
+        VStack(spacing: Space.sm) {
             if let version = model.availableUpdate, let update = model.onUpdate {
                 pill {
                     Image(systemName: "arrow.down.circle.fill").font(.system(size: 16))
                     Text("Tilez \(version) is \(model.updateReady ? "ready" : "available")")
-                    Button(model.updateReady ? "Restart" : "Update", action: update).buttonStyle(GridButtonStyle(primary: true))
+                    Button(model.updateReady ? "Restart" : "Update", action: update).buttonStyle(GridButtonStyle(primary: true, capsule: true))
                 }
             }
             if !model.busy && !model.displaced.isEmpty {
                 pill {
                     appIcons(model.displaced)
                     Text("\(windowCount(model.displaced.count)) from this screen \(model.displaced.count == 1 ? "is" : "are") on \(model.displacedLocation)")
-                    Button("Put back", action: model.putBack).buttonStyle(GridButtonStyle(primary: true))
+                    Button("Put back", action: model.putBack).buttonStyle(GridButtonStyle(primary: true, capsule: true))
                 }
             }
             if !model.busy && !model.hasActiveLayer && model.grid.hasOverlappingPanes {
@@ -767,8 +693,8 @@ struct DesktopGridView: View {
                     Image(systemName: "square.on.square").font(.system(size: 15))
                     Text("Some windows overlap")
                     Button(action: { model.tileAll() }) {
-                        HStack(spacing: 8) { Text("Tile all"); keycap("⌘T").colorScheme(.dark) }
-                    }.buttonStyle(GridButtonStyle(primary: true))
+                        HStack(spacing: Space.sm) { Text("Tile all"); keycap("⌘T").colorScheme(.dark) }
+                    }.buttonStyle(GridButtonStyle(primary: true, capsule: true))
                         .help("Arrange every window on this screen in an even grid. Apply moves them.")
                 }
             }
@@ -781,22 +707,20 @@ struct DesktopGridView: View {
                     .font(.system(size: 12)).foregroundStyle(.white)
             }
             if !model.trusted {
-                HStack(spacing: 12) {
+                pill {
                     Image(systemName: "hand.raised")
                     Text("Allow Accessibility so Tilez can arrange your windows.")
                     Button("Allow access") {
                         Accessibility.requestPermission()
                         NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility")!)
-                    }.buttonStyle(GridButtonStyle(primary: true))
-                }.font(.system(size: 13)).padding(10)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+                    }.buttonStyle(GridButtonStyle(primary: true, capsule: true))
+                }
             } else if !model.message.isEmpty {
-                HStack(spacing: 10) {
+                pill(trailing: Space.lg) {
                     if model.busy { ProgressView().controlSize(.small) }
                     else { Image(systemName: model.isError ? "exclamationmark.circle" : "checkmark.circle") }
-                    Text(model.message).font(.system(size: 13)).lineLimit(3)
-                }.padding(.horizontal, 16).padding(.vertical, 10)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12))
+                    Text(model.message).lineLimit(2)
+                }
             }
             Text(keyboardHints)
                 .font(.system(size: 12)).foregroundStyle(.white.opacity(0.95))
@@ -804,16 +728,14 @@ struct DesktopGridView: View {
         }
     }
 
-    /// The bottom pills share one look: an icon or two, a sentence, and one action.
-    private func pill<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        HStack(spacing: 12, content: content)
+    /// Notices share one look: an icon, a sentence, and at most one action, inset so a
+    /// capsule button sits concentric with the pill.
+    private func pill<Content: View>(trailing: CGFloat = Space.xs, @ViewBuilder _ content: () -> Content) -> some View {
+        HStack(spacing: Space.md, content: content)
             .font(.system(size: 13, weight: .medium))
-            .padding(.leading, 16).padding(.trailing, 6).padding(.vertical, 6)
-            .background {
-                GridGlass(material: .popover).overlay(Color.white.opacity(reduceTransparency ? 1 : 0.25)).clipShape(Capsule())
-            }
-            .overlay(Capsule().strokeBorder(.white.opacity(0.8)))
-            .shadow(color: .black.opacity(0.16), radius: 16, y: 6)
+            .padding(.leading, Space.lg).padding(.trailing, trailing)
+            .frame(minHeight: Metrics.pillHeight)
+            .glassSurface(Capsule(), reduceTransparency: reduceTransparency)
             .preferredColorScheme(.light)
     }
 
@@ -822,7 +744,7 @@ struct DesktopGridView: View {
         let apps = windows.compactMap(\.app).reduce(into: [GridApp]()) { apps, app in
             if !apps.contains(where: { $0.bundleID == app.bundleID }) { apps.append(app) }
         }
-        return HStack(spacing: -6) {
+        return HStack(spacing: -Space.sm) {
             ForEach(apps.prefix(4), id: \.bundleID) { app in
                 Image(nsImage: model.icon(for: app)).resizable().frame(width: 20, height: 20)
             }
@@ -841,9 +763,8 @@ struct DesktopGridView: View {
 
     private func keycap(_ text: String) -> some View {
         Text(text).font(.system(size: 12, weight: .medium, design: .rounded))
-            .padding(.horizontal, 6).padding(.vertical, 3)
-            .background(.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 4))
-            .overlay(RoundedRectangle(cornerRadius: 4).strokeBorder(.primary.opacity(0.14)))
+            .padding(.horizontal, Space.xs + Space.xxs).padding(.vertical, Space.xxs)
+            .background(.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: Space.xs))
     }
 }
 
@@ -852,7 +773,7 @@ private struct PaneAppButtonStyle: ButtonStyle {
     var highlighted: Bool
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .background(Color.white.opacity(configuration.isPressed ? 0.28 : highlighted ? 0.14 : 0), in: RoundedRectangle(cornerRadius: 12))
+            .background(Color.white.opacity(configuration.isPressed ? 0.28 : highlighted ? 0.14 : 0), in: RoundedRectangle(cornerRadius: Metrics.controlRadius))
     }
 }
 
@@ -926,39 +847,35 @@ private struct AppRowStyle: ButtonStyle {
         @State private var hovered = false
         var body: some View {
             configuration.label.foregroundStyle(.primary)
-                .background(gridAccent.opacity(configuration.isPressed ? 0.22 : selected ? 0.14 : hovered ? 0.07 : 0), in: RoundedRectangle(cornerRadius: 8))
+                .background(gridAccent.opacity(configuration.isPressed ? 0.22 : selected ? 0.12 : hovered ? 0.06 : 0), in: RoundedRectangle(cornerRadius: Metrics.rowRadius))
                 .onHover { hovered = $0 }
         }
     }
 }
 
-/// Uses the same geometry as the editor, including unequal and nested splits.
+/// Uses the same geometry as the editor, including unequal and nested splits. It fits inside a
+/// control, inset by `Space.xs`.
 struct GridLayoutPreview: View {
     let grid: DesktopGrid
     let selectedCell: Int?
+    static let size = CGSize(width: 38, height: Metrics.control - Space.xs * 2)
 
     var body: some View {
-        GeometryReader { proxy in
-            let frames = grid.frames(in: CGRect(origin: .zero, size: proxy.size), gap: 2)
-            ZStack(alignment: .topLeading) {
-                ForEach(grid.slots.indices.reversed(), id: \.self) { index in
-                    let frame = frames[index]
-                    // The selected pane is darker rather than outlined.
-                    let selected = selectedCell == index
-                    RoundedRectangle(cornerRadius: 2)
-                        .fill(grid.slots[index].app == nil ? Color.black.opacity(selected ? 0.22 : 0.10)
-                                                           : gridAccent.opacity(selected ? 0.85 : 0.55))
-                        .overlay {
-                            // A light inner edge keeps the margin between panes.
-                            RoundedRectangle(cornerRadius: 2).strokeBorder(Color.white.opacity(0.7), lineWidth: 1)
-                        }
-                        .frame(width: max(0, frame.width), height: max(0, frame.height))
-                        .offset(x: frame.minX, y: frame.minY)
-                }
+        let frames = grid.frames(in: CGRect(origin: .zero, size: Self.size), gap: 1.5)
+        ZStack(alignment: .topLeading) {
+            RoundedRectangle(cornerRadius: Metrics.insetRadius).fill(Color.white.opacity(0.6))
+            ForEach(grid.slots.indices.reversed(), id: \.self) { index in
+                let frame = frames[index]
+                // The selected pane is darker rather than outlined.
+                let selected = selectedCell == index
+                RoundedRectangle(cornerRadius: 1.5)
+                    .fill(grid.slots[index].app == nil ? Color.black.opacity(selected ? 0.2 : 0.08)
+                                                       : gridAccent.opacity(selected ? 0.8 : 0.45))
+                    .frame(width: max(0, frame.width), height: max(0, frame.height))
+                    .offset(x: frame.minX, y: frame.minY)
             }
         }
-        .frame(width: 75, height: 49)
-        .padding(5).background(.white.opacity(0.45), in: RoundedRectangle(cornerRadius: 9))
+        .frame(width: Self.size.width, height: Self.size.height)
         .accessibilityHidden(true)
     }
 }
@@ -969,21 +886,20 @@ private struct GridSizePicker: View {
     let rows: Int
     let hover: (Int, Int) -> Void
     let select: (Int, Int) -> Void
-    private let step: CGFloat = 13
+    private static let cell: CGFloat = 16
+    private let step: CGFloat = cell + Space.xs
     var body: some View {
-        VStack(spacing: 3) {
+        VStack(spacing: Space.xs) {
             ForEach(0..<DesktopGrid.maxRows, id: \.self) { row in
-                HStack(spacing: 3) {
+                HStack(spacing: Space.xs) {
                     ForEach(0..<DesktopGrid.maxColumns, id: \.self) { column in
-                        RoundedRectangle(cornerRadius: 2)
-                            .fill(column < columns && row < rows ? gridAccent : Color.black.opacity(0.12))
-                            .frame(width: 10, height: 10)
+                        RoundedRectangle(cornerRadius: Space.xs)
+                            .fill(column < columns && row < rows ? gridAccent : Color.black.opacity(0.1))
+                            .frame(width: Self.cell, height: Self.cell)
                     }
                 }
             }
         }
-        .padding(5).background(.white.opacity(0.45), in: RoundedRectangle(cornerRadius: 9))
-        .overlay(RoundedRectangle(cornerRadius: 9).strokeBorder(gridAccent.opacity(0.5)))
         .contentShape(Rectangle())
         .onContinuousHover { phase in
             if case .active(let point) = phase {
@@ -1019,54 +935,45 @@ private struct PaneResize: Equatable {
 
 /// The first nine workspaces, numbered for ⌃⌥1–9. Click one to open it; the one this screen
 /// shows is outlined. Right-click to rename, reorder, or delete.
-private struct WorkspaceStrip: View {
+/// The first nine workspaces at the start of the bar, each its thumbnail and number, with its
+/// name when there's room. The one this screen shows stays filled.
+struct WorkspaceChips: View {
+    enum Labels { case named, numbered, hidden }
     @ObservedObject var store: WorkspaceStore
     @ObservedObject var model: GridEditorModel
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    let labels: Labels
 
     var body: some View {
         let shown = store.workspaces.prefix(9)
         if !shown.isEmpty {
-            HStack(spacing: 6) {
+            HStack(spacing: Space.xs) {
                 ForEach(Array(shown.enumerated()), id: \.element.id) { index, workspace in
-                    tile(workspace, number: index + 1)
+                    chip(workspace, number: index + 1)
                 }
                 if store.workspaces.count > 9 {
-                    Button(action: model.beginSaved) { Image(systemName: "ellipsis").frame(width: 24, height: 48) }
-                        .buttonStyle(.plain).help("All workspaces (⌘O)")
+                    Button(action: model.beginSaved) { Image(systemName: "ellipsis") }
+                        .buttonStyle(QuietButtonStyle()).help("All workspaces (⌘O)")
                 }
+                BarSeparator().padding(.horizontal, Space.xs)
             }
-            .padding(6)
-            .background {
-                GridGlass(material: .popover)
-                    .overlay(Color.white.opacity(reduceTransparency ? 1 : 0.25))
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
-            }
-            .overlay(RoundedRectangle(cornerRadius: 20).strokeBorder(.white.opacity(0.8)))
-            .shadow(color: .black.opacity(0.16), radius: 22, y: 10)
-            .fixedSize()
             .disabled(model.busy)
         }
     }
 
-    private func tile(_ workspace: Workspace, number: Int) -> some View {
+    private func chip(_ workspace: Workspace, number: Int) -> some View {
         let here = model.shownWorkspace?.id == workspace.id
         return Button { model.openWorkspace(workspace) } label: {
-            VStack(spacing: 4) {
-                WorkspaceThumbnail(workspace: workspace, height: 28, maxWidth: 80)
-                    .frame(height: 28)
-                HStack(spacing: 4) {
-                    Text("\(number)").font(.system(size: 10, weight: .bold, design: .rounded)).foregroundStyle(.secondary)
-                    Text(workspace.name).font(.system(size: 11, weight: .medium)).lineLimit(1)
+            HStack(spacing: Space.sm) {
+                WorkspaceThumbnail(workspace: workspace, height: Metrics.control - Space.xs * 2, maxWidth: 40,
+                                   cornerRadius: Metrics.insetRadius)
+                Text("\(number)").font(.system(size: 12, weight: .semibold)).monospacedDigit().foregroundStyle(.secondary)
+                    .padding(.trailing, labels == .named ? -Space.xs : 0)
+                if labels == .named {
+                    Text(workspace.name).lineLimit(1).truncationMode(.tail).frame(maxWidth: 120, alignment: .leading).fixedSize()
                 }
-                .frame(maxWidth: 80)
             }
-            .padding(4)
-            .background(Color.white.opacity(here ? 0.7 : 0), in: RoundedRectangle(cornerRadius: 12))
-            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Color.black.opacity(here ? 0.35 : 0), lineWidth: 1.5))
-            .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(QuietButtonStyle(selected: here, leading: Space.xs, trailing: labels == .named ? Space.md : Space.sm))
         .help("\(workspace.name) · ⌃⌥\(number)")
         .accessibilityLabel("\(workspace.name), workspace \(number)\(here ? ", on this screen" : "")")
         .contextMenu {
@@ -1076,6 +983,133 @@ private struct WorkspaceStrip: View {
             Button("Move Right") { store.move(workspace.id, by: 1) }.disabled(number == store.workspaces.count)
             Divider()
             Button("Delete", role: .destructive) { model.deleteSaved(workspace.id) }
+        }
+    }
+}
+
+/// A search field the height of a control, with a clear button once there's text.
+struct SearchBox: View {
+    let placeholder: String
+    @Binding var text: String
+    let onSubmit: () -> Void
+
+    var body: some View {
+        HStack(spacing: Space.sm) {
+            Image(systemName: "magnifyingglass").foregroundStyle(.secondary)
+            GridSearchField(placeholder: placeholder, text: $text, onSubmit: onSubmit, fontSize: 13).frame(height: 20)
+            if !text.isEmpty {
+                Button { text = "" } label: { Image(systemName: "xmark.circle.fill") }
+                    .buttonStyle(.plain).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.horizontal, Space.sm).frame(height: Metrics.control)
+        .background(Color.black.opacity(0.05), in: RoundedRectangle(cornerRadius: Metrics.controlRadius))
+    }
+}
+
+/// ⌘O: workspaces, then layouts, each drawn as its arrangement, with saving at the bottom.
+struct SavedList: View {
+    @ObservedObject var model: GridEditorModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: Space.sm) {
+            SearchBox(placeholder: "Search workspaces and layouts", text: $model.savedSearch, onSubmit: model.confirmSearchSelection)
+            ScrollViewReader { reader in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: Space.xxs) {
+                        let items = model.filteredSaved
+                        ForEach(items) { item in
+                            if items.first(where: { $0.isWorkspace == item.isWorkspace })?.id == item.id {
+                                heading(item.isWorkspace ? "Workspaces" : "Layouts", first: item.id == items.first?.id)
+                            }
+                            SavedRow(model: model, item: item)
+                        }
+                        if items.isEmpty {
+                            Text(model.hasSavedItems ? "Nothing matches" : "Press ⌘S to save the windows on this screen as a workspace.")
+                                .font(.system(size: 13)).foregroundStyle(.secondary)
+                                .frame(maxWidth: .infinity).padding(.vertical, Space.lg)
+                        }
+                    }
+                }.frame(maxHeight: 300)
+                .onChange(of: model.selectedSavedItem?.id) { _, id in
+                    if let id { reader.scrollTo(id) }
+                }
+            }
+            Divider()
+            HStack(spacing: Space.xs) {
+                Button { model.beginSave(.workspace) } label: { Label("New workspace", systemImage: "plus") }
+                    .help("Save this screen as a new workspace (⌘⇧S)")
+                Button { model.beginSave(.layout) } label: { Label("Save as layout", systemImage: "square.grid.2x2") }
+                    .disabled(model.grid.filledCount == 0)
+                    .help("Save the apps in this grid, not their windows")
+            }
+            .buttonStyle(QuietButtonStyle(trailing: Space.md)).font(.system(size: 12))
+        }
+        .padding(Space.md).frame(width: 320).preferredColorScheme(.light)
+        .environment(\.gridPointer, nil)
+    }
+
+    private func heading(_ title: String, first: Bool) -> some View {
+        Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+            .padding(.horizontal, Space.sm).padding(.top, first ? Space.xs : Space.md).padding(.bottom, Space.xxs)
+    }
+}
+
+/// One workspace or layout: its arrangement, name, and size. Delete appears on hover.
+private struct SavedRow: View {
+    @ObservedObject var model: GridEditorModel
+    let item: GridEditorModel.SavedItem
+    @State private var hovered = false
+
+    var body: some View {
+        let selected = model.selectedSavedItem?.id == item.id
+        let here = item.isWorkspace && item.id == model.shownWorkspace?.id
+        Button { model.open(item) } label: {
+            HStack(spacing: Space.md) {
+                preview.frame(width: 40, height: GridLayoutPreview.size.height)
+                Text(item.name).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                if here {
+                    Text("Here").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
+                        .padding(.horizontal, Space.xs + Space.xxs).padding(.vertical, Space.xxs)
+                        .background(Color.black.opacity(0.06), in: Capsule())
+                }
+                Spacer(minLength: Space.sm)
+                // Delete takes the size's place on hover, inside the row.
+                Text(summary).font(.system(size: 12)).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
+                    .opacity(hovered ? 0 : 1)
+            }
+            .padding(.horizontal, Space.sm).frame(height: DesktopGridView.rowHeight + Space.xs).contentShape(Rectangle())
+        }
+        .buttonStyle(AppRowStyle(selected: selected))
+        .accessibilityAddTraits(selected ? [.isSelected] : [])
+        .overlay(alignment: .trailing) {
+            if hovered {
+                Button { model.deleteSaved(item.id) } label: {
+                    Image(systemName: "trash").frame(width: Metrics.control - Space.sm, height: Metrics.control - Space.sm)
+                }
+                .buttonStyle(.plain).foregroundStyle(.secondary).padding(.trailing, Space.xs)
+                .help(item.isWorkspace ? "Delete workspace" : "Delete layout")
+            }
+        }
+        .accessibilityAction(named: item.isWorkspace ? "Delete workspace" : "Delete layout") { model.deleteSaved(item.id) }
+        .onHover { hovered = $0 }
+        .id(item.id)
+    }
+
+    @ViewBuilder private var preview: some View {
+        switch item.kind {
+        case .workspace(let workspace):
+            WorkspaceThumbnail(workspace: workspace, height: GridLayoutPreview.size.height, maxWidth: 40, cornerRadius: Metrics.insetRadius)
+        case .layout(let layout): GridLayoutPreview(grid: layout.grid, selectedCell: nil)
+        }
+    }
+
+    private var summary: String {
+        switch item.kind {
+        case .workspace(let workspace):
+            let windows = "\(workspace.windowCount) window\(workspace.windowCount == 1 ? "" : "s")"
+            return workspace.screens.count > 1 ? "\(windows) · \(workspace.screens.count) screens" : windows
+        case .layout(let layout): return "\(layout.grid.filledCount) app\(layout.grid.filledCount == 1 ? "" : "s")"
         }
     }
 }
