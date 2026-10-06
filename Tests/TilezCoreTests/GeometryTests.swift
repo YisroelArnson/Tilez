@@ -519,15 +519,16 @@ func checkPaneLayouts() {
     requests.slots[1] = GridSlot(app: app, opensNewWindow: true)
     expectEqual(requests.candidateIDs(bundleID: app.bundleID, session: "session", available: ["unrelated", "w0", "new"], initial: ["unrelated", "w0"]), ["w0", "new"])
     expectEqual(requests.candidateIDs(bundleID: app.bundleID, session: "restarted", available: ["w0"], initial: ["w0"]), [])
-    let covered = DesktopGrid.visibleDesktop(panes: [(slot(0), bounds), (slot(1), bounds)], in: bounds)
-    expectEqual(covered.slots.count, 1)
-    expectEqual(covered.slots[0].binding, slot(0).binding)
+    let covered = DesktopGrid.desktop(panes: [(slot(0), bounds), (slot(1), bounds)], in: bounds)
+    expect(covered.slots.map(\.binding) == [slot(0).binding, slot(1).binding], "A window hidden behind another is still a pane")
+    expect(covered.hasOverlappingPanes)
     let halves = [CGRect(x: bounds.minX, y: bounds.minY, width: bounds.width / 2, height: bounds.height),
                   CGRect(x: bounds.midX, y: bounds.minY, width: bounds.width / 2, height: bounds.height)]
-    let unionCovered = DesktopGrid.visibleDesktop(panes: [(slot(0), halves[0]), (slot(1), halves[1]), (slot(2), bounds)], in: bounds)
-    expect(unionCovered.slots.count == 2, "Occlusion uses the union of front windows")
-    let partial = DesktopGrid.visibleDesktop(panes: [(slot(0), halves[0]), (slot(1), bounds)], in: bounds)
-    expect(partial.slots.count == 2, "Partially visible windows preserve their full geometry")
+    let unionCovered = DesktopGrid.desktop(panes: [(slot(0), halves[0]), (slot(1), halves[1]), (slot(2), bounds)], in: bounds)
+    expect(unionCovered.slots.count == 3 && unionCovered.normalizedFrames[2] == CGRect(x: 0, y: 0, width: 1, height: 1),
+           "A window covered by several others keeps its full geometry")
+    expectFalse(DesktopGrid.desktop(panes: [(slot(0), halves[0]), (slot(1), halves[1])], in: bounds).hasOverlappingPanes,
+                "Side-by-side panes don't overlap")
     let eightFrames = Geometry.grid(count: 8, in: bounds, columns: 4, rows: 2, gap: 10)
     var eight = DesktopGrid.desktop(panes: eightFrames.enumerated().map { (slot($0.offset), $0.element) }, in: bounds)
     expectEqual(eight.mergeCandidates(7, toward: .top), [3])

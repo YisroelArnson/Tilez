@@ -247,7 +247,7 @@ enum WorkspaceError: LocalizedError {
     /// Full-screen desktops hold one app's window, not an arrangement.
     private func capture(_ display: Display) async throws -> DesktopGrid? {
         guard let desktop = Desktops.current(displayID: display.id, includeFullScreen: true), !desktop.isFullScreen else { return nil }
-        return try await GridEditorModel.visibleDesktop(display: display, desktop: desktop, manager: manager)
+        return try await GridEditorModel.liveDesktop(display: display, desktop: desktop, manager: manager)
     }
 
     /// Quick Add's new window joins the workspace this screen shows.

@@ -762,11 +762,10 @@ struct DesktopGridView: View {
                     Button("Put back", action: model.putBack).buttonStyle(GridButtonStyle(primary: true))
                 }
             }
-            let behind = model.busy ? [] : model.behind
-            if !behind.isEmpty {
+            if !model.busy && !model.hasActiveLayer && model.grid.hasOverlappingPanes {
                 pill {
-                    appIcons(behind)
-                    Text("\(windowCount(behind.count)) hidden behind others")
+                    Image(systemName: "square.on.square").font(.system(size: 15))
+                    Text("Some windows overlap")
                     Button(action: { model.tileAll() }) {
                         HStack(spacing: 8) { Text("Tile all"); keycap("⌘T").colorScheme(.dark) }
                     }.buttonStyle(GridButtonStyle(primary: true))
@@ -837,7 +836,7 @@ struct DesktopGridView: View {
         if model.choosingApp || model.showingSaved { return "↑ ↓  Select result   ·   ↵  Confirm   ·   Esc  Back to grid" }
         if model.saving { return model.saveKind == .workspace ? "↵  Save workspace   ·   Esc  Back to grid" : "↵  Save layout   ·   Esc  Back to grid" }
         if model.resizing { return "Hover or ← → ↑ ↓  Choose size   ·   ↵  Confirm   ·   Esc  Cancel" }
-        return "Arrows  Select   ·   ⌥Arrows  Split   ·   ⌥⇧Arrows  Merge   ·   ⌘R  Realign   ·   ⌘⇧⌫  Close all   ·   Type / Space  Choose app   ·   G  Size   ·   ⌘S  Save workspace   ·   ⌘O  Open   ·   ↵  Apply   ·   Esc  Close"
+        return "Arrows  Select   ·   ⌥Arrows  Split   ·   ⌥⇧Arrows  Merge   ·   ⌘R  Realign   ·   ⌘T  Tile all   ·   ⌘⇧⌫  Close all   ·   Type / Space  Choose app   ·   G  Size   ·   ⌘S  Save workspace   ·   ⌘O  Open   ·   ↵  Apply   ·   Esc  Close"
     }
 
     private func keycap(_ text: String) -> some View {

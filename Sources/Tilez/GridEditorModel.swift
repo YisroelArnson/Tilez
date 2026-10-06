@@ -50,8 +50,6 @@ struct GridAppChoice: Identifiable, Sendable {
     var onApplied: ((DesktopGrid) -> Void)?
     /// The workspace this screen is showing, which ⌘S saves.
     @Published private(set) var shownWorkspace: Workspace?
-    /// Every window on this screen and desktop, front to back, including those that others cover.
-    @Published private(set) var screenWindows: [GridSlot] = []
     struct OtherScreen: Identifiable { let id: String; let name: String; let windows: [GridSlot] }
     /// The windows other screens show now, which can be brought into this grid.
     @Published private(set) var otherScreens: [OtherScreen] = []
@@ -100,9 +98,8 @@ struct GridAppChoice: Identifiable, Sendable {
         locationKey = desktop?.id ?? display.id
         let captured = snapshot ?? desktop.map { Self.captureDesktop(display: display, desktop: $0, manager: manager) } ?? .emptyDesktop
         let capturedFrames = captured.frames(in: display.bounds)
-        grid = snapshot ?? DesktopGrid.visibleDesktop(panes: Array(zip(captured.slots, capturedFrames)), in: display.bounds)
+        grid = snapshot ?? DesktopGrid.desktop(panes: Array(zip(captured.slots, capturedFrames)), in: display.bounds)
         originalGrid = grid
-        screenWindows = snapshot == nil ? captured.slots.filter { $0.binding != nil } : []
         otherScreens = snapshot == nil ? Self.otherScreens(than: display, manager: manager) : []
         let away = snapshot == nil ? displacedWindows?(display) : nil
         displaced = away?.windows ?? []; displacedLocation = away?.location ?? ""
@@ -123,9 +120,8 @@ struct GridAppChoice: Identifiable, Sendable {
                 guard let self, self.discoveryGeneration == generation, !self.busy,
                       self.undoDrafts.isEmpty, self.grid == initial, !self.hasActiveLayer else { return }
                 guard Desktops.current(displayID: display.id, includeFullScreen: true)?.number == desktop.number else { return }
-                self.grid = DesktopGrid.visibleDesktop(panes: panes, in: display.bounds)
+                self.grid = DesktopGrid.desktop(panes: panes, in: display.bounds)
                 self.originalGrid = self.grid
-                self.screenWindows = panes.map(\.0)
                 self.selectedCell = min(self.selectedCell ?? 0, self.grid.slots.count - 1)
                 self.updateWorkspaceStatus()
             } catch { /* Preview remains usable if discovery is cancelled or unavailable. */ }
@@ -153,11 +149,11 @@ struct GridAppChoice: Identifiable, Sendable {
         }
     }
 
-    /// The windows a person can see on `desktop` within `display`, as the grid shows them.
-    static func visibleDesktop(display: Display, desktop: Desktop, manager: WindowManager) async throws -> DesktopGrid {
+    /// Every window on `desktop` within `display`, including those behind others, as the grid shows them.
+    static func liveDesktop(display: Display, desktop: Desktop, manager: WindowManager) async throws -> DesktopGrid {
         let captured = captureDesktop(display: display, desktop: desktop, manager: manager)
         guard Accessibility.trusted else { return captured }
-        return DesktopGrid.visibleDesktop(panes: try await livePanes(captured, display: display), in: display.bounds)
+        return DesktopGrid.desktop(panes: try await livePanes(captured, display: display), in: display.bounds)
     }
 
     /// Windows on each other screen's current desktop, front to back.
@@ -333,13 +329,8 @@ struct GridAppChoice: Identifiable, Sendable {
         if !aligned { message = "These panes are too far apart to line up." }
         else if grid == before { message = "Panes are already aligned." }
     }
-    /// Windows on this screen that the grid leaves out because others cover them, front to back.
-    var behind: [GridSlot] {
-        let present = Set(grid.slots.compactMap(\.binding) + (grid.windowsToClose ?? []))
-        return screenWindows.filter { $0.binding.map { !present.contains($0) } ?? false }
-    }
-    /// ⌘T: every window on this screen, including those hidden behind others, in an even grid in
-    /// reading order. `adding` brings windows from another screen in too; Apply moves them here.
+    /// ⌘T: every pane in an even grid, in reading order. `adding` brings windows from another
+    /// screen in too; Apply moves them here.
     func tileAll(adding extra: [GridSlot] = []) {
         guard !busy, let display else { return }
         closeLayers()
@@ -349,7 +340,7 @@ struct GridAppChoice: Identifiable, Sendable {
             return
         }
         var seen = Set(grid.slots.compactMap(\.binding) + (grid.windowsToClose ?? []))
-        let panes = current + (behind + extra).filter { $0.binding.map { seen.insert($0).inserted } ?? false }
+        let panes = current + extra.filter { $0.binding.map { seen.insert($0).inserted } ?? false }
         guard !panes.isEmpty else { message = "There are no windows on this screen to tile."; isError = false; return }
         let gap = CGSize(width: 10 / max(1, display.bounds.width), height: 10 / max(1, display.bounds.height))
         let before = grid

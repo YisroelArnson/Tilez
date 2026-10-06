@@ -401,7 +401,6 @@ MainActor.assumeIsolated {
            "Tiling keeps the grid's windows in reading order, adds brought ones once, and leaves removed windows out")
     assert(model.grid.windowsToClose == [live.slots[5].binding!], "A removed window still closes on Apply")
     assert(model.grid.normalizedFrames.allSatisfy { $0.width > 0.2 && $0.height > 0.2 } && model.grid.isValid, "Eight windows tile evenly")
-    assert(model.behind.isEmpty, "A snapshot has no windows behind the grid")
     assert(manager.windows.isEmpty, "Tiling only edits the draft")
     let tileKey = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: .command, timestamp: 0,
         windowNumber: 0, context: nil, characters: "t", charactersIgnoringModifiers: "t", isARepeat: false, keyCode: 17)!

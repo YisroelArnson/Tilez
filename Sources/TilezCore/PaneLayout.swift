@@ -36,31 +36,16 @@ extension DesktopGrid {
         return visible.isEmpty ? .emptyDesktop : DesktopGrid(panes: visible.map(\.0), frames: visible.map(\.1))
     }
 
-    /// WindowServer lists fully occluded windows too. Keep panes with a visible
-    /// portion so a window buried under a tiled desktop doesn't become a phantom cell.
-    public static func visibleDesktop(panes: [(GridSlot, CGRect)], in bounds: CGRect) -> DesktopGrid {
-        var covering: [CGRect] = []
-        let visible = panes.filter { _, frame in
-            let clipped = bounds.intersection(frame)
-            guard !clipped.isNull else { return false }
-            var remaining = [clipped]
-            for cover in covering {
-                remaining = remaining.flatMap { piece -> [CGRect] in
-                    let intersection = piece.intersection(cover)
-                    guard !intersection.isNull && intersection.width > 0 && intersection.height > 0 else { return [piece] }
-                    return [
-                        CGRect(x: piece.minX, y: piece.minY, width: intersection.minX - piece.minX, height: piece.height),
-                        CGRect(x: intersection.maxX, y: piece.minY, width: piece.maxX - intersection.maxX, height: piece.height),
-                        CGRect(x: intersection.minX, y: piece.minY, width: intersection.width, height: intersection.minY - piece.minY),
-                        CGRect(x: intersection.minX, y: intersection.maxY, width: intersection.width, height: piece.maxY - intersection.maxY)
-                    ].filter { $0.width > 0.5 && $0.height > 0.5 }
-                }
-                if remaining.isEmpty { break }
+    /// True when any two panes cover part of each other, as stacked windows do.
+    public var hasOverlappingPanes: Bool {
+        let frames = normalizedFrames
+        return frames.indices.contains { a in
+            frames.indices.contains { b in
+                guard b > a else { return false }
+                let shared = frames[a].intersection(frames[b])
+                return !shared.isNull && shared.width > 0.01 && shared.height > 0.01
             }
-            covering.append(clipped)
-            return remaining.reduce(CGFloat(0)) { $0 + $1.width * $1.height } > 4
         }
-        return desktop(panes: visible, in: bounds)
     }
 
     public func frames(in bounds: CGRect, gap: CGFloat = 10) -> [CGRect] {

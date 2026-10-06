@@ -9,14 +9,12 @@ import TilezCore
         guard let desktop = Desktops.current(displayID: display.id, includeFullScreen: true), !desktop.isFullScreen else {
             NSSound.beep(); return
         }
-        // Read the desktop the way the grid does, so buried windows don't become panes.
+        // Read the desktop the way the grid does: every window, including those behind others.
         let captured = GridEditorModel.captureDesktop(display: display, desktop: desktop, manager: manager)
-        let visible = DesktopGrid.visibleDesktop(panes: Array(zip(captured.slots, captured.frames(in: display.bounds))),
-                                                 in: display.bounds)
-        let pids = Set(visible.slots.compactMap { $0.binding?.windowID.split(separator: ":").first.flatMap { Int32($0) } })
+        let pids = Set(captured.slots.compactMap { $0.binding?.windowID.split(separator: ":").first.flatMap { Int32($0) } })
         guard !pids.isEmpty, (try? await manager.refresh(for: pids)) != nil else { return }
         let live = Dictionary(manager.windows.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
-        let windows = visible.slots.compactMap { slot -> ManagedWindow? in
+        let windows = captured.slots.compactMap { slot -> ManagedWindow? in
             guard let id = slot.binding?.windowID, let window = live[id] else { return nil }
             let onDisplay = display.bounds.intersection(window.frame)
             return window.availability.automatic && !onDisplay.isNull && onDisplay.width > 1 && onDisplay.height > 1 ? window : nil
