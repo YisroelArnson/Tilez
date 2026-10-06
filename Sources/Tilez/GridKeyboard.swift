@@ -85,6 +85,9 @@ enum GridDirection {
         let modifiers = event.modifierFlags.intersection([.command, .control, .option, .shift])
         if event.keyCode == 53 { dismissLayer(); return true }
         guard !busy else { return false }
+        // ? shows the shortcut sheet, except while typing a search or a name.
+        if !editingText, !choosingApp, !showingSaved, !saving, event.characters == "?" { toggleShortcuts(); return true }
+        if showingShortcuts { closeLayers() }
 
         if choosingApp || showingSaved {
             if modifiers.isEmpty {

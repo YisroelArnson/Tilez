@@ -408,6 +408,17 @@ MainActor.assumeIsolated {
     assert(model.handleKey(tileKey, editingText: false) && model.grid == tiled && !model.message.isEmpty, "⌘T on an even grid says so")
     model.undo()
     assert(model.grid == beforeTiling, "Tiling is one undo step")
+    func key(_ text: String, _ code: UInt16, _ flags: NSEvent.ModifierFlags = []) -> NSEvent {
+        NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0, context: nil,
+                         characters: text, charactersIgnoringModifiers: text, isARepeat: false, keyCode: code)!
+    }
+    assert(model.handleKey(key("?", 44, .shift), editingText: false) && model.showingShortcuts && !model.choosingApp,
+           "? shows the shortcut sheet instead of starting an app search")
+    _ = model.handleKey(key("?", 44, .shift), editingText: false)
+    assert(!model.showingShortcuts, "? again closes it")
+    _ = model.handleKey(key("?", 44, .shift), editingText: false)
+    _ = model.handleKey(key("t", 17, .command), editingText: false)
+    assert(!model.showingShortcuts, "Any other key closes it and still runs")
     model.grid = live
     model.removePane(0)
     assert(model.grid.slots.count == 5 && model.grid.windowsToClose == [panes[0].0.binding!])

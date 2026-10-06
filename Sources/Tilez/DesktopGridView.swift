@@ -78,27 +78,6 @@ private struct QuietButtonStyle: ButtonStyle {
     }
 }
 
-/// Half of a split button. The container draws the resting fill; each half adds hover and
-/// press on top so the whole control matches `GridButtonStyle` (40% → 80% → 95% white).
-private struct SplitHalfStyle: ButtonStyle {
-    var horizontalPadding: CGFloat = Space.md
-    @Environment(\.isEnabled) private var enabled
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(Color.primary)
-            .padding(.horizontal, horizontalPadding).frame(minHeight: Metrics.control)
-            .background {
-                PointerHover { hovered in
-                    Rectangle().fill(Color.white.opacity(configuration.isPressed ? 0.92 : hovered && enabled ? 0.67 : 0))
-                }
-            }
-            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
-            .opacity(enabled ? 1 : 0.4)
-            .contentShape(Rectangle())
-    }
-}
-
 struct DesktopGridView: View {
     @ObservedObject var model: GridEditorModel
     @State private var dragSource: Int?
@@ -143,6 +122,10 @@ struct DesktopGridView: View {
                     Spacer()
                     footer
                 }.padding(.bottom, Space.lg).padding(.horizontal, Space.xl).zIndex(3)
+                if model.showingShortcuts {
+                    ShortcutSheet().padding(.top, gridTop + Space.xl).zIndex(4)
+                        .onTapGesture { model.closeLayers() }
+                }
             }
             .frame(width: canvas.width, height: canvas.height)
             .coordinateSpace(name: gridRootSpace)
@@ -186,16 +169,9 @@ struct DesktopGridView: View {
         return "Double-click a pane to choose its app  ·  Add or merge at an edge  ·  Drag an edge or corner to resize  ·  Drag panes to swap"
     }
 
-    /// One bar: workspaces, then editing, then saving and applying. Narrow screens shorten labels.
+    /// One bar: workspaces, the grid's size, then saving and everything else. Return applies
+    /// and ⌘K adds a pane, so neither needs a button.
     private var toolbar: some View {
-        ViewThatFits(in: .horizontal) {
-            bar(compact: false)
-            bar(compact: true)
-        }
-        .padding(.horizontal, Space.xl)
-    }
-
-    private func bar(compact: Bool) -> some View {
         HStack(spacing: Space.xs) {
             if let store = model.workspaces {
                 // Above the rest of the bar, so the fanned-out cards draw over it.
@@ -208,33 +184,14 @@ struct DesktopGridView: View {
             .help("Grid size (G)").disabled(model.busy)
             .accessibilityLabel("Current layout, \(model.grid.slots.count) panes. Choose grid size")
             .popover(isPresented: $model.resizing, arrowEdge: .bottom) { sizePopover }
-            Button(action: model.addApp) { Label(compact ? "Add" : "Add pane", systemImage: "plus") }
-                .buttonStyle(QuietButtonStyle(trailing: Space.md))
-                .help("Add a pane (⌘K)").disabled(model.busy)
             BarSeparator().padding(.horizontal, Space.xs)
-            // Save the workspace on the left; workspaces, layouts, and Save As from the chevron.
-            HStack(spacing: 0) {
-                saveButton
-                openButton
-            }
-            .clipShape(RoundedRectangle(cornerRadius: Metrics.controlRadius))
-            if model.busy {
-                Button("Stop", action: model.cancel).buttonStyle(GridButtonStyle())
-            } else {
-                Button(action: model.openGrid) {
-                    HStack(spacing: Space.sm) {
-                        Text("Apply")
-                        Image(systemName: "return")
-                    }
-                }.buttonStyle(GridButtonStyle(primary: true))
-                    .disabled((model.grid.filledCount == 0 && model.originalGrid.filledCount == 0) || model.desktop == nil)
-                    .padding(.leading, Space.xs)
-            }
-            moreMenu
+            saveButton
+            moreButton
         }
         .padding(Metrics.barPadding)
         .glassSurface(RoundedRectangle(cornerRadius: Metrics.barRadius), reduceTransparency: reduceTransparency)
         .fixedSize()
+        .padding(.horizontal, Space.xl)
     }
 
     private var sizePopover: some View {
@@ -602,72 +559,74 @@ struct DesktopGridView: View {
             .environment(\.gridPointer, nil)
     }
 
-    private var moreMenu: some View {
-        Menu {
-            Button("Close all panes on Apply (⌘⇧⌫)", role: .destructive, action: model.removeAllPanes)
-            Button("Realign panes (⌘R)", action: model.realign)
-            Button("Tile all windows on this screen (⌘T)") { model.tileAll() }
-            ForEach(model.otherScreens) { screen in
-                Button("Bring \(windowCount(screen.windows.count)) from \(screen.name)") { model.bring(from: screen.id) }
-            }
-            Button("New empty grid (⌘N)", action: model.newGrid)
-            Button("Undo grid edit (⌘Z)", action: model.undo)
-            Button("Undo last window arrangement") { model.manager.undo() }
-                .disabled(model.manager.undoLabel == nil)
-            Divider()
-            Text("Show or hide Tilez: ⌃⌥Space")
-            Text("Enlarge a window, or put it back: ⌃⌥Return or ⌃⌥-click")
-            Text("Quick add a tile: ⌃⌥N")
-            Text("Realign windows: ⌃⌥R")
-            Text("Open a workspace: ⌃⌥W, or ⌃⌥1–9")
-            Text("Save the workspace: ⌃⌥S, or a new one: ⌃⌥⇧S")
-            if Display.all.count > 1 || model.putBackAutomatically {
-                Toggle("Put windows back automatically when a screen reconnects", isOn: $model.putBackAutomatically)
-            }
-            // A downloaded update holds Sparkle's session open until it installs, so checking again would do nothing.
-            if model.updateReady, let version = model.availableUpdate, let update = model.onUpdate {
-                Button("Restart to Install Tilez \(version)", action: update)
-            } else if let check = model.onCheckForUpdates { Button("Check for Updates…", action: check) }
-            Button("Close", action: { model.onDismiss?() })
-            Button("Quit Tilez") { NSApp.terminate(nil) }
-        } label: { Image(systemName: "ellipsis") }
-            .menuStyle(.borderlessButton).menuIndicator(.hidden).fixedSize().help("More actions")
-            .frame(width: Metrics.control, height: Metrics.control)
-            .background {
-                PointerHover { hovered in
-                    RoundedRectangle(cornerRadius: Metrics.controlRadius).fill(Color.white.opacity(hovered && !model.busy ? 0.6 : 0))
-                }
-            }
-            .disabled(model.busy)
+    private var moreButton: some View {
+        Button { showMoreMenu() } label: { Image(systemName: "ellipsis") }
+            .buttonStyle(QuietButtonStyle())
+            .help("More").disabled(model.busy)
+            .accessibilityLabel("More actions")
     }
 
-    private var openButton: some View {
-        Button(action: model.beginSaved) {
-            Image(systemName: "chevron.down").font(.system(size: 11, weight: .semibold))
-                .accessibilityLabel("Workspaces and layouts")
+    /// Actions only, with their shortcuts aligned right.
+    private func showMoreMenu() {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+        func add(_ title: String, _ key: String = "", _ modifiers: NSEvent.ModifierFlags = [], enabled: Bool = true, action: @escaping () -> Void) {
+            menu.addItem(GridMenuItem(title, key: key, modifiers: modifiers, enabled: enabled, action: action))
         }
-        .buttonStyle(SplitHalfStyle(horizontalPadding: Space.sm))
-        .help("Workspaces and layouts (⌘O)").disabled(model.busy)
-        .popover(isPresented: $model.showingSaved, arrowEdge: .bottom) {
-            SavedList(model: model).onDisappear { model.onFocusGrid?() }
+        add("Tile all", "t", .command) { model.tileAll() }
+        add("Realign panes", "r", .command) { model.realign() }
+        add("Grid size…", "g") { model.beginResize() }
+        for screen in model.otherScreens {
+            add("Bring \(windowCount(screen.windows.count)) from \(screen.name)") { model.bring(from: screen.id) }
         }
+        menu.addItem(.separator())
+        add("Undo", "z", .command) { model.undo() }
+        add("Undo last window arrangement", enabled: model.manager.undoLabel != nil) { model.manager.undo() }
+        add("Close all panes on Apply", "\u{8}", [.command, .shift]) { model.removeAllPanes() }
+        menu.addItem(.separator())
+        add("Keyboard Shortcuts", "?") { model.toggleShortcuts() }
+        if Display.all.count > 1 || model.putBackAutomatically {
+            let putBack = NSMenuItem(title: "Put windows back when a screen reconnects", action: nil, keyEquivalent: "")
+            let choices = NSMenu()
+            for (title, automatic) in [("Ask first", false), ("Automatically", true)] {
+                let item = GridMenuItem(title) { model.putBackAutomatically = automatic }
+                item.state = model.putBackAutomatically == automatic ? .on : .off
+                choices.addItem(item)
+            }
+            putBack.submenu = choices
+            menu.addItem(putBack)
+        }
+        // A downloaded update holds Sparkle's session open until it installs, so checking again would do nothing.
+        if model.updateReady, let version = model.availableUpdate, let update = model.onUpdate {
+            add("Restart to Install Tilez \(version)", action: update)
+        } else if let check = model.onCheckForUpdates {
+            add("Check for Updates…", action: check)
+        }
+        add("Quit Tilez", "q", .command) { NSApp.terminate(nil) }
+        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
     }
 
-    /// A dot marks a shown workspace with unsaved changes.
     private var saveButton: some View {
-        let help: String = model.shownWorkspace.map { "Save workspace “\($0.name)” (⌘S)" } ?? "Save as a workspace (⌘S)"
-        return Button(action: model.saveWorkspace) {
-            HStack(spacing: Space.xs) {
-                Label("Save", systemImage: "bookmark")
+        Button(action: model.beginSaved) {
+            HStack(spacing: Space.xs + Space.xxs) {
+                Image(systemName: "bookmark")
+                Text("Save")
                 if model.workspaceModified {
                     Circle().fill(Color.primary).frame(width: 6, height: 6).accessibilityLabel("Edited")
                 }
+                Image(systemName: "chevron.down").font(.system(size: 10, weight: .semibold)).foregroundStyle(.secondary)
             }
         }
-        .buttonStyle(SplitHalfStyle())
-        .help(help)
-        .disabled(model.busy)
-        .popover(isPresented: $model.saving, arrowEdge: .bottom) { savePopover }
+        .buttonStyle(QuietButtonStyle(selected: model.showingSaved || model.saving, trailing: Space.md))
+        .help("Save, and your workspaces and layouts (⌘S, ⌘O)").disabled(model.busy)
+        .accessibilityLabel("Save, workspaces, and layouts")
+        .popover(isPresented: Binding(get: { model.showingSaved || model.saving }, set: { if !$0 { model.closeLayers() } }),
+                 arrowEdge: .bottom) {
+            Group {
+                if model.saving { savePopover } else { SavedList(model: model) }
+            }
+            .onDisappear { model.onFocusGrid?() }
+        }
     }
 
     private var footer: some View {
@@ -756,7 +715,8 @@ struct DesktopGridView: View {
         if model.choosingApp || model.showingSaved { return "↑ ↓  Select result   ·   ↵  Confirm   ·   Esc  Back to grid" }
         if model.saving { return model.saveKind == .workspace ? "↵  Save workspace   ·   Esc  Back to grid" : "↵  Save layout   ·   Esc  Back to grid" }
         if model.resizing { return "Hover or ← → ↑ ↓  Choose size   ·   ↵  Confirm   ·   Esc  Cancel" }
-        return "Arrows  Select   ·   ⌥Arrows  Split   ·   ⌥⇧Arrows  Merge   ·   ⌘R  Realign   ·   ⌘T  Tile all   ·   ⌘⇧⌫  Close all   ·   Type / Space  Choose app   ·   G  Size   ·   ⌘S  Save workspace   ·   ⌘O  Open   ·   ↵  Apply   ·   Esc  Close"
+        if model.showingShortcuts { return "Any key  Close shortcuts" }
+        return "↵  Apply   ·   Esc  Close   ·   ⌘T  Tile all   ·   ⌘S  Save   ·   ?  All shortcuts"
     }
 
     private func keycap(_ text: String) -> some View {
@@ -1068,55 +1028,84 @@ struct SearchBox: View {
     }
 }
 
-/// ⌘O: workspaces, then layouts, each drawn as its arrangement, with saving at the bottom.
+/// The Save button's popup: saving at the top, then your workspaces and layouts. A search field
+/// appears once the list is long; typing filters it either way.
 struct SavedList: View {
     @ObservedObject var model: GridEditorModel
 
     var body: some View {
-        VStack(alignment: .leading, spacing: Space.sm) {
-            SearchBox(placeholder: "Search workspaces and layouts", text: $model.savedSearch, onSubmit: model.confirmSearchSelection)
-            ScrollViewReader { reader in
-                ScrollView {
-                    VStack(alignment: .leading, spacing: Space.xxs) {
-                        let items = model.filteredSaved
-                        ForEach(items) { item in
-                            if items.first(where: { $0.isWorkspace == item.isWorkspace })?.id == item.id {
-                                heading(item.isWorkspace ? "Workspaces" : "Layouts", first: item.id == items.first?.id)
+        let items = model.filteredSaved
+        VStack(alignment: .leading, spacing: Space.xxs) {
+            if let shown = model.shownWorkspace {
+                ActionRow(title: "Save “\(shown.name)”", systemImage: "bookmark.fill", key: "⌘S") { model.saveWorkspace() }
+            }
+            ActionRow(title: "New workspace…", systemImage: "plus", key: model.shownWorkspace == nil ? "⌘S" : "⌘⇧S") {
+                model.beginSave(.workspace)
+            }
+            ActionRow(title: "Save as layout…", systemImage: "square.grid.2x2", key: "") { model.beginSave(.layout) }
+                .disabled(model.grid.filledCount == 0)
+                .help("Keeps the apps in this grid, not their windows")
+            if model.hasSavedItems {
+                Divider().padding(.vertical, Space.xs).padding(.horizontal, Space.sm)
+                if model.saved.count + (model.workspaces?.workspaces.count ?? 0) > 8 || !model.savedSearch.isEmpty {
+                    SearchBox(placeholder: "Search", text: $model.savedSearch, onSubmit: model.confirmSearchSelection)
+                        .padding(.bottom, Space.xs)
+                }
+                ScrollViewReader { reader in
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: Space.xxs) {
+                            let mixed = items.contains(where: \.isWorkspace) && items.contains(where: { !$0.isWorkspace })
+                            ForEach(items) { item in
+                                // Headings only when there's both kinds to tell apart.
+                                if mixed, items.first(where: { $0.isWorkspace == item.isWorkspace })?.id == item.id {
+                                    heading(item.isWorkspace ? "Workspaces" : "Layouts", first: item.id == items.first?.id)
+                                }
+                                SavedRow(model: model, item: item)
                             }
-                            SavedRow(model: model, item: item)
+                            if items.isEmpty {
+                                Text("Nothing matches").font(.system(size: 13)).foregroundStyle(.secondary)
+                                    .frame(maxWidth: .infinity).padding(.vertical, Space.md)
+                            }
                         }
-                        if items.isEmpty {
-                            Text(model.hasSavedItems ? "Nothing matches" : "Press ⌘S to save the windows on this screen as a workspace.")
-                                .font(.system(size: 13)).foregroundStyle(.secondary)
-                                .frame(maxWidth: .infinity).padding(.vertical, Space.lg)
-                        }
+                    }.frame(maxHeight: 320).fixedSize(horizontal: false, vertical: true)
+                    .onChange(of: model.selectedSavedItem?.id) { _, id in
+                        if let id { reader.scrollTo(id) }
                     }
-                }.frame(maxHeight: 300)
-                .onChange(of: model.selectedSavedItem?.id) { _, id in
-                    if let id { reader.scrollTo(id) }
                 }
             }
-            Divider()
-            HStack(spacing: Space.xs) {
-                Button { model.beginSave(.workspace) } label: { Label("New workspace", systemImage: "plus") }
-                    .help("Save this screen as a new workspace (⌘⇧S)")
-                Button { model.beginSave(.layout) } label: { Label("Save as layout", systemImage: "square.grid.2x2") }
-                    .disabled(model.grid.filledCount == 0)
-                    .help("Save the apps in this grid, not their windows")
-            }
-            .buttonStyle(QuietButtonStyle(trailing: Space.md)).font(.system(size: 12))
         }
-        .padding(Space.md).frame(width: 320).preferredColorScheme(.light)
+        .padding(Space.sm).frame(width: 280).preferredColorScheme(.light)
         .environment(\.gridPointer, nil)
     }
 
     private func heading(_ title: String, first: Bool) -> some View {
         Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
-            .padding(.horizontal, Space.sm).padding(.top, first ? Space.xs : Space.md).padding(.bottom, Space.xxs)
+            .padding(.horizontal, Space.sm).padding(.top, first ? 0 : Space.sm).padding(.bottom, Space.xxs)
     }
 }
 
-/// One workspace or layout: its arrangement, name, and size. Delete appears on hover.
+/// A menu-like row: an icon, a title, and its shortcut on the right.
+private struct ActionRow: View {
+    let title: String
+    let systemImage: String
+    let key: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: Space.sm) {
+                Image(systemName: systemImage).frame(width: 16).foregroundStyle(.secondary)
+                Text(title).font(.system(size: 13)).lineLimit(1)
+                Spacer(minLength: Space.md)
+                Text(key).font(.system(size: 12)).foregroundStyle(.secondary)
+            }
+            .padding(.horizontal, Space.sm).frame(height: Metrics.control).contentShape(Rectangle())
+        }
+        .buttonStyle(AppRowStyle())
+    }
+}
+
+/// One workspace or layout: its arrangement and name. Delete appears on hover.
 private struct SavedRow: View {
     @ObservedObject var model: GridEditorModel
     let item: GridEditorModel.SavedItem
@@ -1126,20 +1115,17 @@ private struct SavedRow: View {
         let selected = model.selectedSavedItem?.id == item.id
         let here = item.isWorkspace && item.id == model.shownWorkspace?.id
         Button { model.open(item) } label: {
-            HStack(spacing: Space.md) {
+            HStack(spacing: Space.sm) {
                 preview.frame(width: 40, height: GridLayoutPreview.size.height)
-                Text(item.name).font(.system(size: 13, weight: .medium)).lineLimit(1)
-                if here {
-                    Text("Here").font(.system(size: 11, weight: .medium)).foregroundStyle(.secondary)
-                        .padding(.horizontal, Space.xs + Space.xxs).padding(.vertical, Space.xxs)
-                        .background(Color.black.opacity(0.06), in: Capsule())
-                }
+                Text(item.name).font(.system(size: 13)).lineLimit(1)
                 Spacer(minLength: Space.sm)
-                // Delete takes the size's place on hover, inside the row.
-                Text(summary).font(.system(size: 12)).monospacedDigit().foregroundStyle(.secondary).lineLimit(1)
-                    .opacity(hovered ? 0 : 1)
+                if here && !hovered {
+                    Image(systemName: "checkmark").font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+                        .accessibilityLabel("On this screen")
+                }
             }
-            .padding(.horizontal, Space.sm).frame(height: DesktopGridView.rowHeight + Space.xs).contentShape(Rectangle())
+            .padding(.leading, Space.xs).padding(.trailing, Space.sm)
+            .frame(height: Metrics.control + Space.xs).contentShape(Rectangle())
         }
         .buttonStyle(AppRowStyle(selected: selected))
         .accessibilityAddTraits(selected ? [.isSelected] : [])
@@ -1164,13 +1150,56 @@ private struct SavedRow: View {
         case .layout(let layout): GridLayoutPreview(grid: layout.grid, selectedCell: nil)
         }
     }
+}
 
-    private var summary: String {
-        switch item.kind {
-        case .workspace(let workspace):
-            let windows = "\(workspace.windowCount) window\(workspace.windowCount == 1 ? "" : "s")"
-            return workspace.screens.count > 1 ? "\(windows) · \(workspace.screens.count) screens" : windows
-        case .layout(let layout): return "\(layout.grid.filledCount) app\(layout.grid.filledCount == 1 ? "" : "s")"
+/// A menu item that runs a closure. Its key equivalent is only shown: the menu isn't attached to
+/// the menu bar, so the grid's own key handling stays the only place a shortcut runs.
+private final class GridMenuItem: NSMenuItem {
+    private let run: () -> Void
+    init(_ title: String, key: String = "", modifiers: NSEvent.ModifierFlags = [], enabled: Bool = true, action: @escaping () -> Void) {
+        run = action
+        super.init(title: title, action: #selector(invoke), keyEquivalent: key)
+        keyEquivalentModifierMask = modifiers
+        target = self; isEnabled = enabled
+    }
+    required init(coder: NSCoder) { fatalError("Not supported") }
+    @objc private func invoke() { run() }
+}
+
+/// Every shortcut in one place: those that work anywhere, and those inside the grid.
+struct ShortcutSheet: View {
+    private let anywhere = [("⌃⌥Space", "Show or hide the grid"), ("⌃⌥N", "Quick add a tile"), ("⌃⌥R", "Realign windows"),
+                            ("⌃⌥W", "Open a workspace"), ("⌃⌥1–9", "Switch workspace"), ("⌃⌥S", "Save the workspace"),
+                            ("⌃⌥⇧S", "Save a new workspace"), ("⌃⌥Return", "Enlarge a window")]
+    private let grid = [("Arrows", "Select a pane"), ("⌥ Arrows", "Split"), ("⌥⇧ Arrows", "Merge"), ("⇧ Arrows", "Move"),
+                        ("⌘K", "Add a pane"), ("⌘T", "Tile all"), ("⌘R", "Realign"), ("G", "Grid size"),
+                        ("⌘S / ⌘O", "Save / open"), ("⌘Z", "Undo"), ("↵", "Apply"), ("Esc", "Close")]
+
+    var body: some View {
+        HStack(alignment: .top, spacing: Space.xl) {
+            column("Anywhere", anywhere)
+            column("In the grid", grid)
+        }
+        .padding(Space.lg)
+        .glassSurface(RoundedRectangle(cornerRadius: Metrics.barRadius))
+        .fixedSize()
+        .preferredColorScheme(.light)
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Keyboard shortcuts")
+    }
+
+    private func column(_ title: String, _ rows: [(String, String)]) -> some View {
+        VStack(alignment: .leading, spacing: Space.sm) {
+            Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
+            ForEach(rows, id: \.0) { key, label in
+                HStack(spacing: Space.md) {
+                    Text(key).font(.system(size: 12, weight: .medium, design: .rounded))
+                        .padding(.horizontal, Space.xs + Space.xxs).fixedSize()
+                        .frame(width: 96, height: 22, alignment: .leading)
+                        .background(Color.black.opacity(0.06), in: RoundedRectangle(cornerRadius: Space.xs))
+                    Text(label).font(.system(size: 13))
+                }
+            }
         }
     }
 }

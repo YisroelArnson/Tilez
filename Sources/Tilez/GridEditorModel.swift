@@ -38,7 +38,9 @@ struct GridAppChoice: Identifiable, Sendable {
     /// The update is already downloaded, so the pill's button restarts into it.
     @Published var updateReady = false
     var onUpdate: (() -> Void)?
-    var hasActiveLayer: Bool { choosingApp || saving || showingSaved || resizing }
+    /// ? shows every shortcut in one sheet.
+    @Published var showingShortcuts = false
+    var hasActiveLayer: Bool { choosingApp || saving || showingSaved || resizing || showingShortcuts }
     enum SaveKind { case workspace, layout }
     @Published var saveKind = SaveKind.workspace
     @Published var saveAllScreens = false
@@ -494,7 +496,12 @@ struct GridAppChoice: Identifiable, Sendable {
         else { persist(); onDismiss?() }
     }
     func closeLayers() {
-        choosingApp = false; saving = false; showingSaved = false; resizing = false
+        choosingApp = false; saving = false; showingSaved = false; resizing = false; showingShortcuts = false
+    }
+    func toggleShortcuts() {
+        let showing = showingShortcuts
+        closeLayers()
+        showingShortcuts = !showing
     }
     func beginSave(_ kind: SaveKind) {
         guard !busy, kind == .workspace || grid.filledCount > 0 else { return }
