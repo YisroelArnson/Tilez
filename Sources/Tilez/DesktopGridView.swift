@@ -186,22 +186,20 @@ struct DesktopGridView: View {
         return "Double-click a pane to choose its app  ·  Add or merge at an edge  ·  Drag an edge or corner to resize  ·  Drag panes to swap"
     }
 
-    /// One bar: workspaces, then editing, then saving and applying. Narrow screens drop the
-    /// workspace names first, then shorten labels, then leave workspaces to ⌘O.
+    /// One bar: workspaces, then editing, then saving and applying. Narrow screens shorten labels.
     private var toolbar: some View {
         ViewThatFits(in: .horizontal) {
-            bar(chips: .named, compact: false)
-            bar(chips: .numbered, compact: false)
-            bar(chips: .numbered, compact: true)
-            bar(chips: .hidden, compact: true)
+            bar(compact: false)
+            bar(compact: true)
         }
         .padding(.horizontal, Space.xl)
     }
 
-    private func bar(chips: WorkspaceChips.Labels, compact: Bool) -> some View {
+    private func bar(compact: Bool) -> some View {
         HStack(spacing: Space.xs) {
-            if chips != .hidden, let store = model.workspaces {
-                WorkspaceChips(store: store, model: model, labels: chips)
+            if let store = model.workspaces {
+                // Above the rest of the bar, so the fanned-out cards draw over it.
+                WorkspaceStack(store: store, model: model).zIndex(1)
             }
             Button(action: model.beginResize) {
                 GridLayoutPreview(grid: model.grid, selectedCell: model.selectedCell)
@@ -935,45 +933,94 @@ private struct PaneResize: Equatable {
 
 /// The first nine workspaces, numbered for ⌃⌥1–9. Click one to open it; the one this screen
 /// shows is outlined. Right-click to rename, reorder, or delete.
-/// The first nine workspaces at the start of the bar, each its thumbnail and number, with its
-/// name when there's room. The one this screen shows stays filled.
-struct WorkspaceChips: View {
-    enum Labels { case named, numbered, hidden }
+/// The first nine workspaces as a stack of overlapping thumbnails at the start of the bar.
+/// Hovering fans them out on a tray over the bar, with the pointed-at one's number and name
+/// below it; the bar itself never changes width, so nothing moves under the pointer.
+struct WorkspaceStack: View {
     @ObservedObject var store: WorkspaceStore
     @ObservedObject var model: GridEditorModel
-    let labels: Labels
+    @Environment(\.gridPointer) private var pointer
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var expanded: Bool
+    @State private var hovered: Int?
+    static let card = CGSize(width: 40, height: Metrics.control - Space.xs * 2)
+    /// How much of each card behind the front one shows while stacked.
+    static let peek: CGFloat = 7
+    static let peeking = 4
+
+    init(store: WorkspaceStore, model: GridEditorModel, expanded: Bool = false, hovered: Int? = nil) {
+        self.store = store; self.model = model
+        _expanded = State(initialValue: expanded); _hovered = State(initialValue: hovered)
+    }
 
     var body: some View {
-        let shown = store.workspaces.prefix(9)
+        let shown = Array(store.workspaces.prefix(9))
         if !shown.isEmpty {
+            let stacked = Self.card.width + Self.peek * CGFloat(min(shown.count, Self.peeking) - 1)
+            let fanned = CGFloat(shown.count) * Self.card.width + CGFloat(shown.count - 1) * Space.xs
             HStack(spacing: Space.xs) {
-                ForEach(Array(shown.enumerated()), id: \.element.id) { index, workspace in
-                    chip(workspace, number: index + 1)
+                ZStack(alignment: .topLeading) {
+                    // The tray the cards fan out onto, inset like a control.
+                    RoundedRectangle(cornerRadius: Metrics.controlRadius)
+                        .fill(Color.white.opacity(0.9))
+                        .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
+                        .frame(width: fanned + Space.xs * 2, height: Metrics.control)
+                        .opacity(expanded ? 1 : 0)
+                    ForEach(Array(shown.enumerated()), id: \.element.id) { index, workspace in
+                        card(workspace, number: index + 1)
+                            .offset(x: Space.xs + (expanded ? CGFloat(index) * (Self.card.width + Space.xs)
+                                                            : CGFloat(min(index, Self.peeking - 1)) * Self.peek),
+                                    y: Space.xs)
+                            .opacity(expanded || index < Self.peeking ? 1 : 0)
+                            .zIndex(Double(shown.count - index))
+                    }
+                    if expanded, let hovered, shown.indices.contains(hovered) {
+                        caption(shown[hovered], number: hovered + 1)
+                            .offset(x: CGFloat(hovered) * (Self.card.width + Space.xs), y: Metrics.control + Space.sm)
+                            .zIndex(Double(shown.count + 1))
+                    }
                 }
-                if store.workspaces.count > 9 {
-                    Button(action: model.beginSaved) { Image(systemName: "ellipsis") }
-                        .buttonStyle(QuietButtonStyle()).help("All workspaces (⌘O)")
+                .frame(width: stacked + Space.xs * 2, height: Metrics.control, alignment: .topLeading)
+                .background {
+                    GeometryReader { proxy in
+                        let frame = proxy.frame(in: .named(gridRootSpace))
+                        Color.clear.onChange(of: pointer) { _, point in track(point, frame: frame, fanned: fanned, count: shown.count) }
+                    }
                 }
+                .animation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0), value: expanded)
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Workspaces")
                 BarSeparator().padding(.horizontal, Space.xs)
             }
             .disabled(model.busy)
         }
     }
 
-    private func chip(_ workspace: Workspace, number: Int) -> some View {
+    /// Fanned out while the pointer is over the stack, or over the tray once it's open.
+    private func track(_ point: CGPoint?, frame: CGRect, fanned: CGFloat, count: Int) {
+        let tray = CGRect(x: frame.minX, y: frame.minY - Space.sm, width: fanned + Space.xs * 2 + Space.sm,
+                          height: frame.height + Space.sm * 2)
+        let inside = point.map { (expanded ? tray : frame).contains($0) } ?? false
+        if inside != expanded { expanded = inside }
+        hovered = inside ? point.map { Int(($0.x - frame.minX - Space.xs) / (Self.card.width + Space.xs)) }
+            .flatMap { (0..<count).contains($0) ? $0 : nil } : nil
+    }
+
+    private func card(_ workspace: Workspace, number: Int) -> some View {
         let here = model.shownWorkspace?.id == workspace.id
         return Button { model.openWorkspace(workspace) } label: {
-            HStack(spacing: Space.sm) {
-                WorkspaceThumbnail(workspace: workspace, height: Metrics.control - Space.xs * 2, maxWidth: 40,
-                                   cornerRadius: Metrics.insetRadius)
-                Text("\(number)").font(.system(size: 12, weight: .semibold)).monospacedDigit().foregroundStyle(.secondary)
-                    .padding(.trailing, labels == .named ? -Space.xs : 0)
-                if labels == .named {
-                    Text(workspace.name).lineLimit(1).truncationMode(.tail).frame(maxWidth: 120, alignment: .leading).fixedSize()
+            WorkspaceThumbnail(workspace: workspace, height: Self.card.height, maxWidth: Self.card.width,
+                               cornerRadius: Metrics.insetRadius, opaque: true)
+                .frame(width: Self.card.width, height: Self.card.height)
+                .overlay {
+                    // A ring marks the workspace this screen shows; a hairline separates the others.
+                    RoundedRectangle(cornerRadius: Metrics.insetRadius)
+                        .strokeBorder(here ? gridAccent : Color.black.opacity(0.12), lineWidth: here ? 1.5 : 1)
                 }
-            }
+                .shadow(color: .black.opacity(expanded ? 0 : 0.12), radius: 2, x: -1)
+                .contentShape(Rectangle())
         }
-        .buttonStyle(QuietButtonStyle(selected: here, leading: Space.xs, trailing: labels == .named ? Space.md : Space.sm))
+        .buttonStyle(.plain)
         .help("\(workspace.name) · ⌃⌥\(number)")
         .accessibilityLabel("\(workspace.name), workspace \(number)\(here ? ", on this screen" : "")")
         .contextMenu {
@@ -984,6 +1031,20 @@ struct WorkspaceChips: View {
             Divider()
             Button("Delete", role: .destructive) { model.deleteSaved(workspace.id) }
         }
+    }
+
+    private func caption(_ workspace: Workspace, number: Int) -> some View {
+        HStack(spacing: Space.sm) {
+            Text("\(number)").monospacedDigit().foregroundStyle(.secondary)
+            Text(workspace.name).lineLimit(1)
+            Text("⌃⌥\(number)").font(.system(size: 11)).foregroundStyle(.secondary)
+        }
+        .font(.system(size: 12, weight: .medium))
+        .padding(.horizontal, Space.sm).frame(height: 24)
+        .background(Color.white.opacity(0.95), in: RoundedRectangle(cornerRadius: Metrics.rowRadius))
+        .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
+        .fixedSize()
+        .allowsHitTesting(false)
     }
 }
 

@@ -9,6 +9,8 @@ struct WorkspaceThumbnail: View {
     var height: CGFloat = 40
     var maxWidth: CGFloat = 132
     var cornerRadius: CGFloat = 5
+    /// A solid backing, for thumbnails stacked on top of each other.
+    var opaque = false
 
     var body: some View {
         let aspects = workspace.screens.map { screen -> CGFloat in
@@ -30,7 +32,8 @@ struct WorkspaceThumbnail: View {
     private func screen(_ screen: WorkspaceScreen, size: CGSize) -> some View {
         let frames = screen.grid.normalizedFrames
         return ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: cornerRadius).fill(Color.black.opacity(0.1))
+            if opaque { RoundedRectangle(cornerRadius: cornerRadius).fill(Color(white: 0.9)) }
+            else { RoundedRectangle(cornerRadius: cornerRadius).fill(Color.black.opacity(0.1)) }
             ForEach(screen.grid.slots.indices, id: \.self) { index in
                 let frame = frames[index]
                 let pane = CGRect(x: frame.minX * size.width + 1, y: frame.minY * size.height + 1,
