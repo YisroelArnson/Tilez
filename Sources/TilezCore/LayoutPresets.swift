@@ -70,6 +70,15 @@ public struct LayoutPreset: Identifiable, Equatable, Sendable {
         return Array(result.prefix(limit))
     }
 
+    /// The layout after the one `grid` is in, among the ways to fit its windows, wrapping around;
+    /// the first layout when it's in none of them. Its position counts from 1.
+    public static func next(after grid: DesktopGrid, aspect: CGFloat) -> (preset: LayoutPreset, position: Int, total: Int)? {
+        let choices = variations(for: grid.filledCount, aspect: aspect)
+        guard !choices.isEmpty else { return nil }
+        let index = choices.firstIndex { grid.matches($0) }.map { ($0 + 1) % choices.count } ?? 0
+        return (choices[index], index + 1, choices.count)
+    }
+
     /// `count` split into `rows` near-equal rows, the larger ones first.
     public static func rowsOf(_ count: Int, rows: Int) -> [Int] {
         (0..<rows).map { count / rows + ($0 < count % rows ? 1 : 0) }

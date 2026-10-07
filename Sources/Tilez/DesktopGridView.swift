@@ -174,8 +174,8 @@ struct DesktopGridView: View {
             }
             .buttonStyle(QuietButtonStyle(selected: model.resizing, leading: Space.sm + Space.xxs, trailing: Space.sm, height: Metrics.dockControl))
             .help("Layouts and grid size (G)").disabled(model.busy)
-            dockButton("Add pane", systemImage: "plus", key: "⌘K", labels: labels, action: model.addApp)
-            dockButton("Tile all", systemImage: "square.grid.2x2", key: "⌘T", labels: labels) { model.tileAll() }
+            dockButton("Add pane", systemImage: "plus", key: "K", labels: labels, action: model.addApp)
+            dockButton("Tile all", systemImage: "square.grid.2x2", key: "T", labels: labels) { model.tileAll() }
             BarSeparator().padding(.horizontal, Space.xs)
             saveButton(labels: labels)
             if model.busy {
@@ -565,8 +565,8 @@ struct DesktopGridView: View {
         func add(_ title: String, _ key: String = "", _ modifiers: NSEvent.ModifierFlags = [], enabled: Bool = true, action: @escaping () -> Void) {
             menu.addItem(GridMenuItem(title, key: key, modifiers: modifiers, enabled: enabled, action: action))
         }
-        add("Tile all", "t", .command) { model.tileAll() }
-        add("Realign panes", "r", .command) { model.realign() }
+        add("Tile all", "t") { model.tileAll() }
+        add("Realign panes", "r") { model.realign() }
         add("Grid size…", "g") { model.beginResize() }
         for screen in model.otherScreens {
             add("Bring \(windowCount(screen.windows.count)) from \(screen.name)") { model.bring(from: screen.id) }
@@ -609,7 +609,7 @@ struct DesktopGridView: View {
                         }
                     }
                 if labels { Text("Workspaces") }
-                keycap("⌘W")
+                keycap("W")
             }
         }
         .buttonStyle(QuietButtonStyle(selected: model.showingWorkspaces || model.showingSaved || model.saving, leading: Space.sm + Space.xxs, trailing: Space.sm,
@@ -648,7 +648,7 @@ struct DesktopGridView: View {
                     Image(systemName: "square.on.square").font(.system(size: 15))
                     Text("Some windows overlap")
                     Button(action: { model.tileAll() }) {
-                        HStack(spacing: Space.sm) { Text("Tile all"); keycap("⌘T") }
+                        HStack(spacing: Space.sm) { Text("Tile all"); keycap("T") }
                     }.buttonStyle(GridButtonStyle(primary: true, capsule: true))
                         .help("Arrange every window on this screen in an even grid. Apply moves them.")
                 }
@@ -909,9 +909,9 @@ struct SavedList: View {
         let items = model.filteredSaved
         VStack(alignment: .leading, spacing: Space.xxs) {
             if let shown = model.shownWorkspace {
-                ActionRow(title: "Save “\(shown.name)”", systemImage: "bookmark.fill", key: "⌘S") { model.saveWorkspace() }
+                ActionRow(title: "Save “\(shown.name)”", systemImage: "bookmark.fill", key: "") { model.saveWorkspace() }
             }
-            ActionRow(title: "New workspace…", systemImage: "plus", key: model.shownWorkspace == nil ? "⌘S" : "⌘⇧S") {
+            ActionRow(title: "New workspace…", systemImage: "plus", key: "") {
                 model.beginSave(.workspace)
             }
             ActionRow(title: "Save as layout…", systemImage: "square.grid.2x2", key: "") { model.beginSave(.layout) }
@@ -1040,12 +1040,13 @@ private final class GridMenuItem: NSMenuItem {
 
 /// Every shortcut in one place: those that work anywhere, and those inside the grid.
 struct ShortcutSheet: View {
-    private let anywhere = [("⌃⌥Space", "Show or hide the grid"), ("⌃⌥N", "Quick add a tile"), ("⌃⌥R", "Realign windows"),
+    private let anywhere = [("⌃⌥Space", "Show or hide the grid"), ("⌃⌥N", "Quick add a tile"), ("⌃⌥R", "Realign windows"), ("⌃⌥T", "Tile all windows"), ("⌃⌥G", "Next layout"),
                             ("⌃⌥W", "Workspaces"), ("⌃⌥1–9", "Switch workspace"), ("⌃⌥S", "Save the workspace"),
                             ("⌃⌥⇧S", "Save a new workspace"), ("⌃⌥Return", "Enlarge a window"), ("⌃⌥ right-click", "Another window of that app")]
     private let grid = [("Arrows", "Select a pane"), ("⌥ Arrows", "Split"), ("⌥⇧ Arrows", "Merge"), ("⇧ Arrows", "Move"), ("1–9", "Choose a pane’s app"),
-                        ("⌘K", "Add a pane"), ("⌘T", "Tile all"), ("⌘W", "Workspaces"), ("⌘R", "Realign"), ("G", "Grid size"),
-                        ("⌘S / ⌘O", "Save / open"), ("⌘Z", "Undo"), ("↵", "Apply"), ("Esc", "Close")]
+                        ("G", "Layouts"), ("K", "Add a pane"), ("T", "Tile all"), ("W", "Workspaces"), ("R", "Realign"),
+                        ("S / ⇧S", "Save / save new"), ("O", "Saved layouts"), ("Space", "Choose an app"), ("⌘Z", "Undo"),
+                        ("↵", "Apply"), ("Esc", "Close")]
 
     var body: some View {
         HStack(alignment: .top, spacing: Space.xl) {
@@ -1242,11 +1243,11 @@ struct WorkspacesPanel: View {
                 Text("1–9 or ↵ open  ·  ⌘← ⌘→ reorder  ·  Esc close").font(.system(size: 12)).foregroundStyle(.secondary)
                 Spacer()
                 if let shown = model.shownWorkspace {
-                    Button { model.saveWorkspace() } label: { HStack(spacing: Space.sm) { Text("Save “\(shown.name)”"); keycap("⌘S") } }
+                    Button { model.saveWorkspace() } label: { HStack(spacing: Space.sm) { Text("Save “\(shown.name)”"); keycap("S") } }
                         .buttonStyle(GridButtonStyle())
                 }
                 Button { model.beginSave(.workspace) } label: {
-                    HStack(spacing: Space.sm) { Label("New workspace", systemImage: "plus"); keycap(model.shownWorkspace == nil ? "⌘S" : "⌘⇧S") }
+                    HStack(spacing: Space.sm) { Label("New workspace", systemImage: "plus"); keycap(model.shownWorkspace == nil ? "S" : "⇧S") }
                 }
                 .buttonStyle(GridButtonStyle(primary: workspaces.isEmpty))
             }

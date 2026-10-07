@@ -220,7 +220,10 @@ MainActor.assumeIsolated {
     assert(key(123) && model.selectedCell == 0)
     model.apps = [GridAppChoice(app: safari, url: URL(fileURLWithPath: "/Applications/Safari.app")),
                   GridAppChoice(app: finder, url: URL(fileURLWithPath: "/System/Library/CoreServices/Finder.app"))]
-    assert(key(3, "f") && model.choosingApp && model.search == "f")
+    let beforeLetters = model.grid
+    assert(key(3, "f") && !model.choosingApp && model.grid == beforeLetters, "Typing a letter doesn't start an app search")
+    assert(key(49, " ") && model.choosingApp, "Space chooses an app")
+    assert(key(3, "f") && model.search == "f")
     assert(key(34, "i") && model.search == "fi", "Fast typing survives search focus transfer")
     model.search = ""
     assert(key(125, editing: true) && model.selectedAppChoice?.app == finder)
@@ -428,6 +431,17 @@ MainActor.assumeIsolated {
     _ = model.handleKey(key("?", 44, .shift), editingText: false)
     _ = model.handleKey(key("t", 17, .command), editingText: false)
     assert(!model.showingShortcuts, "Any other key closes it and still runs")
+    // Plain letters run the grid's commands, the same as with ⌘.
+    model.undo()
+    let untiled = model.grid
+    assert(model.handleKey(key("t", 17), editingText: false) && model.grid != untiled && model.grid.isValid, "T tiles all")
+    model.undo()
+    assert(model.handleKey(key("k", 40), editingText: false) && model.choosingApp, "K adds a pane")
+    model.closeLayers(); model.undo()
+    assert(model.handleKey(key("g", 5), editingText: false) && model.resizing, "G opens Layouts")
+    assert(model.handleKey(key("w", 13), editingText: false) && model.showingWorkspaces && !model.resizing, "W from Layouts opens Workspaces")
+    assert(model.handleKey(key("w", 13), editingText: false) && !model.showingWorkspaces, "W again closes it")
+    assert(model.handleKey(key("x", 7), editingText: false) && !model.choosingApp && !model.hasActiveLayer, "Other letters do nothing")
     model.grid = live
     model.removePane(0)
     assert(model.grid.slots.count == 5 && model.grid.windowsToClose == [panes[0].0.binding!])

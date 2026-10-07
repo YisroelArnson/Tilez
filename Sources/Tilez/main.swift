@@ -30,6 +30,9 @@ final class ActionItem: NSMenuItem {
     private var workspaceHotkeys: [GridHotKey] = []
     private var numberHotkeys: [GridHotKey] = []
     private var screenMemory: ScreenMemoryController!
+    private var screenLayout: ScreenLayout!
+    private var tileHotkey: GridHotKey!
+    private var layoutHotkey: GridHotKey!
     private let updateReminder = UpdateReminder()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -53,6 +56,9 @@ final class ActionItem: NSMenuItem {
         quickAdd = QuickAddController(manager: manager)
         quickAddHotkey = GridHotKey(keyCode: kVK_ANSI_N, id: 3) { [weak self] in self?.showQuickAdd() }
         realignHotkey = GridHotKey(keyCode: kVK_ANSI_R, id: 4) { [weak self] in self?.realign() }
+        screenLayout = ScreenLayout(manager: manager)
+        tileHotkey = GridHotKey(keyCode: kVK_ANSI_T, id: 8) { [weak self] in self?.arrangeScreen(tiling: true) }
+        layoutHotkey = GridHotKey(keyCode: kVK_ANSI_G, id: 9) { [weak self] in self?.arrangeScreen(tiling: false) }
         workspaces = WorkspaceStore(manager: manager)
         overlay.model.workspaces = workspaces
         quickAdd.workspaces = workspaces
@@ -127,6 +133,9 @@ final class ActionItem: NSMenuItem {
         } else if !realignHotkey.registered {
             overlay.model.message = "⌃⌥R is already in use, so windows can’t be realigned with it."
             overlay.model.isError = true
+        } else if !tileHotkey.registered || !layoutHotkey.registered {
+            overlay.model.message = "\(tileHotkey.registered ? "⌃⌥G" : "⌃⌥T") is already in use. Open the grid and press \(tileHotkey.registered ? "G" : "T") instead."
+            overlay.model.isError = true
         } else if let taken = zip(["⌃⌥W", "⌃⌥S", "⌃⌥⇧S"] + (1...9).map { "⌃⌥\($0)" }, workspaceHotkeys + numberHotkeys)
                     .first(where: { !$0.1.registered })?.0 {
             overlay.model.message = "\(taken) is already in use. Open and save workspaces from the grid’s Save menu."
@@ -197,6 +206,17 @@ final class ActionItem: NSMenuItem {
     private func showWorkspaceGallery() {
         if overlay.isShown { overlay.model.toggleWorkspaces(); return }
         showGrid { [weak self] in self?.overlay.model.beginWorkspaces() }
+    }
+    /// ⌃⌥T tiles the screen's windows evenly and ⌃⌥G moves them into the next layout that fits,
+    /// without opening the grid. With the grid open they act on its draft.
+    private func arrangeScreen(tiling: Bool) {
+        if overlay.isShown { if tiling { overlay.model.tileAll() } else { overlay.model.cycleLayout() }; return }
+        quickAdd.close()
+        guard let target = overlay.targetScreen(nil), let display = Display.all.first(where: { $0.screen == target }) else { return }
+        Task {
+            if zoom.hasEnlarged(on: display) { await zoom.restore(on: display) }
+            if tiling { await screenLayout.tile(on: display) } else { await screenLayout.nextLayout(on: display) }
+        }
     }
     @objc private func toggleGrid() { showGrid(on: statusItem.button?.window?.screen) }
     /// That screen's enlarged window returns to its pane first so the grid captures the real layout.

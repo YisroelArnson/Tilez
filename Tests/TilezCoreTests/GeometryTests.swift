@@ -421,6 +421,20 @@ func checkGathering() {
     expectEqual(LayoutPreset.variations(for: 1, aspect: wide).map(\.id), ["full"])
     expectEqual(LayoutPreset.variations(for: 0, aspect: wide), LayoutPreset.all)
     expectEqual(LayoutPreset.rowsOf(7, rows: 3), [3, 2, 2])
+    // ⌃⌥G: from a layout to the next, wrapping; from no layout to the first.
+    let fiveWindows = DesktopGrid(panes: (0..<5).map(pane), frames: (0..<5).map { CGRect(x: CGFloat($0) * 0.1, y: 0, width: 0.3, height: 0.4) })
+    let choices = LayoutPreset.variations(for: 5, aspect: wide)
+    var cycled = fiveWindows
+    var seen: [String] = []
+    for _ in 0..<(choices.count + 1) {
+        let step = LayoutPreset.next(after: cycled, aspect: wide)!
+        seen.append(step.preset.id)
+        expectEqual(step.total, choices.count)
+        cycled = cycled.arranged(in: step.preset, gap: CGSize(width: 0.006, height: 0.009))
+        expect(cycled.matches(step.preset) && cycled.filledCount == 5, "Each step lands in its layout with every window")
+    }
+    expectEqual(Array(seen.prefix(choices.count)), choices.map(\.id))
+    expectEqual(seen.last, choices.first?.id)
     print("PASS: even tiling across screen shapes, reading order, layout presets and variations for any window count, and screen memory that survives a disconnect")
 }
 

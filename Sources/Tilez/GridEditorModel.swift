@@ -369,6 +369,16 @@ struct GridAppChoice: Identifiable, Sendable {
         if left > 0 { message = "Tiled \(DesktopGrid.maxTiled) windows, the most a grid holds. \(left) more stay where they are."; isError = false }
         else if grid == before { message = "These windows are already tiled evenly."; isError = false }
     }
+    /// ⌃⌥G with the grid open: the draft moves into the next layout that fits its windows.
+    func cycleLayout() {
+        guard !busy, let display else { return }
+        closeLayers()
+        guard let next = LayoutPreset.next(after: grid, aspect: display.bounds.width / max(1, display.bounds.height)) else { NSSound.beep(); return }
+        let gap = CGSize(width: 10 / max(1, display.bounds.width), height: 10 / max(1, display.bounds.height))
+        edit { $0 = $0.arranged(in: next.preset, gap: gap) }
+        selectedCell = 0
+        message = "\(next.preset.name) · \(next.position) of \(next.total)"; isError = false
+    }
     /// Adds another screen's windows to this grid, tiled evenly with this screen's.
     func bring(from screenID: String) {
         guard let screen = otherScreens.first(where: { $0.id == screenID }) else { return }

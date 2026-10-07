@@ -108,6 +108,7 @@ enum GridDirection {
             guard modifiers.isEmpty else { return false }
             if event.keyCode == 36 || event.keyCode == 76 { confirmResize(); return true }
             if event.characters?.lowercased() == "g" { closeLayers(); return true }
+            if event.characters?.lowercased() == "w" { beginWorkspaces(); return true }
             if let text = event.characters, let number = Int(text), (1...9).contains(number) { choosePreset(number - 1); return true }
             return true
         }
@@ -123,6 +124,11 @@ enum GridDirection {
                 }
                 if let text = event.characters, let number = Int(text), (1...9).contains(number) { openWorkspace(number: number); return true }
                 if event.characters?.lowercased() == "g" { beginResize(); return true }
+                if event.characters?.lowercased() == "w" { closeLayers(); return true }
+                if event.charactersIgnoringModifiers?.lowercased() == "s" {
+                    if modifiers == .shift { beginSave(.workspace) } else { saveWorkspace() }
+                    return true
+                }
                 // Typing doesn't start an app search behind the gallery.
                 return true
             }
@@ -169,16 +175,26 @@ enum GridDirection {
             case 49: choose(selectedCell ?? 0); return true
             default: break
             }
-            if event.characters?.lowercased() == "g" { beginResize(); return true }
             if let text = event.characters, let number = Int(text), (1...9).contains(number),
                grid.slots.indices.contains(number - 1) { choose(number - 1); return true }
         }
-        if let text = event.characters, isSearchText(text) {
-            choose(selectedCell ?? 0)
-            search = text
-            return true
+        // Plain letters run the grid's commands, as the dock's keycaps show; ⌘ with them still
+        // works. Space, a pane's number, or a double-click chooses an app.
+        switch (event.charactersIgnoringModifiers?.lowercased(), modifiers) {
+        case ("g", []): beginResize()
+        case ("k", []): addApp()
+        case ("t", []): tileAll()
+        case ("w", []): toggleWorkspaces()
+        case ("r", []): realign()
+        case ("s", []): saveWorkspace()
+        case ("s", .shift): beginSave(.workspace)
+        case ("o", []): beginSaved()
+        case ("n", []): newGrid()
+        default:
+            // Other typing does nothing rather than beep.
+            return event.characters.map(isSearchText) ?? false
         }
-        return false
+        return true
     }
 
     private func isSearchText(_ text: String) -> Bool {
