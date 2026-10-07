@@ -179,17 +179,11 @@ struct DesktopGridView: View {
             BarSeparator().padding(.horizontal, Space.xs)
             saveButton(labels: labels)
             if model.busy {
-                Button("Stop", action: model.cancel).buttonStyle(GridButtonStyle(height: Metrics.dockControl))
+                dockButton("Stop", systemImage: "stop.circle", key: "Esc", labels: labels, enabled: true, action: model.cancel)
             } else {
-                Button(action: model.openGrid) {
-                    HStack(spacing: Space.sm) {
-                        Text("Apply")
-                        keycap("↵").colorScheme(.dark)
-                    }
-                }
-                .buttonStyle(GridButtonStyle(primary: true, height: Metrics.dockControl))
-                .disabled((model.grid.filledCount == 0 && model.originalGrid.filledCount == 0) || model.desktop == nil)
-                .padding(.leading, Space.xs)
+                dockButton("Apply", systemImage: "checkmark", key: "↵", labels: labels,
+                           enabled: !(model.grid.filledCount == 0 && model.originalGrid.filledCount == 0) && model.desktop != nil,
+                           action: model.openGrid)
             }
             moreButton
         }
@@ -198,7 +192,8 @@ struct DesktopGridView: View {
         .fixedSize()
     }
 
-    private func dockButton(_ title: String, systemImage: String, key: String, labels: Bool, action: @escaping () -> Void) -> some View {
+    private func dockButton(_ title: String, systemImage: String, key: String, labels: Bool, enabled: Bool? = nil,
+                            action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: Space.sm) {
                 Image(systemName: systemImage)
@@ -207,7 +202,7 @@ struct DesktopGridView: View {
             }
         }
         .buttonStyle(QuietButtonStyle(leading: Space.sm + Space.xxs, trailing: Space.sm, height: Metrics.dockControl))
-        .help("\(title) (\(key))").disabled(model.busy)
+        .help("\(title) (\(key))").disabled(!(enabled ?? !model.busy))
         .accessibilityLabel(title)
     }
 
