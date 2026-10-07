@@ -27,7 +27,7 @@ Press **Control–Option–Space** or click the grid icon in the menu bar. The p
 - **K** uses an empty pane or splits the selected pane to make room. **⌘C / ⌘V** copies an app assignment into an empty cell, without sharing its live window binding.
 - **⌘Z** undoes a grid edit, and **N** starts a new empty grid. The bar's **…** menu lists the grid's actions with their shortcuts, plus Undo last window arrangement, Keyboard Shortcuts, Check for Updates, and Quit.
 - **O** opens a popup above the dock's **Workspaces** button for saving and for your workspaces and saved layouts. At the top: save the workspace this screen is showing, save a new workspace, or **Save as layout…**, which keeps the grid's apps as a reusable layout of app choices, not windows or a fixed screen or desktop. Below: your workspaces and layouts, each drawn as its arrangement. Type to filter, use ↑/↓, then Return; a search field appears once the list is long. A workspace brings back its windows; a layout loads a draft of apps on any desktop. **S** saves the shown workspace directly, or names a new one when the screen shows none (see Workspaces below); **⇧S** saves a new workspace.
-- **?** shows every shortcut in one sheet; any key closes it.
+- **?** shows every shortcut in one sheet, with or without Shift; any key closes it.
 - **Escape** closes the app picker first, then the overlay. Clicking on another screen also closes it. While opening windows it stops the request; windows already created stay available.
 
 ### Workspaces
