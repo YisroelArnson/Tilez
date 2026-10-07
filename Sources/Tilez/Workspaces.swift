@@ -63,7 +63,13 @@ enum WorkspaceError: LocalizedError {
 
     func move(_ id: UUID, by delta: Int) {
         guard let index = workspaces.firstIndex(where: { $0.id == id }) else { return }
-        let target = max(0, min(workspaces.count - 1, index + delta))
+        move(id, to: index + delta)
+    }
+
+    /// Moves a workspace to a position in the list, which is its ⌃⌥ number less one.
+    func move(_ id: UUID, to position: Int) {
+        guard let index = workspaces.firstIndex(where: { $0.id == id }) else { return }
+        let target = max(0, min(workspaces.count - 1, position))
         guard target != index else { return }
         workspaces.insert(workspaces.remove(at: index), at: target)
         persist()

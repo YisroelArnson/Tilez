@@ -112,6 +112,9 @@ struct DesktopGridView: View {
                 // G shows the Layouts panel in the panes' place.
                 Group {
                     if model.resizing { LayoutsPanel(model: model, size: CGSize(width: width, height: gridHeight)) }
+                    else if model.showingWorkspaces, let store = model.workspaces {
+                        WorkspacesPanel(model: model, store: store, size: CGSize(width: width, height: gridHeight))
+                    }
                     else { gridCanvas(width: width, height: gridHeight) }
                 }
                 .frame(width: width, height: gridHeight)
@@ -162,10 +165,6 @@ struct DesktopGridView: View {
 
     private func dockBar(labels: Bool) -> some View {
         HStack(spacing: Space.xs) {
-            if let store = model.workspaces {
-                // Above the rest of the dock, so the fanned-out cards draw over it.
-                WorkspaceStack(store: store, model: model, captionAbove: true).zIndex(1)
-            }
             Button { if model.resizing { model.closeLayers() } else { model.beginResize() } } label: {
                 HStack(spacing: Space.sm) {
                     GridLayoutPreview(grid: model.grid, selectedCell: model.selectedCell)
@@ -613,7 +612,7 @@ struct DesktopGridView: View {
 
     /// Saving, workspaces, and layouts share one button and one popup, which opens upward.
     private func saveButton(labels: Bool) -> some View {
-        Button(action: model.beginSaved) {
+        Button(action: model.toggleWorkspaces) {
             HStack(spacing: Space.sm) {
                 Image(systemName: "rectangle.3.group")
                     .overlay(alignment: .topTrailing) {
@@ -622,10 +621,10 @@ struct DesktopGridView: View {
                         }
                     }
                 if labels { Text("Workspaces") }
-                keycap("⌘S")
+                keycap("⌘W")
             }
         }
-        .buttonStyle(QuietButtonStyle(selected: model.showingSaved || model.saving, leading: Space.sm + Space.xxs, trailing: Space.sm,
+        .buttonStyle(QuietButtonStyle(selected: model.showingWorkspaces || model.showingSaved || model.saving, leading: Space.sm + Space.xxs, trailing: Space.sm,
                                       height: Metrics.dockControl))
         .help(model.shownWorkspace.map { "Workspace “\($0.name)”\(model.workspaceModified ? ", edited" : "") · Save, workspaces, and layouts (⌘S, ⌘O)" }
               ?? "Save, workspaces, and layouts (⌘S, ⌘O)")
@@ -893,125 +892,6 @@ private struct PaneResize: Equatable {
 
 /// The first nine workspaces, numbered for ⌃⌥1–9. Click one to open it; the one this screen
 /// shows is outlined. Right-click to rename, reorder, or delete.
-/// The first nine workspaces as a stack of overlapping thumbnails at the start of the bar.
-/// Hovering fans them out on a tray over the bar, with the pointed-at one's number and name
-/// below it; the bar itself never changes width, so nothing moves under the pointer.
-struct WorkspaceStack: View {
-    @ObservedObject var store: WorkspaceStore
-    @ObservedObject var model: GridEditorModel
-    @Environment(\.gridPointer) private var pointer
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    /// In the dock the caption sits above the stack rather than below it.
-    var captionAbove = false
-    @State private var expanded: Bool
-    @State private var hovered: Int?
-    static let card = CGSize(width: 40, height: Metrics.control - Space.xs * 2)
-    /// How much of each card behind the front one shows while stacked.
-    static let peek: CGFloat = 7
-    static let peeking = 4
-    static let captionHeight: CGFloat = 24
-
-    init(store: WorkspaceStore, model: GridEditorModel, captionAbove: Bool = false, expanded: Bool = false, hovered: Int? = nil) {
-        self.store = store; self.model = model; self.captionAbove = captionAbove
-        _expanded = State(initialValue: expanded); _hovered = State(initialValue: hovered)
-    }
-
-    var body: some View {
-        let shown = Array(store.workspaces.prefix(9))
-        if !shown.isEmpty {
-            let stacked = Self.card.width + Self.peek * CGFloat(min(shown.count, Self.peeking) - 1)
-            let fanned = CGFloat(shown.count) * Self.card.width + CGFloat(shown.count - 1) * Space.xs
-            HStack(spacing: Space.xs) {
-                ZStack(alignment: .topLeading) {
-                    // The tray the cards fan out onto, inset like a control.
-                    RoundedRectangle(cornerRadius: Metrics.controlRadius)
-                        .fill(Color.white.opacity(0.9))
-                        .shadow(color: .black.opacity(0.18), radius: 12, y: 4)
-                        .frame(width: fanned + Space.xs * 2, height: Metrics.control)
-                        .opacity(expanded ? 1 : 0)
-                    ForEach(Array(shown.enumerated()), id: \.element.id) { index, workspace in
-                        card(workspace, number: index + 1)
-                            .offset(x: Space.xs + (expanded ? CGFloat(index) * (Self.card.width + Space.xs)
-                                                            : CGFloat(min(index, Self.peeking - 1)) * Self.peek),
-                                    y: Space.xs)
-                            .opacity(expanded || index < Self.peeking ? 1 : 0)
-                            .zIndex(Double(shown.count - index))
-                    }
-                    if expanded, let hovered, shown.indices.contains(hovered) {
-                        caption(shown[hovered], number: hovered + 1)
-                            .offset(x: CGFloat(hovered) * (Self.card.width + Space.xs),
-                                    y: captionAbove ? -(Self.captionHeight + Space.sm) : Metrics.control + Space.sm)
-                            .zIndex(Double(shown.count + 1))
-                    }
-                }
-                .frame(width: stacked + Space.xs * 2, height: Metrics.control, alignment: .topLeading)
-                .background {
-                    GeometryReader { proxy in
-                        let frame = proxy.frame(in: .named(gridRootSpace))
-                        Color.clear.onChange(of: pointer) { _, point in track(point, frame: frame, fanned: fanned, count: shown.count) }
-                    }
-                }
-                .animation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0), value: expanded)
-                .accessibilityElement(children: .contain)
-                .accessibilityLabel("Workspaces")
-                BarSeparator().padding(.horizontal, Space.xs)
-            }
-            .disabled(model.busy)
-        }
-    }
-
-    /// Fanned out while the pointer is over the stack, or over the tray once it's open.
-    private func track(_ point: CGPoint?, frame: CGRect, fanned: CGFloat, count: Int) {
-        let tray = CGRect(x: frame.minX, y: frame.minY - Space.sm, width: fanned + Space.xs * 2 + Space.sm,
-                          height: frame.height + Space.sm * 2)
-        let inside = point.map { (expanded ? tray : frame).contains($0) } ?? false
-        if inside != expanded { expanded = inside }
-        hovered = inside ? point.map { Int(($0.x - frame.minX - Space.xs) / (Self.card.width + Space.xs)) }
-            .flatMap { (0..<count).contains($0) ? $0 : nil } : nil
-    }
-
-    private func card(_ workspace: Workspace, number: Int) -> some View {
-        let here = model.shownWorkspace?.id == workspace.id
-        return Button { model.openWorkspace(workspace) } label: {
-            WorkspaceThumbnail(workspace: workspace, height: Self.card.height, maxWidth: Self.card.width,
-                               cornerRadius: Metrics.insetRadius, opaque: true)
-                .frame(width: Self.card.width, height: Self.card.height)
-                .overlay {
-                    // A ring marks the workspace this screen shows; a hairline separates the others.
-                    RoundedRectangle(cornerRadius: Metrics.insetRadius)
-                        .strokeBorder(here ? gridAccent : Color.black.opacity(0.12), lineWidth: here ? 1.5 : 1)
-                }
-                .shadow(color: .black.opacity(expanded ? 0 : 0.12), radius: 2, x: -1)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help("\(workspace.name) · ⌃⌥\(number)")
-        .accessibilityLabel("\(workspace.name), workspace \(number)\(here ? ", on this screen" : "")")
-        .contextMenu {
-            Button("Open (⌃⌥\(number))") { model.openWorkspace(workspace) }
-            Button("Rename…") { model.renameWorkspace(workspace) }
-            Button("Move Left") { store.move(workspace.id, by: -1) }.disabled(number == 1)
-            Button("Move Right") { store.move(workspace.id, by: 1) }.disabled(number == store.workspaces.count)
-            Divider()
-            Button("Delete", role: .destructive) { model.deleteSaved(workspace.id) }
-        }
-    }
-
-    private func caption(_ workspace: Workspace, number: Int) -> some View {
-        HStack(spacing: Space.sm) {
-            Text("\(number)").monospacedDigit().foregroundStyle(.secondary)
-            Text(workspace.name).lineLimit(1)
-            Text("⌃⌥\(number)").font(.system(size: 11)).foregroundStyle(.secondary)
-        }
-        .font(.system(size: 12, weight: .medium))
-        .padding(.horizontal, Space.sm).frame(height: Self.captionHeight)
-        .background(Color.white.opacity(0.95), in: RoundedRectangle(cornerRadius: Metrics.rowRadius))
-        .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
-        .fixedSize()
-        .allowsHitTesting(false)
-    }
-}
-
 /// A search field the height of a control, with a clear button once there's text.
 struct SearchBox: View {
     let placeholder: String
@@ -1173,10 +1053,10 @@ private final class GridMenuItem: NSMenuItem {
 /// Every shortcut in one place: those that work anywhere, and those inside the grid.
 struct ShortcutSheet: View {
     private let anywhere = [("⌃⌥Space", "Show or hide the grid"), ("⌃⌥N", "Quick add a tile"), ("⌃⌥R", "Realign windows"),
-                            ("⌃⌥W", "Open a workspace"), ("⌃⌥1–9", "Switch workspace"), ("⌃⌥S", "Save the workspace"),
+                            ("⌃⌥W", "Workspaces"), ("⌃⌥1–9", "Switch workspace"), ("⌃⌥S", "Save the workspace"),
                             ("⌃⌥⇧S", "Save a new workspace"), ("⌃⌥Return", "Enlarge a window")]
     private let grid = [("Arrows", "Select a pane"), ("⌥ Arrows", "Split"), ("⌥⇧ Arrows", "Merge"), ("⇧ Arrows", "Move"),
-                        ("⌘K", "Add a pane"), ("⌘T", "Tile all"), ("⌘R", "Realign"), ("G", "Grid size"),
+                        ("⌘K", "Add a pane"), ("⌘T", "Tile all"), ("⌘W", "Workspaces"), ("⌘R", "Realign"), ("G", "Grid size"),
                         ("⌘S / ⌘O", "Save / open"), ("⌘Z", "Undo"), ("↵", "Apply"), ("Esc", "Close")]
 
     var body: some View {
@@ -1317,6 +1197,7 @@ struct LayoutsPanel: View {
             .overlay(RoundedRectangle(cornerRadius: Metrics.controlRadius + Space.xs + Space.sm)
                 .strokeBorder(highlighted ? gridAccent : Color.clear, lineWidth: 2))
             .contentShape(Rectangle())
+            .background(HoverReporter { model.highlightedLayout = index })
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title)
@@ -1330,5 +1211,169 @@ private extension DesktopGrid {
         let gap = CGSize(width: 4 / max(1, size.width), height: 4 / max(1, size.height))
         return DesktopGrid(panes: preset.frames.map { _ in GridSlot() }, frames: preset.frames).arranged(in: preset, gap: gap)
             .frames(in: CGRect(origin: .zero, size: size))
+    }
+}
+
+/// Reports the pointer entering, from the overlay's polled pointer: SwiftUI's own hover never
+/// reaches this panel.
+private struct HoverReporter: View {
+    let entered: () -> Void
+    var body: some View {
+        PointerHover { hovered in
+            Color.clear.onChange(of: hovered) { _, inside in if inside { entered() } }
+        }
+    }
+}
+
+/// ⌘W, or ⌃⌥W anywhere: every workspace as a large preview in the panes' place. Click, 1–9, or
+/// Return opens one; ⌘← and ⌘→ reorder, which renumbers their ⌃⌥ shortcuts. The highlighted
+/// card shows rename, move, and delete.
+struct WorkspacesPanel: View {
+    @ObservedObject var model: GridEditorModel
+    @ObservedObject var store: WorkspaceStore
+    let size: CGSize
+    @FocusState private var nameFocused: Bool
+    private static let header: CGFloat = 32
+    private static let labelHeight: CGFloat = 40
+
+    var body: some View {
+        let workspaces = store.workspaces
+        let columns = GridEditorModel.workspaceColumns(workspaces.count)
+        let rows = max(1, Int((Double(workspaces.count) / Double(columns)).rounded(.up)))
+        let cardWidth = (size.width - Space.xl * 2 - Space.lg * CGFloat(columns - 1)) / CGFloat(columns)
+        let roomPerRow = (size.height - Space.xl * 2 - Self.header - Space.lg - Space.lg * CGFloat(rows - 1)) / CGFloat(rows)
+        let chrome = CGSize(width: (Space.md + Space.sm) * 2, height: (Space.md + Space.sm) * 2 + Space.sm + Self.labelHeight)
+        let aspect = size.width / max(1, size.height)
+        // Previews as large as the space allows, keeping the screen's shape; scrolls past what fits.
+        let width = min(720, cardWidth - chrome.width, max(120, roomPerRow - chrome.height) * aspect)
+        let preview = CGSize(width: width, height: width / aspect)
+        VStack(alignment: .leading, spacing: Space.lg) {
+            HStack(spacing: Space.sm) {
+                Text("Workspaces").font(.system(size: 20, weight: .semibold))
+                Text("1–9 or ↵ open  ·  ⌘← ⌘→ reorder  ·  Esc close").font(.system(size: 12)).foregroundStyle(.secondary)
+                Spacer()
+                if let shown = model.shownWorkspace {
+                    Button { model.saveWorkspace() } label: { HStack(spacing: Space.sm) { Text("Save “\(shown.name)”"); keycap("⌘S") } }
+                        .buttonStyle(GridButtonStyle())
+                }
+                Button { model.beginSave(.workspace) } label: {
+                    HStack(spacing: Space.sm) { Label("New workspace", systemImage: "plus"); keycap(model.shownWorkspace == nil ? "⌘S" : "⌘⇧S") }
+                }
+                .buttonStyle(GridButtonStyle(primary: workspaces.isEmpty))
+            }
+            .frame(height: Self.header)
+            if workspaces.isEmpty {
+                VStack(spacing: Space.sm) {
+                    Image(systemName: "rectangle.3.group").font(.system(size: 36, weight: .light)).foregroundStyle(.secondary)
+                    Text("No workspaces yet").font(.system(size: 15, weight: .semibold))
+                    Text("A workspace keeps the windows on this screen in their places, so you can bring them back later.")
+                        .font(.system(size: 13)).foregroundStyle(.secondary).multilineTextAlignment(.center).frame(maxWidth: 360)
+                }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVGrid(columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: Space.lg), count: columns), spacing: Space.lg) {
+                        ForEach(Array(workspaces.enumerated()), id: \.element.id) { index, workspace in
+                            card(workspace, index: index, preview: preview)
+                        }
+                    }
+                }
+                .scrollIndicators(.never)
+            }
+        }
+        .padding(Space.xl)
+        .frame(width: size.width, height: size.height, alignment: .top)
+        .glassSurface(RoundedRectangle(cornerRadius: Metrics.paneRadius + Space.sm))
+        .preferredColorScheme(.light)
+        .onChange(of: model.renamingWorkspace) { _, id in nameFocused = id != nil }
+    }
+
+    private func card(_ workspace: Workspace, index: Int, preview: CGSize) -> some View {
+        let highlighted = model.highlightedWorkspace == index
+        let here = model.shownWorkspace?.id == workspace.id
+        let renaming = model.renamingWorkspace == workspace.id
+        let outer = Metrics.controlRadius + Space.xs + Space.sm
+        return VStack(alignment: .leading, spacing: Space.sm) {
+            Button { model.openWorkspace(workspace) } label: {
+                WorkspaceThumbnail(workspace: workspace, height: preview.height, maxWidth: preview.width,
+                                   cornerRadius: Metrics.controlRadius, iconSize: 40)
+                    .frame(width: preview.width, height: preview.height)
+                    .padding(Space.md)
+                    .frame(maxWidth: .infinity)
+                    .background(Color.black.opacity(0.06), in: RoundedRectangle(cornerRadius: Metrics.controlRadius + Space.md))
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("Open “\(workspace.name)”")
+            HStack(spacing: Space.sm) {
+                if index < 9 {
+                    Text("\(index + 1)").font(.system(size: 11, weight: .semibold, design: .rounded)).monospacedDigit()
+                        .frame(width: 18, height: 18)
+                        .background(Color.black.opacity(highlighted ? 0.85 : 0.08), in: RoundedRectangle(cornerRadius: Space.xs))
+                        .foregroundStyle(highlighted ? Color.white : Color.primary)
+                        .help("⌃⌥\(index + 1)")
+                }
+                VStack(alignment: .leading, spacing: 0) {
+                    if renaming {
+                        TextField("Name", text: $model.workspaceName)
+                            .textFieldStyle(.plain).font(.system(size: 14, weight: .medium))
+                            .focused($nameFocused).onSubmit { model.commitWorkspaceName() }
+                    } else {
+                        Text(workspace.name).font(.system(size: 14, weight: .medium)).lineLimit(1)
+                            .onTapGesture(count: 2) { model.renameWorkspace(workspace) }
+                    }
+                    Text("\(workspace.windowCount) window\(workspace.windowCount == 1 ? "" : "s")"
+                         + (workspace.screens.count > 1 ? " · \(workspace.screens.count) screens" : "") + (here ? " · On this screen" : ""))
+                        .font(.system(size: 11)).foregroundStyle(.secondary).lineLimit(1)
+                }
+                Spacer(minLength: Space.sm)
+                if highlighted && !renaming {
+                    HStack(spacing: Space.xxs) {
+                        iconButton("pencil", help: "Rename") { model.renameWorkspace(workspace) }
+                        iconButton("chevron.left", help: "Move earlier (⌘←)") { model.moveWorkspace(workspace, to: index - 1) }
+                            .disabled(index == 0)
+                        iconButton("chevron.right", help: "Move later (⌘→)") { model.moveWorkspace(workspace, to: index + 1) }
+                            .disabled(index == store.workspaces.count - 1)
+                        iconButton("trash", help: "Delete workspace") { model.deleteSaved(workspace.id) }
+                    }
+                } else if renaming {
+                    Button("Done") { model.commitWorkspaceName() }.buttonStyle(GridButtonStyle(primary: true))
+                }
+            }
+            .padding(.horizontal, Space.xs).frame(height: Self.labelHeight)
+        }
+        .padding(Space.sm)
+        .background(Color.white.opacity(highlighted ? 0.75 : 0.35), in: RoundedRectangle(cornerRadius: outer))
+        .overlay(RoundedRectangle(cornerRadius: outer).strokeBorder(highlighted ? gridAccent : Color.clear, lineWidth: 2))
+        .background(HoverReporter { if model.renamingWorkspace == nil { model.highlightedWorkspace = index } })
+        .contextMenu {
+            Button("Open") { model.openWorkspace(workspace) }
+            Button("Rename…") { model.renameWorkspace(workspace) }
+            Menu("Move to position") {
+                ForEach(store.workspaces.indices, id: \.self) { position in
+                    Button(position < 9 ? "\(position + 1)  ·  ⌃⌥\(position + 1)" : "\(position + 1)") { model.moveWorkspace(workspace, to: position) }
+                        .disabled(position == index)
+                }
+            }
+            Divider()
+            Button("Delete", role: .destructive) { model.deleteSaved(workspace.id) }
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(workspace.name), workspace \(index + 1)\(here ? ", on this screen" : "")")
+    }
+
+    private func iconButton(_ symbol: String, help: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: symbol).font(.system(size: 12, weight: .medium))
+                .frame(width: 28, height: 28).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).foregroundStyle(.secondary)
+        .help(help).accessibilityLabel(help)
+    }
+
+    private func keycap(_ text: String) -> some View {
+        Text(text).font(.system(size: 12, weight: .medium, design: .rounded))
+            .padding(.horizontal, Space.xs + Space.xxs).padding(.vertical, Space.xxs)
+            .background(.primary.opacity(0.08), in: RoundedRectangle(cornerRadius: Space.xs))
     }
 }

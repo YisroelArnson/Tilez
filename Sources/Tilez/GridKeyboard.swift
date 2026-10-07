@@ -99,8 +99,8 @@ enum GridDirection {
             return false
         }
         if saving || editingText { return false }
-        if resizing {
-            guard modifiers.isEmpty || modifiers == .shift else { return false }
+        // Command shortcuts fall through the panels to the grid's own, so ⌘W, ⌘S, and ⌘Z still work.
+        if resizing, modifiers.isEmpty || modifiers == .shift {
             if let direction = GridDirection(keyCode: event.keyCode) {
                 if modifiers == .shift { resizeDraft(direction) } else { moveLayoutHighlight(direction) }
                 return true
@@ -109,7 +109,23 @@ enum GridDirection {
             if event.keyCode == 36 || event.keyCode == 76 { confirmResize(); return true }
             if event.characters?.lowercased() == "g" { closeLayers(); return true }
             if let text = event.characters, let number = Int(text), (1...9).contains(number) { choosePreset(number - 1); return true }
-            return false
+            return true
+        }
+        if showingWorkspaces {
+            if modifiers == .command, let direction = GridDirection(keyCode: event.keyCode), direction.columnDelta != 0 {
+                moveHighlightedWorkspace(by: direction.columnDelta); return true
+            }
+            if modifiers.isEmpty || modifiers == .shift {
+                if let direction = GridDirection(keyCode: event.keyCode) { moveWorkspaceHighlight(direction); return true }
+                if event.keyCode == 36 || event.keyCode == 76 {
+                    if workspaceList.indices.contains(highlightedWorkspace) { openWorkspace(workspaceList[highlightedWorkspace]) }
+                    return true
+                }
+                if let text = event.characters, let number = Int(text), (1...9).contains(number) { openWorkspace(number: number); return true }
+                if event.characters?.lowercased() == "g" { beginResize(); return true }
+                // Typing doesn't start an app search behind the gallery.
+                return true
+            }
         }
         if let direction = GridDirection(keyCode: event.keyCode) {
             if modifiers.isEmpty { arrow(direction); return true }
@@ -134,6 +150,7 @@ enum GridDirection {
             case "n": newGrid()
             case "r": realign()
             case "t": tileAll()
+            case "w": toggleWorkspaces()
             case "s": saveWorkspace()
             case "o": beginSaved()
             case "c": copySelectedApp()

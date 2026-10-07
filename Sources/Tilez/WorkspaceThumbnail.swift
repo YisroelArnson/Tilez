@@ -11,6 +11,8 @@ struct WorkspaceThumbnail: View {
     var cornerRadius: CGFloat = 5
     /// A solid backing, for thumbnails stacked on top of each other.
     var opaque = false
+    /// The largest an app icon gets in a pane.
+    var iconSize: CGFloat = 18
 
     var body: some View {
         let aspects = workspace.screens.map { screen -> CGFloat in
@@ -42,7 +44,7 @@ struct WorkspaceThumbnail: View {
                     RoundedRectangle(cornerRadius: max(1.5, cornerRadius - 2)).fill(Color.white.opacity(0.9))
                     if let app = screen.grid.slots[index].app, pane.width > 9, pane.height > 9 {
                         Image(nsImage: AppIcons.icon(for: app)).resizable().interpolation(.high)
-                            .frame(width: min(18, pane.width - 3, pane.height - 3), height: min(18, pane.width - 3, pane.height - 3))
+                            .frame(width: min(iconSize, pane.width - 3, pane.height * 0.6), height: min(iconSize, pane.width - 3, pane.height * 0.6))
                     }
                 }
                 .frame(width: pane.width, height: pane.height)

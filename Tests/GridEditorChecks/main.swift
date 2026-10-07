@@ -494,8 +494,36 @@ MainActor.assumeIsolated {
     assert(!store.rename(store.workspaces[1].id, to: "   "), "An empty name is refused")
     assert(store.rename(store.workspaces[0].id, to: "CODING"), "A workspace can change its own name's case")
     assert(store.suggestedName == "Workspace 1")
+    store.move(store.workspaces[2].id, to: 0)
+    assert(store.workspaces.map(\.name) == ["Writing", "CODING", "Inbox"], "Move to position 1 makes it ⌃⌥1")
+    store.move(store.workspaces[0].id, to: 2)
+    assert(store.workspaces.map(\.name) == ["CODING", "Inbox", "Writing"])
+
+    // The gallery: arrows move, ⌘→ reorders with the highlight following, a number opens, renaming happens in place.
+    let gallery = GridEditorModel(manager: manager, defaults: storage)
+    gallery.workspaces = store
+    var opened: [String] = []
+    gallery.onOpenWorkspace = { opened.append($0.name) }
+    gallery.showingWorkspaces = true; gallery.highlightedWorkspace = 0
+    @MainActor func press(_ text: String, _ code: UInt16, _ flags: NSEvent.ModifierFlags = []) -> Bool {
+        gallery.handleKey(NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: flags, timestamp: 0, windowNumber: 0, context: nil,
+                                           characters: text, charactersIgnoringModifiers: text, isARepeat: false, keyCode: code)!, editingText: false)
+    }
+    assert(press("", 124) && gallery.highlightedWorkspace == 1, "→ highlights the next workspace")
+    assert(press("", 124, .command) && store.workspaces.map(\.name) == ["CODING", "Writing", "Inbox"] && gallery.highlightedWorkspace == 2,
+           "⌘→ moves it later and the highlight follows")
+    assert(press("x", 7) && gallery.showingWorkspaces && !gallery.choosingApp, "Typing doesn't start an app search behind the gallery")
+    gallery.renameWorkspace(store.workspaces[2])
+    assert(gallery.renamingWorkspace == store.workspaces[2].id && gallery.workspaceName == "Inbox")
+    gallery.workspaceName = "Mail"; gallery.commitWorkspaceName()
+    assert(store.workspaces[2].name == "Mail" && gallery.renamingWorkspace == nil, "Renaming saves in place")
+    gallery.renameWorkspace(store.workspaces[2]); gallery.dismissLayer()
+    assert(gallery.renamingWorkspace == nil && gallery.showingWorkspaces, "Escape cancels a rename, not the gallery")
+    assert(press("2", 19) && opened == ["Writing"] && !gallery.showingWorkspaces, "A number opens that workspace")
+    gallery.showingWorkspaces = true
+    assert(press("w", 13, .command) && !gallery.showingWorkspaces, "⌘W closes the gallery")
     let reopened = WorkspaceStore(manager: manager, defaults: storage)
-    assert(reopened.workspaces.map(\.name) == ["CODING", "Inbox", "Writing"], "Order and names survive restart")
+    assert(reopened.workspaces.map(\.name) == ["CODING", "Writing", "Mail"], "Order and names survive restart")
     assert(reopened.workspace(number: 1) == nil && reopened.workspaces.isEmpty,
            "Workspaces whose windows have all closed are gone, so nothing is numbered")
 

@@ -73,18 +73,13 @@ final class ActionItem: NSMenuItem {
             self?.overlay.close(restoreFocus: false)
             self?.screenMemory.putBack(on: [display.id])
         }
-        overlay.model.onRenameWorkspace = { [weak self] workspace in
-            guard let self, let display = self.overlay.model.display else { return }
-            self.overlay.close(restoreFocus: false)
-            self.workspacePanel.showRename(workspace.id, on: display)
-        }
         // ⌃⌥1–9 switch to the workspace at that position in the list.
         let digits = [kVK_ANSI_1, kVK_ANSI_2, kVK_ANSI_3, kVK_ANSI_4, kVK_ANSI_5, kVK_ANSI_6, kVK_ANSI_7, kVK_ANSI_8, kVK_ANSI_9]
         numberHotkeys = digits.enumerated().map { index, key in
             GridHotKey(keyCode: key, id: UInt32(11 + index)) { [weak self] in self?.openWorkspace(number: index + 1) }
         }
         workspaceHotkeys = [
-            GridHotKey(keyCode: kVK_ANSI_W, id: 5) { [weak self] in self?.showWorkspaces { $0.showList(on: $1) } },
+            GridHotKey(keyCode: kVK_ANSI_W, id: 5) { [weak self] in self?.showWorkspaceGallery() },
             GridHotKey(keyCode: kVK_ANSI_S, id: 6) { [weak self] in self?.showWorkspaces { $0.quickSave(on: $1) } },
             GridHotKey(keyCode: kVK_ANSI_S, id: 7, modifiers: controlKey | optionKey | shiftKey) { [weak self] in
                 self?.showWorkspaces { $0.showSave(on: $1) }
@@ -188,9 +183,14 @@ final class ActionItem: NSMenuItem {
             await WindowRealign.run(on: display, manager: manager)
         }
     }
+    /// ⌃⌥W opens the grid on its workspaces, or switches an open grid to them.
+    private func showWorkspaceGallery() {
+        if overlay.isShown { overlay.model.toggleWorkspaces(); return }
+        showGrid { [weak self] in self?.overlay.model.beginWorkspaces() }
+    }
     @objc private func toggleGrid() { showGrid(on: statusItem.button?.window?.screen) }
     /// That screen's enlarged window returns to its pane first so the grid captures the real layout.
-    private func showGrid(on screen: NSScreen? = nil) {
+    private func showGrid(on screen: NSScreen? = nil, then shown: (() -> Void)? = nil) {
         quickAdd.close()
         workspacePanel.close()
         // Opening the grid also checks for updates if it has been a while, so the pill appears promptly.
@@ -200,8 +200,8 @@ final class ActionItem: NSMenuItem {
         }
         let target = overlay.targetScreen(screen)
         guard !overlay.isShown, let display = Display.all.first(where: { $0.screen == target }),
-              zoom.hasEnlarged(on: display) else { overlay.toggle(on: target); return }
-        Task { await zoom.restore(on: display); overlay.toggle(on: target) }
+              zoom.hasEnlarged(on: display) else { overlay.toggle(on: target); shown?(); return }
+        Task { await zoom.restore(on: display); overlay.toggle(on: target); shown?() }
     }
     private func configureMainMenu() {
         let bar = NSMenu()

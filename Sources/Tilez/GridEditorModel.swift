@@ -45,14 +45,19 @@ struct GridAppChoice: Identifiable, Sendable {
     var onUpdate: (() -> Void)?
     /// ? shows every shortcut in one sheet.
     @Published var showingShortcuts = false
-    var hasActiveLayer: Bool { choosingApp || saving || showingSaved || resizing || showingShortcuts }
+    /// ⌘W, or ⌃⌥W anywhere, shows the workspaces in the panes' place.
+    @Published var showingWorkspaces = false
+    @Published var highlightedWorkspace = 0
+    /// The workspace being renamed in place, and its new name.
+    @Published var renamingWorkspace: UUID?
+    @Published var workspaceName = ""
+    var hasActiveLayer: Bool { choosingApp || saving || showingSaved || resizing || showingShortcuts || showingWorkspaces }
     enum SaveKind { case workspace, layout }
     @Published var saveKind = SaveKind.workspace
     @Published var saveAllScreens = false
     /// Shared with Quick Add and the workspace panel.
     var workspaces: WorkspaceStore?
     var onOpenWorkspace: ((Workspace) -> Void)?
-    var onRenameWorkspace: ((Workspace) -> Void)?
     /// Called with the arranged grid after Apply places its windows.
     var onApplied: ((DesktopGrid) -> Void)?
     /// The workspace this screen is showing, which ⌘S saves.
@@ -480,9 +485,65 @@ struct GridAppChoice: Identifiable, Sendable {
         guard !busy else { return }
         closeLayers(); onOpenWorkspace?(workspace)
     }
+    // MARK: Workspaces gallery
+
+    var workspaceList: [Workspace] { workspaces?.workspaces ?? [] }
+
+    /// Columns that keep the previews large while all of them fit: one alone, two for up to four,
+    /// three up to nine, four beyond.
+    static func workspaceColumns(_ count: Int) -> Int {
+        switch count {
+        case ...1: return 1
+        case ...4: return 2
+        case ...9: return 3
+        default: return 4
+        }
+    }
+
+    func beginWorkspaces() {
+        guard !busy else { return }
+        closeLayers()
+        updateWorkspaceStatus()
+        highlightedWorkspace = workspaceList.firstIndex { $0.id == shownWorkspace?.id } ?? 0
+        showingWorkspaces = true
+    }
+    func toggleWorkspaces() {
+        if showingWorkspaces { closeLayers() } else { beginWorkspaces() }
+    }
+    func moveWorkspaceHighlight(_ direction: GridDirection) {
+        let next = highlightedWorkspace + direction.columnDelta + direction.rowDelta * Self.workspaceColumns(workspaceList.count)
+        if workspaceList.indices.contains(next) { highlightedWorkspace = next }
+    }
+    /// ⌘← and ⌘→ move the highlighted workspace, renumbering its shortcut; the highlight follows it.
+    func moveHighlightedWorkspace(by delta: Int) {
+        guard let workspaces, workspaceList.indices.contains(highlightedWorkspace) else { return }
+        objectWillChange.send()
+        workspaces.move(workspaceList[highlightedWorkspace].id, by: delta)
+        highlightedWorkspace = max(0, min(workspaceList.count - 1, highlightedWorkspace + delta))
+    }
+    func moveWorkspace(_ workspace: Workspace, to position: Int) {
+        guard let workspaces else { return }
+        objectWillChange.send()
+        workspaces.move(workspace.id, to: position)
+        highlightedWorkspace = workspaceList.firstIndex { $0.id == workspace.id } ?? highlightedWorkspace
+    }
+    func openWorkspace(number: Int) {
+        guard workspaceList.indices.contains(number - 1) else { NSSound.beep(); return }
+        openWorkspace(workspaceList[number - 1])
+    }
     func renameWorkspace(_ workspace: Workspace) {
         guard !busy else { return }
-        closeLayers(); onRenameWorkspace?(workspace)
+        if !showingWorkspaces { beginWorkspaces() }
+        highlightedWorkspace = workspaceList.firstIndex { $0.id == workspace.id } ?? highlightedWorkspace
+        workspaceName = workspace.name
+        renamingWorkspace = workspace.id
+    }
+    /// Names are trimmed and unique; a taken or empty name keeps the field open.
+    func commitWorkspaceName() {
+        guard let id = renamingWorkspace, let workspaces else { return }
+        objectWillChange.send()
+        if workspaces.rename(id, to: workspaceName) { renamingWorkspace = nil; onFocusGrid?() }
+        else { NSSound.beep() }
     }
     func deleteSaved(_ id: UUID) {
         guard !busy else { return }
@@ -497,11 +558,13 @@ struct GridAppChoice: Identifiable, Sendable {
     }
     func dismissLayer() {
         if busy { task?.cancel(); return }
+        if renamingWorkspace != nil { renamingWorkspace = nil; onFocusGrid?(); return }
         if hasActiveLayer { closeLayers() }
         else { persist(); onDismiss?() }
     }
     func closeLayers() {
         choosingApp = false; saving = false; showingSaved = false; resizing = false; showingShortcuts = false
+        showingWorkspaces = false; renamingWorkspace = nil
     }
     func toggleShortcuts() {
         let showing = showingShortcuts
