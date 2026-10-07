@@ -255,7 +255,7 @@ enum GridLaunchError: LocalizedError {
             try await Accessibility.perform {
                 placements.filter { window, target in
                     guard let actual = Accessibility.rect(window.element) else { return true }
-                    return !Geometry.approximatelyEqual(actual, target, tolerance: 6)
+                    return !Geometry.fits(actual, in: target, tolerance: 6)
                 }
             }
         }

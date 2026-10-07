@@ -24,7 +24,7 @@ import ApplicationServices
                     let t = eased(Date().timeIntervalSince(began) / duration)
                     let frame = interpolate(start, end, t)
                     _ = try? await Accessibility.perform {
-                        if resizes { Accessibility.setFrame(element, to: frame) } else { setPosition(element, frame.origin) }
+                        if resizes { Accessibility.setFrame(element, to: frame, fit: false) } else { setPosition(element, frame.origin) }
                     }
                     if t >= 1 { break }
                     try? await Task.sleep(nanoseconds: 8_000_000)

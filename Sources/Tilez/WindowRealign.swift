@@ -22,7 +22,7 @@ import TilezCore
         var grid = DesktopGrid.desktop(panes: windows.map { (GridSlot(), $0.frame) }, in: display.bounds)
         let gap = CGSize(width: 10 / display.bounds.width, height: 10 / display.bounds.height)
         guard !windows.isEmpty, grid.realign(gap: gap) else { NSSound.beep(); return }
-        let changes = zip(windows, grid.frames(in: display.bounds)).filter { !Geometry.approximatelyEqual($0.frame, $1) }
+        let changes = zip(windows, grid.frames(in: display.bounds)).filter { !Geometry.fits($0.frame, in: $1) }
         guard !changes.isEmpty else { return }
         manager.recordArrangement(changes.map(\.0), label: "Realign windows")
         for (window, target) in changes { Task { await WindowMotion.move(window.element, to: target) } }

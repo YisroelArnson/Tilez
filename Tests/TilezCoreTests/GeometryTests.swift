@@ -68,6 +68,14 @@ final class GeometryTests {
         expectEqual(oversized, destination)
     }
 
+    func testStepSizedWindowsFitInsideTheirPane() {
+        let pane = CGRect(x: 822, y: -870, width: 748, height: 870)
+        expect(Geometry.fits(CGRect(x: 822, y: -870, width: 748, height: 863), in: pane), "A row short of the pane fits")
+        expectFalse(Geometry.fits(CGRect(x: 822, y: -870, width: 748, height: 880), in: pane), "A row past the pane doesn't")
+        expectFalse(Geometry.fits(CGRect(x: 822, y: -870, width: 700, height: 600), in: pane), "Far smaller means the app refused the size")
+        expectFalse(Geometry.fits(CGRect(x: 830, y: -870, width: 740, height: 870), in: pane), "A moved origin doesn't fit")
+    }
+
     func testLayoutMatchingPreservesExactTitlesBeforeFallback() {
         let saved = [WindowIdentity(app: "codex", title: "Closed", ordinal: 0),
                      WindowIdentity(app: "codex", title: "Keep", ordinal: 1)]
@@ -427,6 +435,7 @@ private func checkMenuPanelGeometry() {
         tests.testCycleAndQuarterCoordinates()
         tests.testLayoutScalesToDifferentDisplayAndClampsOffscreenWindows()
         tests.testCenterFitsAnOversizedWindow()
+        tests.testStepSizedWindowsFitInsideTheirPane()
         tests.testLayoutMatchingPreservesExactTitlesBeforeFallback()
         tests.testLayoutMatchingConsumesDuplicateTitlesOnceAndIsolatesApps()
         await checkWindowCreation()

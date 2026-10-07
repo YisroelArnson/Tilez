@@ -144,7 +144,7 @@ final class WindowManager: ObservableObject {
     func apply(_ changes: [(ManagedWindow, CGRect)], label: String, recordUndo: Bool = true) {
         guard trusted else { status = "Enable Accessibility in System Settings first."; return }
         let actual = changes.filter { window, rect in
-            !Geometry.approximatelyEqual(Accessibility.rect(window.element) ?? window.frame, rect)
+            !Geometry.fits(Accessibility.rect(window.element) ?? window.frame, in: rect)
         }
         guard !actual.isEmpty else { status = "Windows are already in place."; return }
         if recordUndo {
@@ -158,7 +158,7 @@ final class WindowManager: ObservableObject {
         var failed = 0, constrained = 0
         for (window, target) in actual {
             if !Accessibility.move(window, to: target) { failed += 1 }
-            else if let frame = Accessibility.rect(window.element), !Geometry.approximatelyEqual(frame, target, tolerance: 4) { constrained += 1 }
+            else if let frame = Accessibility.rect(window.element), !Geometry.fits(frame, in: target, tolerance: 4) { constrained += 1 }
         }
         status = "\(label): \(actual.count - failed) window\(actual.count == 1 ? "" : "s") arranged."
         if constrained > 0 { status += " \(constrained) limited by the app’s minimum size." }
@@ -182,7 +182,7 @@ final class WindowManager: ObservableObject {
         trusted = Accessibility.trusted
         guard trusted else { throw Accessibility.NewWindowError.failed }
         // These frames come from the fresh scoped inventory immediately before placement.
-        let actual = changes.filter { !Geometry.approximatelyEqual($0.0.frame, $0.1) }
+        let actual = changes.filter { !Geometry.fits($0.0.frame, in: $0.1) }
         if !actual.isEmpty {
             pushUndo("Open grid", states: actual.map { WindowState(window: $0.0, frame: $0.0.frame) })
         }
@@ -190,7 +190,7 @@ final class WindowManager: ObservableObject {
         suppressUntil = Date().addingTimeInterval(2)
         for (window, target) in changes {
             _ = try await Accessibility.perform {
-                if !Geometry.approximatelyEqual(window.frame, target) { _ = Accessibility.move(window, to: target) }
+                if !Geometry.fits(window.frame, in: target) { _ = Accessibility.move(window, to: target) }
                 return AXUIElementPerformAction(window.element, kAXRaiseAction as CFString)
             }
         }

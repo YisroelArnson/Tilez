@@ -91,6 +91,15 @@ public enum Geometry {
         return CGRect(x: max(bounds.minX, min(bounds.minX + rect.minX * bounds.width, bounds.maxX - w)),
                       y: max(bounds.minY, min(bounds.minY + rect.minY * bounds.height, bounds.maxY - h)), width: w, height: h)
     }
+    /// True when `actual` starts at `target`'s origin and stays inside it, at most `slack` short
+    /// on the right and bottom. Apps that size in steps, like Terminal's rows and columns, stop
+    /// just short of their pane rather than spilling past it.
+    public static func fits(_ actual: CGRect, in target: CGRect, tolerance: Double = 2, slack: Double = 48) -> Bool {
+        abs(actual.minX - target.minX) <= tolerance && abs(actual.minY - target.minY) <= tolerance
+            && actual.width <= target.width + tolerance && actual.height <= target.height + tolerance
+            && actual.width >= target.width - slack && actual.height >= target.height - slack
+    }
+
     public static func approximatelyEqual(_ a: CGRect, _ b: CGRect, tolerance: Double = 2) -> Bool {
         abs(a.minX - b.minX) <= tolerance && abs(a.minY - b.minY) <= tolerance && abs(a.width - b.width) <= tolerance && abs(a.height - b.height) <= tolerance
     }

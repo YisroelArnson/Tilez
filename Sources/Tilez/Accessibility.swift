@@ -390,7 +390,11 @@ enum Accessibility {
     }
 
     @discardableResult
-    static func setFrame(_ element: AXUIElement, to target: CGRect) -> Bool {
+    /// Apps that size in steps, like Terminal's rows and columns, round a requested size up, which
+    /// pushes the window past its pane and can push it off the screen. With `fit`, an overshoot is
+    /// asked for again with that much taken off, so the app rounds down and the window stays inside.
+    /// Animation frames skip it; only the final frame needs to fit.
+    static func setFrame(_ element: AXUIElement, to target: CGRect, fit: Bool = true) -> Bool {
         var origin = CGPoint(x: target.minX.rounded(), y: target.minY.rounded())
         var size = CGSize(width: target.width.rounded(), height: target.height.rounded())
         guard let positionValue = AXValueCreate(.cgPoint, &origin), let sizeValue = AXValueCreate(.cgSize, &size) else { return false }
@@ -398,6 +402,20 @@ enum Accessibility {
         _ = AXUIElementSetAttributeValue(element, kAXSizeAttribute as CFString, sizeValue)
         let moved = AXUIElementSetAttributeValue(element, kAXPositionAttribute as CFString, positionValue)
         let resized = AXUIElementSetAttributeValue(element, kAXSizeAttribute as CFString, sizeValue)
-        return moved == .success && resized == .success
+        guard moved == .success && resized == .success else { return false }
+        guard fit else { return true }
+        for _ in 0..<2 {
+            guard let actual = rect(element) else { break }
+            let over = CGSize(width: max(0, actual.maxX - (origin.x + size.width)), height: max(0, actual.maxY - (origin.y + size.height)))
+            // A rounding overshoot is small and leaves the origin in place. A large one is an app
+            // that hasn't applied the new size yet, like Electron, and shrinking it would be wrong.
+            guard over.width >= 1 || over.height >= 1, over.width < 48, over.height < 48,
+                  abs(actual.minX - origin.x) <= 2, abs(actual.minY - origin.y) <= 2 else { break }
+            size = CGSize(width: max(1, size.width - over.width), height: max(1, size.height - over.height))
+            guard let smaller = AXValueCreate(.cgSize, &size) else { break }
+            _ = AXUIElementSetAttributeValue(element, kAXSizeAttribute as CFString, smaller)
+            _ = AXUIElementSetAttributeValue(element, kAXPositionAttribute as CFString, positionValue)
+        }
+        return true
     }
 }
