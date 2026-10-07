@@ -157,9 +157,11 @@ enum GridLaunchError: LocalizedError {
                     }
                     try Task.checkCancellation()
                     if let item = try await Accessibility.perform({ Accessibility.newWindowCommand(pid: pid) }) {
+                        let before = try await Accessibility.perform { Accessibility.focusedTabs(pid: pid) }
                         guard try await Accessibility.perform({ AXUIElementPerformAction(item, kAXPressAction as CFString) }) == .success else {
                             throw Accessibility.NewWindowError.failed
                         }
+                        try await detachIfTab(pid: pid, before: before)
                     } else if try await candidates().isEmpty, let url = app.bundleURL {
                         let configuration = NSWorkspace.OpenConfiguration()
                         configuration.activates = false
@@ -291,6 +293,24 @@ enum GridLaunchError: LocalizedError {
         let constrained = unsettled.count
         return GridLaunchResult(grid: resolved, exact: constrained == 0,
             message: "\(constrained) window\(constrained == 1 ? " has" : "s have") a minimum size or couldn’t be moved. Try fewer rows or columns.")
+    }
+
+    /// macOS opens a new window as a tab when the front window already shows a tab bar (or when
+    /// you prefer tabs). A tab can't take its own pane, so it moves out into its own window with
+    /// the app's Move Tab to New Window command. A separate new window is left as it is.
+    private static func detachIfTab(pid: pid_t, before: (window: AXUIElement?, tabs: Int)) async throws {
+        for _ in 0..<10 {
+            try await Task.sleep(nanoseconds: 100_000_000)
+            let now = try await Accessibility.perform { Accessibility.focusedTabs(pid: pid) }
+            if now.tabs > max(before.tabs, 1) {
+                if let item = try await Accessibility.perform({ Accessibility.menuItem(pid: pid, labels: ["move tab to new window"]) }) {
+                    _ = try await Accessibility.perform { AXUIElementPerformAction(item, kAXPressAction as CFString) }
+                }
+                return
+            }
+            // Focus moved to a new window without a tab bar: it opened as its own window.
+            if let window = now.window, now.tabs == 0, before.window.map({ !CFEqual($0, window) }) ?? true { return }
+        }
     }
 
     /// A window showing on another screen moves onto this one, which puts it on this screen's

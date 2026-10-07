@@ -260,6 +260,21 @@ enum Accessibility {
         return find(bar as! AXUIElement, depth: 0)
     }
 
+    /// The focused window and how many tabs its tab bar shows, 0 when it shows none.
+    static func focusedTabs(pid: pid_t) -> (window: AXUIElement?, tabs: Int) {
+        let app = AXUIElementCreateApplication(pid)
+        AXUIElementSetMessagingTimeout(app, 0.25)
+        guard let focused = value(app, kAXFocusedWindowAttribute), CFGetTypeID(focused) == AXUIElementGetTypeID() else { return (nil, 0) }
+        let window = focused as! AXUIElement
+        for child in value(window, kAXChildrenAttribute) as? [AXUIElement] ?? []
+        where value(child, kAXRoleAttribute) as? String == kAXTabGroupRole {
+            let tabs = (value(child, kAXChildrenAttribute) as? [AXUIElement] ?? [])
+                .filter { value($0, kAXRoleAttribute) as? String == kAXRadioButtonRole }
+            return (window, tabs.count)
+        }
+        return (window, 0)
+    }
+
     static func newWindowCommand(pid: pid_t) -> AXUIElement? {
         // A New Chat/Conversation command can replace the current chat instead of opening a window.
         let app = AXUIElementCreateApplication(pid)
@@ -404,12 +419,13 @@ enum Accessibility {
         let resized = AXUIElementSetAttributeValue(element, kAXSizeAttribute as CFString, sizeValue)
         guard moved == .success && resized == .success else { return false }
         guard fit else { return true }
-        for _ in 0..<2 {
+        // A tab bar adds its height on top of the rows, so a tabbed Terminal can take a few tries.
+        for _ in 0..<3 {
             guard let actual = rect(element) else { break }
             let over = CGSize(width: max(0, actual.maxX - (origin.x + size.width)), height: max(0, actual.maxY - (origin.y + size.height)))
             // A rounding overshoot is small and leaves the origin in place. A large one is an app
             // that hasn't applied the new size yet, like Electron, and shrinking it would be wrong.
-            guard over.width >= 1 || over.height >= 1, over.width < 48, over.height < 48,
+            guard over.width >= 1 || over.height >= 1, over.width < 96, over.height < 96,
                   abs(actual.minX - origin.x) <= 2, abs(actual.minY - origin.y) <= 2 else { break }
             size = CGSize(width: max(1, size.width - over.width), height: max(1, size.height - over.height))
             guard let smaller = AXValueCreate(.cgSize, &size) else { break }

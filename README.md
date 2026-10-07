@@ -60,7 +60,7 @@ Press **Control–Option–R** anywhere to tidy the windows on the current scree
 
 ### Open another window of an app
 
-Hold **Control–Option** and right-click a window (a two-finger click on a trackpad) to open another window of that app beside it. The clicked window's pane splits along its longer side, the new window takes one half, and every other window stays where it is. When the screen is showing a workspace, the new window joins it. The app never sees the click, so no context menu opens. Apps that can't open another window, or a pane too small to split, show why, the same as **Quick Add**.
+Hold **Control–Option** and right-click a window (a two-finger click on a trackpad) to open another window of that app beside it. The clicked window's pane splits along its longer side, the new window takes one half, and every other window stays where it is. When the screen is showing a workspace, the new window joins it. The app never sees the click, so no context menu opens. When macOS opens the new window as a tab, because the window already shows tabs or you prefer tabs, Tilez moves the tab into its own window with the app's **Move Tab to New Window** command, so it gets its own pane. Apps that can't open another window, or a pane too small to split, show why, the same as **Quick Add**.
 
 ### Swap two windows by dragging
 

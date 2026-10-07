@@ -20,10 +20,15 @@ import TilezCore
             return window.availability.automatic && !onDisplay.isNull && onDisplay.width > 1 && onDisplay.height > 1 ? window : nil
         }
         var grid = DesktopGrid.desktop(panes: windows.map { (GridSlot(), $0.frame) }, in: display.bounds)
+        guard !windows.isEmpty, grid.slots.count == windows.count else { NSSound.beep(); return }
+        // Reading the screen clips each window to it, so even windows too far out of line to
+        // realign come back inside the screen instead of staying off its edge.
+        let inside = grid.frames(in: display.bounds)
         let gap = CGSize(width: 10 / display.bounds.width, height: 10 / display.bounds.height)
-        guard !windows.isEmpty, grid.realign(gap: gap) else { NSSound.beep(); return }
-        let changes = zip(windows, grid.frames(in: display.bounds)).filter { !Geometry.fits($0.frame, in: $1) }
-        guard !changes.isEmpty else { return }
+        let aligned = grid.realign(gap: gap)
+        let targets = aligned ? grid.frames(in: display.bounds) : inside
+        let changes = zip(windows, targets).filter { !Geometry.fits($0.frame, in: $1) }
+        guard !changes.isEmpty else { if !aligned { NSSound.beep() }; return }
         manager.recordArrangement(changes.map(\.0), label: "Realign windows")
         for (window, target) in changes { Task { await WindowMotion.move(window.element, to: target) } }
     }
