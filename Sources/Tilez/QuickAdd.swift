@@ -126,12 +126,7 @@ private final class QuickAddPanel: NSPanel {
         // addApp selects the new pane and opens its chooser; it declines when every pane is too small.
         guard model.choosingApp else { model.isError = true; return }
         model.assign(choice.app)
-        let index = model.selectedCell
-        model.onApplied = { [weak self] grid in
-            guard let self, let index, grid.slots.indices.contains(index),
-                  let window = grid.slots[index].binding, let display = self.model.display else { return }
-            self.workspaces?.join(window, arranged: grid, on: display)
-        }
+        // Apply joins the new window to the workspace the screen shows.
         model.openGrid()
         // Keep working in the background; close() would cancel the launch.
         if model.busy { panel?.orderOut(nil) }
@@ -151,12 +146,8 @@ private final class QuickAddPanel: NSPanel {
         let pane = model.grid.normalizedFrames[index]
         model.split(index, toward: pane.width * display.bounds.width >= pane.height * display.bounds.height ? .right : .bottom)
         // split selects the new pane and opens its chooser; it declines when the pane is too small to halve.
-        guard model.choosingApp, let added = model.selectedCell else { NSSound.beep(); model.endEditing(); return }
+        guard model.choosingApp else { NSSound.beep(); model.endEditing(); return }
         model.assign(app)
-        model.onApplied = { [weak self] grid in
-            guard let self, grid.slots.indices.contains(added), let window = grid.slots[added].binding else { return }
-            self.workspaces?.join(window, arranged: grid, on: display)
-        }
         model.openGrid()
     }
 

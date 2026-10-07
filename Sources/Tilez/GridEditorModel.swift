@@ -58,11 +58,11 @@ struct GridAppChoice: Identifiable, Sendable {
     enum SaveKind { case workspace, layout }
     @Published var saveKind = SaveKind.workspace
     @Published var saveAllScreens = false
+    /// Workspaces sharing windows with this screen, best first, which the save form offers to update.
+    @Published private(set) var workspaceMatches: [(workspace: Workspace, present: Int, members: Int)] = []
     /// Shared with Quick Add and the workspace panel.
     var workspaces: WorkspaceStore?
     var onOpenWorkspace: ((Workspace) -> Void)?
-    /// Called with the arranged grid after Apply places its windows.
-    var onApplied: ((DesktopGrid) -> Void)?
     /// The workspace this screen is showing, which ⌘S saves.
     @Published private(set) var shownWorkspace: Workspace?
     struct OtherScreen: Identifiable { let id: String; let name: String; let windows: [GridSlot] }
@@ -472,6 +472,24 @@ struct GridAppChoice: Identifiable, Sendable {
         }
         if grid != originalGrid { apply(then: run) } else { run() }
     }
+    /// Windows that weren't on this screen before Apply (new panes, windows brought from another
+    /// screen) join the workspace the screen shows, taking the arrangement they were placed in,
+    /// so a workspace grows as you add to it without a separate save.
+    private func joinNewWindows(_ placed: DesktopGrid) {
+        guard let workspaces, let display, let workspace = workspaces.shownWorkspace(on: display) else { return }
+        let before = Set(originalGrid.slots.compactMap(\.binding))
+        let members = Set(workspace.bindings)
+        for binding in placed.slots.compactMap(\.binding) where !before.contains(binding) && !members.contains(binding) {
+            workspaces.join(binding, arranged: placed, on: display)
+        }
+        updateWorkspaceStatus()
+    }
+    /// Folds this screen's windows and arrangement into an existing workspace.
+    func updateWorkspace(_ workspace: Workspace) {
+        guard !busy else { return }
+        closeLayers()
+        commitWorkspace { store, display in try await store.update(workspace, from: display) }
+    }
     /// Unapplied grid edits or windows that moved since the workspace was saved.
     var workspaceModified: Bool {
         guard let shownWorkspace, let display else { return false }
@@ -588,6 +606,7 @@ struct GridAppChoice: Identifiable, Sendable {
         guard !busy, kind == .workspace || grid.filledCount > 0 else { return }
         closeLayers()
         saveKind = kind; saveAllScreens = false
+        workspaceMatches = kind == .workspace ? display.map { workspaces?.matches(on: $0) ?? [] } ?? [] : []
         saveName = kind == .layout ? "\(grid.columns) × \(grid.rows) grid" : workspaces?.suggestedName ?? "Workspace"
         saving = true
     }
@@ -774,7 +793,7 @@ struct GridAppChoice: Identifiable, Sendable {
                 self.grid = result.grid; self.persist()
                 // A saved layout opened here replaces the workspace this screen was showing.
                 if self.loadedLayout, let display = self.display { self.workspaces?.layoutOpened(on: display) }
-                self.onApplied?(result.grid)
+                else { self.joinNewWindows(result.grid) }
                 if let next {
                     // After this task finishes, so `next` can start its own.
                     Task { @MainActor in next() }

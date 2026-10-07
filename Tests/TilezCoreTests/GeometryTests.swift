@@ -810,6 +810,20 @@ func checkWorkspaces() {
     expect(Workspace.regularDesktop(among: ["A|1", "A|2"], lastShown: nil, windows: [:]) == "A|1")
     expect(Workspace.regularDesktop(among: [], lastShown: nil, windows: [:]) == nil, "No regular desktop to switch to")
 
+    // Recognized by its windows: the largest share on the screen, at least half.
+    let mostly = Set([binding(0), binding(1), binding(7)])
+    expect(Workspace.recognize(among: [workspace], showing: mostly, on: "A")?.id == workspace.id,
+           "Two of three windows on screen: that workspace")
+    let solo = Workspace(name: "Solo", screens: [WorkspaceScreen(displayID: "A", arranging: DesktopGrid(panes: [pane(7)], frames: [left]))!])
+    expect(Workspace.recognize(among: [workspace, solo], showing: mostly, on: "A")?.id == solo.id,
+           "All of a workspace's windows beat two of three")
+    expect(Workspace.recognize(among: [workspace], showing: [binding(0), binding(8)], on: "A") == nil, "One of three isn't enough")
+    expect(Workspace.recognize(among: [spanning], showing: [binding(3)], on: "B")?.id == spanning.id,
+           "A multi-screen workspace is recognized on its own screen")
+    expect(Workspace.recognize(among: [spanning], showing: [binding(3)], on: "C") == nil, "but not on a screen it doesn't use")
+    let ranked = Workspace.matches(among: [spanning, workspace], showing: [binding(0)], on: "A")
+    expect(ranked.count == 2 && ranked.allSatisfy { $0.present == 1 }, "Any shared window counts as a match to offer")
+
     // Shown: per screen and desktop, replaced by the next workspace or cleared by a layout.
     var shown = ShownWorkspaces()
     shown.show(workspace.id, on: "A", desktop: "A|1")

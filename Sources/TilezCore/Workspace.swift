@@ -43,6 +43,30 @@ public struct Workspace: Codable, Identifiable, Equatable {
         return screens.filter { connected.contains($0.displayID) }.map { ($0, $0.displayID) }
     }
 
+    /// The workspace a screen shows, judged by its windows: the one with the largest share of its
+    /// windows for that screen among `showing`, at least half of them. With a tie, the one with
+    /// more windows there wins. Nil when none has half its windows on the screen.
+    public static func recognize(among workspaces: [Workspace], showing: Set<GridWindowBinding>, on displayID: String) -> Workspace? {
+        matches(among: workspaces, showing: showing, on: displayID)
+            .first { $0.present * 2 >= $0.members }?.workspace
+    }
+
+    /// Workspaces with any of their windows for that screen among `showing`, best match first.
+    public static func matches(among workspaces: [Workspace], showing: Set<GridWindowBinding>, on displayID: String)
+        -> [(workspace: Workspace, present: Int, members: Int)] {
+        workspaces.compactMap { workspace -> (Workspace, Int, Int)? in
+            guard let screen = workspace.screen(on: displayID) else { return nil }
+            let members = screen.grid.slots.compactMap(\.binding)
+            let present = members.filter(showing.contains).count
+            return present > 0 ? (workspace, present, members.count) : nil
+        }
+        .sorted { a, b in
+            let shareA = Double(a.1) / Double(a.2), shareB = Double(b.1) / Double(b.2)
+            return shareA != shareB ? shareA > shareB : a.1 > b.1
+        }
+        .map { (workspace: $0.0, present: $0.1, members: $0.2) }
+    }
+
     /// A screen showing a full-screen app shows the workspace on one of its regular desktops
     /// instead, leaving the app in full screen: the desktop it last showed this workspace on, else
     /// the one holding most of the workspace's windows for that screen, else its first desktop.

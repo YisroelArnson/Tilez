@@ -532,6 +532,31 @@ struct DesktopGridView: View {
     private var savePopover: some View {
         let workspace = model.saveKind == .workspace
         return VStack(alignment: .leading, spacing: Space.md) {
+            // Updating a workspace that already has these windows comes first, so saving doesn't
+            // quietly make a duplicate.
+            if workspace, !model.workspaceMatches.isEmpty {
+                Text("Update a workspace").font(.system(size: 14, weight: .semibold))
+                VStack(spacing: Space.xxs) {
+                    ForEach(model.workspaceMatches.prefix(3), id: \.workspace.id) { match in
+                        Button { model.updateWorkspace(match.workspace) } label: {
+                            HStack(spacing: Space.sm) {
+                                WorkspaceThumbnail(workspace: match.workspace, height: GridLayoutPreview.size.height, maxWidth: 40,
+                                                   cornerRadius: Metrics.insetRadius)
+                                    .frame(width: 40)
+                                VStack(alignment: .leading, spacing: 0) {
+                                    Text("Update “\(match.workspace.name)”").font(.system(size: 13, weight: .medium)).lineLimit(1)
+                                    Text("\(match.present) of its \(match.members) window\(match.members == 1 ? "" : "s") are here")
+                                        .font(.system(size: 11)).foregroundStyle(.secondary)
+                                }
+                                Spacer(minLength: 0)
+                            }
+                            .padding(.horizontal, Space.sm).frame(height: Metrics.control + Space.sm).contentShape(Rectangle())
+                        }
+                        .buttonStyle(AppRowStyle())
+                    }
+                }
+                Divider()
+            }
             Text(workspace ? "Save as a new workspace" : "Save as a layout").font(.system(size: 14, weight: .semibold))
             TextField("Name", text: $model.saveName).textFieldStyle(.roundedBorder)
                 .focused($nameFocused).onSubmit { model.save() }

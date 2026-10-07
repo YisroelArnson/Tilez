@@ -18,6 +18,8 @@ private final class WorkspacePanel: NSPanel {
     @Published var status = ""
     @Published var isError = false
     @Published private(set) var busy = false
+    /// The workspace that shares the most windows with this screen, offered before naming a new one.
+    @Published private(set) var bestMatch: Workspace?
     let store: WorkspaceStore
     /// Puts back an enlarged window on that screen before its layout is read or changed.
     var prepare: ((Display) async -> Void)?
@@ -38,6 +40,7 @@ private final class WorkspacePanel: NSPanel {
         _ = store.current()
         name = store.suggestedName
         allScreens = false
+        bestMatch = store.matches(on: display).first?.workspace
         present(.save, on: display)
     }
 
@@ -58,6 +61,12 @@ private final class WorkspacePanel: NSPanel {
         run(hiding: false) { store, display in
             "Saved workspace “\(try await store.saveNew(named: name, allScreens: allScreens, from: display).name)”"
         }
+    }
+
+    /// Folds this screen's windows into the best-matching workspace instead of making a new one.
+    func updateBestMatch() {
+        guard !busy, let workspace = bestMatch else { return }
+        run(hiding: false) { store, display in "Updated workspace “\(try await store.update(workspace, from: display).name)”" }
     }
 
     /// From the grid's workspaces gallery or ⌃⌥1–9.
@@ -198,6 +207,9 @@ private struct WorkspacePanelView: View {
                 Text("Keeps these exact windows. Closed windows leave it; nothing reopens.")
                     .font(.system(size: 12)).foregroundStyle(.secondary)
                 Spacer()
+                if let match = controller.bestMatch {
+                    Button("Update “\(match.name)”", action: controller.updateBestMatch).buttonStyle(GridButtonStyle())
+                }
                 Button("Save", action: controller.save).buttonStyle(GridButtonStyle(primary: true))
                     .disabled(controller.name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }

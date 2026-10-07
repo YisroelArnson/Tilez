@@ -99,12 +99,43 @@ enum WorkspaceError: LocalizedError {
         return workspaces
     }
 
-    /// The workspace this screen shows on its current desktop, without windows that have closed.
+    /// The workspace this screen shows on its current desktop, without windows that have closed:
+    /// the one last opened or saved there, or else the one most of whose windows are there now,
+    /// however they got there. A recognized workspace is remembered as shown.
     func shownWorkspace(on display: Display) -> Workspace? {
-        guard let desktop = Desktops.current(displayID: display.id),
-              let id = shown.workspace(on: display.id, desktop: desktop.id),
-              let workspace = workspaces.first(where: { $0.id == id }) else { return nil }
-        return prune(workspace, open: openWindowIDs())
+        guard let desktop = Desktops.current(displayID: display.id) else { return nil }
+        if let id = shown.workspace(on: display.id, desktop: desktop.id),
+           let workspace = workspaces.first(where: { $0.id == id }) {
+            return prune(workspace, open: openWindowIDs())
+        }
+        let live = current()
+        guard !live.isEmpty, let recognized = Workspace.recognize(among: live, showing: windows(on: display, desktop: desktop),
+                                                                     on: display.id) else { return nil }
+        shown.show(recognized.id, on: display.id, desktop: desktop.id)
+        persist()
+        return recognized
+    }
+
+    /// Workspaces sharing windows with this screen, best match first, for the save form to offer.
+    func matches(on display: Display) -> [(workspace: Workspace, present: Int, members: Int)] {
+        guard let desktop = Desktops.current(displayID: display.id) else { return [] }
+        return Workspace.matches(among: current(), showing: windows(on: display, desktop: desktop), on: display.id)
+    }
+
+    private func windows(on display: Display, desktop: Desktop) -> Set<GridWindowBinding> {
+        Set(GridEditorModel.captureDesktop(display: display, desktop: desktop, manager: manager).slots.compactMap(\.binding))
+    }
+
+    /// Replaces a workspace's arrangement for this screen with what the screen shows now, which
+    /// adds the windows that are new there; this screen then shows it.
+    func update(_ listed: Workspace, from display: Display) async throws -> Workspace {
+        guard let workspace = workspaces.first(where: { $0.id == listed.id }) else { throw WorkspaceError.closed(listed.name) }
+        guard let grid = try await capture(display), let desktop = Desktops.current(displayID: display.id),
+              let next = workspace.saving(grid, on: display.id) else { throw WorkspaceError.nothingToSave }
+        store(next)
+        shown.show(next.id, on: display.id, desktop: desktop.id)
+        persist()
+        return next
     }
 
     @discardableResult private func prune(_ workspace: Workspace, open: Set<String>) -> Workspace? {
