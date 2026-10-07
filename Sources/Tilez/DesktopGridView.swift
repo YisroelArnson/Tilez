@@ -167,12 +167,12 @@ struct DesktopGridView: View {
         HStack(spacing: Space.xs) {
             Button { if model.resizing { model.closeLayers() } else { model.beginResize() } } label: {
                 HStack(spacing: Space.sm) {
-                    GridLayoutPreview(grid: model.grid, selectedCell: model.selectedCell)
+                    Image(systemName: "rectangle.split.3x1")
                     if labels { Text("Layouts") }
                     keycap("G")
                 }
             }
-            .buttonStyle(QuietButtonStyle(selected: model.resizing, leading: Space.xs, trailing: Space.sm, height: Metrics.dockControl))
+            .buttonStyle(QuietButtonStyle(selected: model.resizing, leading: Space.sm + Space.xxs, trailing: Space.sm, height: Metrics.dockControl))
             .help("Layouts and grid size (G)").disabled(model.busy)
             dockButton("Add pane", systemImage: "plus", key: "⌘K", labels: labels, action: model.addApp)
             dockButton("Tile all", systemImage: "square.grid.2x2", key: "⌘T", labels: labels) { model.tileAll() }
