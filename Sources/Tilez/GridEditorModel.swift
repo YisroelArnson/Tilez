@@ -16,7 +16,12 @@ struct GridAppChoice: Identifiable, Sendable {
     @Published var selectedAppID: String?
     @Published var savedSearch = "" { didSet { selectedSavedID = nil } }
     @Published var selectedSavedID: UUID?
+    /// G opens the Layouts panel in place of the panes.
     @Published var resizing = false
+    /// The highlighted card in the Layouts panel: a preset, or the custom grid after them.
+    @Published var highlightedLayout = 0
+    static let layoutColumns = 4
+    var customLayoutIndex: Int { LayoutPreset.all.count }
     @Published var draftColumns = 2
     @Published var draftRows = 2
     @Published var apps: [GridAppChoice] = []
@@ -517,9 +522,36 @@ struct GridAppChoice: Identifiable, Sendable {
     func beginResize() {
         guard !busy else { return }
         closeLayers()
-        draftColumns = grid.columns; draftRows = grid.rows; resizing = true
+        // A grid read from the screen has no columns and rows of its own; start from the even grid that fits its windows.
+        let shape = grid.paneFrames == nil ? (columns: grid.columns, rows: grid.rows)
+            : DesktopGrid.tilingShape(count: max(1, grid.filledCount), aspect: (display?.bounds.width ?? 16) / max(1, display?.bounds.height ?? 10))
+        draftColumns = shape.columns; draftRows = shape.rows
+        highlightedLayout = LayoutPreset.all.firstIndex { grid.matches($0) } ?? 0
+        resizing = true
     }
-    func confirmResize() { resize(columns: draftColumns, rows: draftRows) }
+    /// Return in the Layouts panel: the highlighted preset, or the custom grid.
+    func confirmResize() {
+        if highlightedLayout == customLayoutIndex { resize(columns: draftColumns, rows: draftRows) }
+        else { choosePreset(highlightedLayout) }
+    }
+    /// Moves the panes into a preset in reading order; extras drop off the end, as a smaller grid does.
+    func choosePreset(_ index: Int) {
+        guard !busy, LayoutPreset.all.indices.contains(index) else { return }
+        let gap = CGSize(width: 10 / (display?.bounds.width ?? 1250), height: 10 / (display?.bounds.height ?? 1250))
+        edit { $0 = $0.arranged(in: LayoutPreset.all[index], gap: gap) }
+        selectedCell = 0
+        closeLayers()
+    }
+    func moveLayoutHighlight(_ direction: GridDirection) {
+        let next = highlightedLayout + direction.columnDelta + direction.rowDelta * Self.layoutColumns
+        if (0...customLayoutIndex).contains(next) { highlightedLayout = next }
+    }
+    /// ⇧ arrows size the custom grid and highlight it.
+    func resizeDraft(_ direction: GridDirection) {
+        draftColumns = max(1, min(DesktopGrid.maxColumns, draftColumns + direction.columnDelta))
+        draftRows = max(1, min(DesktopGrid.maxRows, draftRows + direction.rowDelta))
+        highlightedLayout = customLayoutIndex
+    }
     func repeatInEmptyCells(_ index: Int) {
         guard !busy, grid.slots.indices.contains(index), let app = grid.slots[index].app else { return }
         edit { draft in

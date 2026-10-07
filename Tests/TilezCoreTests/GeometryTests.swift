@@ -365,7 +365,30 @@ func checkGathering() {
     expect(memory.screens.isEmpty)
     let encoded = try! JSONEncoder().encode(ScreenMemory())
     expectEqual(try! JSONDecoder().decode(ScreenMemory.self, from: encoded), ScreenMemory())
-    print("PASS: even tiling across screen shapes, reading order, and screen memory that survives a disconnect")
+    // Presets: each covers the screen without overlap, and panes move in reading order.
+    expectEqual(LayoutPreset.all.count, 11)
+    expectEqual(Set(LayoutPreset.all.map(\.id)).count, LayoutPreset.all.count)
+    for preset in LayoutPreset.all {
+        let area = preset.frames.reduce(CGFloat(0)) { $0 + $1.width * $1.height }
+        expect(abs(area - 1) < 0.001, "\(preset.name) fills the screen")
+        let gapped = preset.frames(gap: CGSize(width: 0.01, height: 0.01))
+        for (i, frame) in gapped.enumerated() {
+            for other in gapped.dropFirst(i + 1) { expectFalse(frame.intersects(other), "\(preset.name) panes never overlap") }
+        }
+        let arranged = DesktopGrid.tiling((0..<3).map(pane), aspect: wide).arranged(in: preset)
+        expect(arranged.isValid && arranged.slots.count == preset.frames.count, "\(preset.name) holds its panes")
+        expect(arranged.matches(preset), "\(preset.name) matches itself after gaps")
+    }
+    let mainLeft = LayoutPreset.all.first { $0.id == "main-left" }!
+    let four = DesktopGrid.tiling((0..<4).map(pane), aspect: wide)
+    let squeezed = four.arranged(in: mainLeft)
+    expect(squeezed.slots.map(\.binding) == [binding(0), binding(1), binding(2)], "Panes fill the preset in reading order; extras drop off the end")
+    expect(Geometry.approximatelyEqual(squeezed.normalizedFrames[0], CGRect(x: 0, y: 0, width: 0.496, height: 1), tolerance: 0.001),
+           "The first window takes the main pane")
+    let roomy = DesktopGrid.tiling([pane(0)], aspect: wide).arranged(in: LayoutPreset.all.first { $0.id == "quarters" }!)
+    expect(roomy.slots.count == 4 && roomy.filledCount == 1, "Spare spaces stay empty")
+    expectFalse(four.matches(mainLeft))
+    print("PASS: even tiling across screen shapes, reading order, layout presets, and screen memory that survives a disconnect")
 }
 
 private func checkMenuPanelGeometry() {

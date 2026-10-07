@@ -30,11 +30,6 @@ enum GridDirection {
     /// All grid directions are spatial: never wrap at a row or column boundary.
     func arrow(_ direction: GridDirection, moving: Bool = false, copying: Bool = false) {
         guard !busy else { return }
-        if resizing {
-            draftColumns = max(1, min(DesktopGrid.maxColumns, draftColumns + direction.columnDelta))
-            draftRows = max(1, min(DesktopGrid.maxRows, draftRows + direction.rowDelta))
-            return
-        }
         guard !hasActiveLayer else { return }
         let source = selectedCell ?? 0
         guard grid.slots.indices.contains(source) else { return }
@@ -105,10 +100,15 @@ enum GridDirection {
         }
         if saving || editingText { return false }
         if resizing {
+            guard modifiers.isEmpty || modifiers == .shift else { return false }
+            if let direction = GridDirection(keyCode: event.keyCode) {
+                if modifiers == .shift { resizeDraft(direction) } else { moveLayoutHighlight(direction) }
+                return true
+            }
             guard modifiers.isEmpty else { return false }
-            if let direction = GridDirection(keyCode: event.keyCode) { arrow(direction); return true }
             if event.keyCode == 36 || event.keyCode == 76 { confirmResize(); return true }
             if event.characters?.lowercased() == "g" { closeLayers(); return true }
+            if let text = event.characters, let number = Int(text), (1...9).contains(number) { choosePreset(number - 1); return true }
             return false
         }
         if let direction = GridDirection(keyCode: event.keyCode) {

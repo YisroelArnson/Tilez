@@ -235,11 +235,19 @@ MainActor.assumeIsolated {
     assert(key(53, editing: true) && !model.hasActiveLayer && model.selectedCell == 0)
     assert(key(5, "g") && model.resizing)
     let beforeResize = model.grid
-    assert(key(124) && model.draftColumns == 4 && model.grid == beforeResize)
+    let opened = model.highlightedLayout
+    assert(key(124) && model.highlightedLayout == min(opened + 1, model.customLayoutIndex) && model.grid == beforeResize,
+           "Arrows move between layouts, starting at the one the grid matches")
+    assert(key(124, "", .shift) && model.draftColumns == 4 && model.highlightedLayout == model.customLayoutIndex && model.grid == beforeResize,
+           "⇧ arrows size the custom grid")
     assert(key(53) && !model.resizing && model.grid == beforeResize, "Escape discards size preview")
     assert(key(5, "g") && model.resizing && key(5, "g") && !model.resizing && model.grid == beforeResize, "G toggles sizing off")
-    assert(key(5, "g")); assert(key(125)); assert(key(36))
-    assert(model.grid.rows == 3 && !model.resizing && !model.busy, "Return confirms size without opening windows")
+    assert(key(5, "g")); assert(key(125, "", .shift)); assert(key(36))
+    assert(model.grid.rows == 3 && !model.resizing && !model.busy, "Return confirms the custom size without opening windows")
+    model.undo()
+    assert(key(5, "g") && key(18, "2") && !model.resizing && model.grid.matches(LayoutPreset.all[1]),
+           "A number picks that layout")
+    assert(model.grid.slots.compactMap(\.app).count == min(2, beforeResize.filledCount), "Panes move into it in reading order")
     assert(key(6, "z", .command) && model.grid == beforeResize)
     assert(key(1, "s", .command) && model.saving && model.saveKind == .workspace, "⌘S names a new workspace when the screen shows none")
     assert(!key(124, "", .shift, editing: true), "Saving preserves normal name editing")

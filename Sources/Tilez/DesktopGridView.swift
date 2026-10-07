@@ -31,14 +31,15 @@ struct GridButtonStyle: ButtonStyle {
     var primary = false
     /// Capsule-shaped, for buttons inside a pill.
     var capsule = false
+    var height: CGFloat = Metrics.control
     @Environment(\.isEnabled) private var enabled
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     func makeBody(configuration: Configuration) -> some View {
-        let shape = RoundedRectangle(cornerRadius: capsule ? Metrics.control / 2 : Metrics.controlRadius)
+        let shape = RoundedRectangle(cornerRadius: capsule ? height / 2 : height > Metrics.control ? Metrics.dockControlRadius : Metrics.controlRadius)
         return configuration.label
             .font(.system(size: 13, weight: .medium))
             .foregroundStyle(primary ? Color.white : Color.primary)
-            .padding(.horizontal, Space.md).frame(minHeight: Metrics.control)
+            .padding(.horizontal, Space.md).frame(minHeight: height)
             .background {
                 PointerHover { hovered in
                     let hovered = hovered && enabled
@@ -59,16 +60,17 @@ private struct QuietButtonStyle: ButtonStyle {
     var selected = false
     var leading: CGFloat = Space.sm
     var trailing: CGFloat = Space.sm
+    var height: CGFloat = Metrics.control
     @Environment(\.isEnabled) private var enabled
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 13, weight: .medium))
             .foregroundStyle(Color.primary)
             .padding(.leading, leading).padding(.trailing, trailing)
-            .frame(minWidth: Metrics.control, minHeight: Metrics.control)
+            .frame(minWidth: height, minHeight: height)
             .background {
                 PointerHover { hovered in
-                    RoundedRectangle(cornerRadius: Metrics.controlRadius).fill(Color.white.opacity(
+                    RoundedRectangle(cornerRadius: height > Metrics.control ? Metrics.dockControlRadius : Metrics.controlRadius).fill(Color.white.opacity(
                         configuration.isPressed ? 0.95 : selected ? 0.85 : hovered && enabled ? 0.6 : 0))
                 }
             }
@@ -99,7 +101,7 @@ struct DesktopGridView: View {
             // Controls stay at native point sizes; only the grid grows with the desktop.
             let canvas = proxy.size
             let top = max(Space.lg, min(Space.xxl + Space.lg, canvas.height * 0.04))
-            let gridTop = top + Metrics.barHeight + Space.lg
+            let gridTop = top
             let availableHeight = max(160, canvas.height - gridTop - Self.footerReserve)
             let aspect = (model.display?.bounds.width ?? canvas.width) / max(1, model.display?.bounds.height ?? canvas.height)
             let width = min(max(320, canvas.width * 0.90), availableHeight * aspect)
@@ -107,10 +109,13 @@ struct DesktopGridView: View {
             ZStack(alignment: .top) {
                 Color.black.opacity(0.12).ignoresSafeArea()
                     .onTapGesture { if model.choosingApp { model.choosingApp = false } else { model.dismissLayer() } }
-                toolbar.padding(.top, top).zIndex(2)
-                gridCanvas(width: width, height: gridHeight)
-                    .frame(width: width, height: gridHeight)
-                    .padding(.top, gridTop).zIndex(1)
+                // G shows the Layouts panel in the panes' place.
+                Group {
+                    if model.resizing { LayoutsPanel(model: model, size: CGSize(width: width, height: gridHeight)) }
+                    else { gridCanvas(width: width, height: gridHeight) }
+                }
+                .frame(width: width, height: gridHeight)
+                .padding(.top, gridTop).zIndex(1)
                 VStack {
                     Spacer()
                     footer
@@ -125,7 +130,7 @@ struct DesktopGridView: View {
             .background(PointerTracker { pointer = $0 })
             .environment(\.gridPointer, pointer)
             .onChange(of: pointer) { _, point in
-                // The grid is centered horizontally below the toolbar.
+                // The grid is centered horizontally near the top.
                 let origin = CGPoint(x: (canvas.width - width) / 2, y: gridTop)
                 pointerMoved(point.map { CGPoint(x: $0.x - origin.x, y: $0.y - origin.y) },
                              frames: model.grid.frames(in: CGRect(x: 0, y: 0, width: width, height: gridHeight)),
@@ -144,50 +149,67 @@ struct DesktopGridView: View {
         .onExitCommand { model.dismissLayer() }
     }
 
-    /// Room below the grid for a pill and the keyboard hints.
-    private static let footerReserve: CGFloat = Space.xxl * 3
+    /// Room below the grid for a pill and the dock.
+    private static let footerReserve: CGFloat = Metrics.dockHeight + Metrics.pillHeight + Space.lg * 2 + Space.sm
 
-    /// One bar: workspaces, the grid's size, then saving and everything else. Return applies
-    /// and ⌘K adds a pane, so neither needs a button.
-    private var toolbar: some View {
+    /// The dock: the main actions, labeled with their shortcuts, so what you can do is in view.
+    private var dock: some View {
+        ViewThatFits(in: .horizontal) {
+            dockBar(labels: true)
+            dockBar(labels: false)
+        }
+    }
+
+    private func dockBar(labels: Bool) -> some View {
         HStack(spacing: Space.xs) {
             if let store = model.workspaces {
-                // Above the rest of the bar, so the fanned-out cards draw over it.
-                WorkspaceStack(store: store, model: model).zIndex(1)
+                // Above the rest of the dock, so the fanned-out cards draw over it.
+                WorkspaceStack(store: store, model: model, captionAbove: true).zIndex(1)
             }
-            Button(action: model.beginResize) {
-                GridLayoutPreview(grid: model.grid, selectedCell: model.selectedCell)
+            Button { if model.resizing { model.closeLayers() } else { model.beginResize() } } label: {
+                HStack(spacing: Space.sm) {
+                    GridLayoutPreview(grid: model.grid, selectedCell: model.selectedCell)
+                    if labels { Text("Layouts") }
+                    keycap("G")
+                }
             }
-            .buttonStyle(QuietButtonStyle(selected: model.resizing, leading: Space.xs, trailing: Space.xs))
-            .help("Grid size (G)").disabled(model.busy)
-            .accessibilityLabel("Current layout, \(model.grid.slots.count) panes. Choose grid size")
-            .popover(isPresented: $model.resizing, arrowEdge: .bottom) { sizePopover }
+            .buttonStyle(QuietButtonStyle(selected: model.resizing, leading: Space.xs, trailing: Space.sm, height: Metrics.dockControl))
+            .help("Layouts and grid size (G)").disabled(model.busy)
+            dockButton("Add pane", systemImage: "plus", key: "⌘K", labels: labels, action: model.addApp)
+            dockButton("Tile all", systemImage: "square.grid.2x2", key: "⌘T", labels: labels) { model.tileAll() }
             BarSeparator().padding(.horizontal, Space.xs)
-            saveButton
+            saveButton(labels: labels)
+            if model.busy {
+                Button("Stop", action: model.cancel).buttonStyle(GridButtonStyle(height: Metrics.dockControl))
+            } else {
+                Button(action: model.openGrid) {
+                    HStack(spacing: Space.sm) {
+                        Text("Apply")
+                        keycap("↵").colorScheme(.dark)
+                    }
+                }
+                .buttonStyle(GridButtonStyle(primary: true, height: Metrics.dockControl))
+                .disabled((model.grid.filledCount == 0 && model.originalGrid.filledCount == 0) || model.desktop == nil)
+                .padding(.leading, Space.xs)
+            }
             moreButton
         }
         .padding(Metrics.barPadding)
-        .glassSurface(RoundedRectangle(cornerRadius: Metrics.barRadius), reduceTransparency: reduceTransparency)
+        .glassSurface(RoundedRectangle(cornerRadius: Metrics.dockRadius), reduceTransparency: reduceTransparency)
         .fixedSize()
-        .padding(.horizontal, Space.xl)
     }
 
-    private var sizePopover: some View {
-        VStack(spacing: Space.sm) {
-            GridSizePicker(columns: model.draftColumns, rows: model.draftRows,
-                           hover: { c, r in model.draftColumns = c; model.draftRows = r },
-                           select: model.resize(columns:rows:))
-            Text("\(model.draftColumns) × \(model.draftRows)")
-                .font(.system(size: 12, weight: .medium)).monospacedDigit().foregroundStyle(.secondary)
-            let dropped = model.grid.slots.count - model.draftColumns * model.draftRows
-            if dropped > 0 {
-                Text("Removes \(dropped) pane\(dropped == 1 ? "" : "s"); windows stay open")
-                    .font(.system(size: 11)).foregroundStyle(.secondary)
+    private func dockButton(_ title: String, systemImage: String, key: String, labels: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: Space.sm) {
+                Image(systemName: systemImage)
+                if labels { Text(title) }
+                keycap(key)
             }
         }
-        .padding(Space.md).preferredColorScheme(.light)
-        .environment(\.gridPointer, nil)
-        .onDisappear { model.onFocusGrid?() }
+        .buttonStyle(QuietButtonStyle(leading: Space.sm + Space.xxs, trailing: Space.sm, height: Metrics.dockControl))
+        .help("\(title) (\(key))").disabled(model.busy)
+        .accessibilityLabel(title)
     }
 
     private func gridCanvas(width: CGFloat, height: CGFloat) -> some View {
@@ -544,7 +566,7 @@ struct DesktopGridView: View {
 
     private var moreButton: some View {
         Button { showMoreMenu() } label: { Image(systemName: "ellipsis") }
-            .buttonStyle(QuietButtonStyle())
+            .buttonStyle(QuietButtonStyle(height: Metrics.dockControl))
             .help("More").disabled(model.busy)
             .accessibilityLabel("More actions")
     }
@@ -589,22 +611,28 @@ struct DesktopGridView: View {
         menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
     }
 
-    private var saveButton: some View {
+    /// Saving, workspaces, and layouts share one button and one popup, which opens upward.
+    private func saveButton(labels: Bool) -> some View {
         Button(action: model.beginSaved) {
-            Image(systemName: "rectangle.3.group")
-                .overlay(alignment: .topTrailing) {
-                    if model.workspaceModified {
-                        Circle().fill(Color.primary).frame(width: 6, height: 6).offset(x: Space.xs, y: -Space.xxs)
+            HStack(spacing: Space.sm) {
+                Image(systemName: "rectangle.3.group")
+                    .overlay(alignment: .topTrailing) {
+                        if model.workspaceModified {
+                            Circle().fill(Color.primary).frame(width: 6, height: 6).offset(x: Space.xs, y: -Space.xxs)
+                        }
                     }
-                }
+                if labels { Text("Workspaces") }
+                keycap("⌘S")
+            }
         }
-        .buttonStyle(QuietButtonStyle(selected: model.showingSaved || model.saving))
+        .buttonStyle(QuietButtonStyle(selected: model.showingSaved || model.saving, leading: Space.sm + Space.xxs, trailing: Space.sm,
+                                      height: Metrics.dockControl))
         .help(model.shownWorkspace.map { "Workspace “\($0.name)”\(model.workspaceModified ? ", edited" : "") · Save, workspaces, and layouts (⌘S, ⌘O)" }
               ?? "Save, workspaces, and layouts (⌘S, ⌘O)")
         .disabled(model.busy)
         .accessibilityLabel(model.workspaceModified ? "Workspaces and layouts, unsaved changes" : "Workspaces and layouts")
         .popover(isPresented: Binding(get: { model.showingSaved || model.saving }, set: { if !$0 { model.closeLayers() } }),
-                 arrowEdge: .bottom) {
+                 arrowEdge: .top) {
             Group {
                 if model.saving { savePopover } else { SavedList(model: model) }
             }
@@ -662,9 +690,7 @@ struct DesktopGridView: View {
                     Text(model.message).lineLimit(2)
                 }
             }
-            Text(keyboardHints)
-                .font(.system(size: 12)).foregroundStyle(.white.opacity(0.95))
-                .shadow(color: .black.opacity(0.5), radius: 4, y: 1)
+            dock.padding(.top, Space.sm)
         }
     }
 
@@ -692,15 +718,6 @@ struct DesktopGridView: View {
     }
 
     private func windowCount(_ count: Int) -> String { "\(count) window\(count == 1 ? "" : "s")" }
-
-    private var keyboardHints: String {
-        if model.busy { return "Esc  Stop opening windows" }
-        if model.choosingApp || model.showingSaved { return "↑ ↓  Select result   ·   ↵  Confirm   ·   Esc  Back to grid" }
-        if model.saving { return model.saveKind == .workspace ? "↵  Save workspace   ·   Esc  Back to grid" : "↵  Save layout   ·   Esc  Back to grid" }
-        if model.resizing { return "Hover or ← → ↑ ↓  Choose size   ·   ↵  Confirm   ·   Esc  Cancel" }
-        if model.showingShortcuts { return "Any key  Close shortcuts" }
-        return "↵  Apply   ·   Esc  Close   ·   ⌘T  Tile all   ·   ⌘S  Save   ·   ?  All shortcuts"
-    }
 
     private func keycap(_ text: String) -> some View {
         Text(text).font(.system(size: 12, weight: .medium, design: .rounded))
@@ -827,8 +844,8 @@ private struct GridSizePicker: View {
     let rows: Int
     let hover: (Int, Int) -> Void
     let select: (Int, Int) -> Void
-    private static let cell: CGFloat = 16
-    private let step: CGFloat = cell + Space.xs
+    var cell: CGFloat = 16
+    private var step: CGFloat { cell + Space.xs }
     var body: some View {
         VStack(spacing: Space.xs) {
             ForEach(0..<DesktopGrid.maxRows, id: \.self) { row in
@@ -836,7 +853,7 @@ private struct GridSizePicker: View {
                     ForEach(0..<DesktopGrid.maxColumns, id: \.self) { column in
                         RoundedRectangle(cornerRadius: Space.xs)
                             .fill(column < columns && row < rows ? gridAccent : Color.black.opacity(0.1))
-                            .frame(width: Self.cell, height: Self.cell)
+                            .frame(width: cell, height: cell)
                     }
                 }
             }
@@ -884,15 +901,18 @@ struct WorkspaceStack: View {
     @ObservedObject var model: GridEditorModel
     @Environment(\.gridPointer) private var pointer
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    /// In the dock the caption sits above the stack rather than below it.
+    var captionAbove = false
     @State private var expanded: Bool
     @State private var hovered: Int?
     static let card = CGSize(width: 40, height: Metrics.control - Space.xs * 2)
     /// How much of each card behind the front one shows while stacked.
     static let peek: CGFloat = 7
     static let peeking = 4
+    static let captionHeight: CGFloat = 24
 
-    init(store: WorkspaceStore, model: GridEditorModel, expanded: Bool = false, hovered: Int? = nil) {
-        self.store = store; self.model = model
+    init(store: WorkspaceStore, model: GridEditorModel, captionAbove: Bool = false, expanded: Bool = false, hovered: Int? = nil) {
+        self.store = store; self.model = model; self.captionAbove = captionAbove
         _expanded = State(initialValue: expanded); _hovered = State(initialValue: hovered)
     }
 
@@ -919,7 +939,8 @@ struct WorkspaceStack: View {
                     }
                     if expanded, let hovered, shown.indices.contains(hovered) {
                         caption(shown[hovered], number: hovered + 1)
-                            .offset(x: CGFloat(hovered) * (Self.card.width + Space.xs), y: Metrics.control + Space.sm)
+                            .offset(x: CGFloat(hovered) * (Self.card.width + Space.xs),
+                                    y: captionAbove ? -(Self.captionHeight + Space.sm) : Metrics.control + Space.sm)
                             .zIndex(Double(shown.count + 1))
                     }
                 }
@@ -983,7 +1004,7 @@ struct WorkspaceStack: View {
             Text("⌃⌥\(number)").font(.system(size: 11)).foregroundStyle(.secondary)
         }
         .font(.system(size: 12, weight: .medium))
-        .padding(.horizontal, Space.sm).frame(height: 24)
+        .padding(.horizontal, Space.sm).frame(height: Self.captionHeight)
         .background(Color.white.opacity(0.95), in: RoundedRectangle(cornerRadius: Metrics.rowRadius))
         .shadow(color: .black.opacity(0.15), radius: 8, y: 2)
         .fixedSize()
@@ -1184,5 +1205,130 @@ struct ShortcutSheet: View {
                 }
             }
         }
+    }
+}
+
+/// G: presets and a custom grid in the panes' place, each card showing where your windows would
+/// go. 1–9 picks a preset, arrows move, Return picks the highlighted card, ⇧ arrows size the grid.
+struct LayoutsPanel: View {
+    @ObservedObject var model: GridEditorModel
+    let size: CGSize
+    private static let labelHeight: CGFloat = 32
+
+    var body: some View {
+        let columns = GridEditorModel.layoutColumns
+        let rows = Int((Double(LayoutPreset.all.count + 1) / Double(columns)).rounded(.up))
+        let header: CGFloat = 28
+        // Around each drawing: its own inset, the card's padding, and the name and detail below it.
+        let chrome = CGSize(width: (Space.md + Space.sm) * 2, height: (Space.md + Space.sm) * 2 + Space.sm + Self.labelHeight)
+        let cardWidth = (size.width - Space.xl * 2 - Space.md * CGFloat(columns - 1)) / CGFloat(columns)
+        let roomPerRow = (size.height - Space.xl * 2 - header - Space.lg - Space.md * CGFloat(rows - 1)) / CGFloat(rows)
+        let aspect = size.width / max(1, size.height)
+        let preview = CGSize(width: min(cardWidth - chrome.width, (roomPerRow - chrome.height) * aspect),
+                             height: min((cardWidth - chrome.width) / aspect, roomPerRow - chrome.height))
+        VStack(alignment: .leading, spacing: Space.lg) {
+            HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
+                Text("Layouts").font(.system(size: 20, weight: .semibold))
+                Text("\(model.grid.filledCount) window\(model.grid.filledCount == 1 ? "" : "s") on this screen")
+                    .font(.system(size: 13)).foregroundStyle(.secondary)
+                Spacer()
+                Text("1–9 or ↵ choose  ·  ⇧ arrows size the grid  ·  Esc close")
+                    .font(.system(size: 12)).foregroundStyle(.secondary)
+            }
+            .frame(height: header)
+            LazyVGrid(columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: Space.md), count: columns), spacing: Space.md) {
+                ForEach(LayoutPreset.all.indices, id: \.self) { index in
+                    presetCard(index, preview: preview)
+                }
+                customCard(preview: preview)
+            }
+        }
+        .padding(Space.xl)
+        .frame(width: size.width, height: size.height, alignment: .top)
+        .glassSurface(RoundedRectangle(cornerRadius: Metrics.paneRadius + Space.sm))
+        .preferredColorScheme(.light)
+    }
+
+    private func presetCard(_ index: Int, preview: CGSize) -> some View {
+        let preset = LayoutPreset.all[index]
+        let windows = model.grid.readingOrder.map { model.grid.slots[$0] }.filter { $0.app != nil }
+        let dropped = windows.count - preset.frames.count
+        return card(index, title: preset.name, detail: model.grid.matches(preset) ? "Current"
+                        : dropped > 0 ? "Leaves out \(dropped) window\(dropped == 1 ? "" : "s")" : "\(preset.frames.count) pane\(preset.frames.count == 1 ? "" : "s")",
+                    key: index < 9 ? "\(index + 1)" : nil, warning: dropped > 0) {
+            ZStack(alignment: .topLeading) {
+                let frames = DesktopGrid.drawingFrames(preset, in: preview)
+                ForEach(frames.indices, id: \.self) { slot in
+                    let frame = frames[slot]
+                    RoundedRectangle(cornerRadius: Metrics.rowRadius)
+                        .fill(Color.white.opacity(slot < windows.count ? 0.95 : 0.5))
+                        .overlay {
+                            if slot < windows.count, let app = windows[slot].app {
+                                Image(nsImage: model.icon(for: app)).resizable().interpolation(.high)
+                                    .frame(width: min(28, frame.width * 0.5, frame.height * 0.5), height: min(28, frame.width * 0.5, frame.height * 0.5))
+                            }
+                        }
+                        .frame(width: frame.width, height: frame.height)
+                        .offset(x: frame.minX, y: frame.minY)
+                }
+            }
+            .frame(width: preview.width, height: preview.height, alignment: .topLeading)
+        } choose: { model.choosePreset(index) }
+    }
+
+    private func customCard(preview: CGSize) -> some View {
+        let dropped = model.grid.filledCount - model.draftColumns * model.draftRows
+        return card(model.customLayoutIndex, title: "Custom grid · \(model.draftColumns) × \(model.draftRows)",
+                    detail: dropped > 0 ? "Leaves out \(dropped) window\(dropped == 1 ? "" : "s")" : "Click a size, or ⇧ arrows",
+                    key: nil, warning: dropped > 0) {
+            GridSizePicker(columns: model.draftColumns, rows: model.draftRows,
+                           hover: { c, r in model.draftColumns = c; model.draftRows = r; model.highlightedLayout = model.customLayoutIndex },
+                           select: model.resize(columns:rows:),
+                           cell: max(10, min(22, (preview.height - Space.xs * 3) / 4)))
+                .frame(width: preview.width, height: preview.height)
+        } choose: { model.confirmResize() }
+    }
+
+    private func card<Preview: View>(_ index: Int, title: String, detail: String, key: String?, warning: Bool,
+                                     @ViewBuilder preview: () -> Preview, choose: @escaping () -> Void) -> some View {
+        let highlighted = model.highlightedLayout == index
+        return Button(action: { model.highlightedLayout = index; choose() }) {
+            VStack(alignment: .leading, spacing: Space.sm) {
+                preview()
+                    .padding(Space.md)
+                    .frame(maxWidth: .infinity)
+                    .background(Color.black.opacity(0.06), in: RoundedRectangle(cornerRadius: Metrics.controlRadius + Space.xs))
+                HStack(spacing: Space.sm) {
+                    if let key {
+                        Text(key).font(.system(size: 11, weight: .semibold, design: .rounded)).monospacedDigit()
+                            .frame(width: 18, height: 18)
+                            .background(Color.black.opacity(highlighted ? 0.85 : 0.08), in: RoundedRectangle(cornerRadius: Space.xs))
+                            .foregroundStyle(highlighted ? Color.white : Color.primary)
+                    }
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(title).font(.system(size: 13, weight: .medium)).lineLimit(1)
+                        Text(detail).font(.system(size: 11)).foregroundStyle(warning ? Color.orange : Color.secondary).lineLimit(1)
+                    }
+                }
+                .padding(.horizontal, Space.xs).frame(height: Self.labelHeight)
+            }
+            .padding(Space.sm)
+            .background(Color.white.opacity(highlighted ? 0.75 : 0.35), in: RoundedRectangle(cornerRadius: Metrics.controlRadius + Space.xs + Space.sm))
+            .overlay(RoundedRectangle(cornerRadius: Metrics.controlRadius + Space.xs + Space.sm)
+                .strokeBorder(highlighted ? gridAccent : Color.clear, lineWidth: 2))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title)
+        .accessibilityAddTraits(highlighted ? [.isSelected] : [])
+    }
+}
+
+private extension DesktopGrid {
+    /// A preset's panes in reading order, laid out in `size` with a small gap, for a card's drawing.
+    static func drawingFrames(_ preset: LayoutPreset, in size: CGSize) -> [CGRect] {
+        let gap = CGSize(width: 4 / max(1, size.width), height: 4 / max(1, size.height))
+        return DesktopGrid(panes: preset.frames.map { _ in GridSlot() }, frames: preset.frames).arranged(in: preset, gap: gap)
+            .frames(in: CGRect(origin: .zero, size: size))
     }
 }

@@ -27,6 +27,11 @@ enum Metrics {
     static let pillHeight: CGFloat = control + Space.xs * 2
     static let rowRadius: CGFloat = 6
     static let paneRadius: CGFloat = 12
+    /// The bottom dock's buttons are larger, with a label and a keycap.
+    static let dockControl: CGFloat = 36
+    static let dockControlRadius: CGFloat = 10
+    static let dockRadius: CGFloat = dockControlRadius + barPadding
+    static let dockHeight: CGFloat = dockControl + barPadding * 2
     /// Thin rules between groups of controls.
     static let separatorHeight: CGFloat = 20
 }
