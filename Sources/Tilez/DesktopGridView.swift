@@ -1085,7 +1085,7 @@ struct LayoutsPanel: View {
 
     var body: some View {
         let columns = GridEditorModel.layoutColumns
-        let rows = Int((Double(LayoutPreset.all.count + 1) / Double(columns)).rounded(.up))
+        let rows = max(2, Int((Double(model.layoutChoices.count + 1) / Double(columns)).rounded(.up)))
         let header: CGFloat = 28
         // Around each drawing: its own inset, the card's padding, and the name and detail below it.
         let chrome = CGSize(width: (Space.md + Space.sm) * 2, height: (Space.md + Space.sm) * 2 + Space.sm + Self.labelHeight)
@@ -1097,7 +1097,8 @@ struct LayoutsPanel: View {
         VStack(alignment: .leading, spacing: Space.lg) {
             HStack(alignment: .firstTextBaseline, spacing: Space.sm) {
                 Text("Layouts").font(.system(size: 20, weight: .semibold))
-                Text("\(model.grid.filledCount) window\(model.grid.filledCount == 1 ? "" : "s") on this screen")
+                Text(model.grid.filledCount == 0 ? "Pick a layout, then choose an app for each pane"
+                     : "Every way here fits all \(model.grid.filledCount) window\(model.grid.filledCount == 1 ? "" : "s")")
                     .font(.system(size: 13)).foregroundStyle(.secondary)
                 Spacer()
                 Text("1–9 or ↵ choose  ·  ⇧ arrows size the grid  ·  Esc close")
@@ -1105,7 +1106,7 @@ struct LayoutsPanel: View {
             }
             .frame(height: header)
             LazyVGrid(columns: Array(repeating: GridItem(.fixed(cardWidth), spacing: Space.md), count: columns), spacing: Space.md) {
-                ForEach(LayoutPreset.all.indices, id: \.self) { index in
+                ForEach(model.layoutChoices.indices, id: \.self) { index in
                     presetCard(index, preview: preview)
                 }
                 customCard(preview: preview)
@@ -1118,11 +1119,11 @@ struct LayoutsPanel: View {
     }
 
     private func presetCard(_ index: Int, preview: CGSize) -> some View {
-        let preset = LayoutPreset.all[index]
+        let preset = model.layoutChoices[index]
         let windows = model.grid.readingOrder.map { model.grid.slots[$0] }.filter { $0.app != nil }
         let dropped = windows.count - preset.frames.count
         return card(index, title: preset.name, detail: model.grid.matches(preset) ? "Current"
-                        : dropped > 0 ? "Leaves out \(dropped) window\(dropped == 1 ? "" : "s")" : "\(preset.frames.count) pane\(preset.frames.count == 1 ? "" : "s")",
+                        : dropped > 0 ? "Leaves out \(dropped) window\(dropped == 1 ? "" : "s")" : "",
                     key: index < 9 ? "\(index + 1)" : nil, warning: dropped > 0) {
             ZStack(alignment: .topLeading) {
                 let frames = DesktopGrid.drawingFrames(preset, in: preview)

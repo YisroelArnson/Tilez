@@ -21,7 +21,10 @@ struct GridAppChoice: Identifiable, Sendable {
     /// The highlighted card in the Layouts panel: a preset, or the custom grid after them.
     @Published var highlightedLayout = 0
     static let layoutColumns = 4
-    var customLayoutIndex: Int { LayoutPreset.all.count }
+    /// The Layouts panel's choices: ways to fit every window on this screen, fixed when it has none.
+    /// They're worked out when the panel opens, so the cards and their numbers hold still.
+    @Published private(set) var layoutChoices: [LayoutPreset] = LayoutPreset.all
+    var customLayoutIndex: Int { layoutChoices.count }
     @Published var draftColumns = 2
     @Published var draftRows = 2
     @Published var apps: [GridAppChoice] = []
@@ -589,7 +592,9 @@ struct GridAppChoice: Identifiable, Sendable {
         let shape = grid.paneFrames == nil ? (columns: grid.columns, rows: grid.rows)
             : DesktopGrid.tilingShape(count: max(1, grid.filledCount), aspect: (display?.bounds.width ?? 16) / max(1, display?.bounds.height ?? 10))
         draftColumns = shape.columns; draftRows = shape.rows
-        highlightedLayout = LayoutPreset.all.firstIndex { grid.matches($0) } ?? 0
+        layoutChoices = LayoutPreset.variations(for: grid.filledCount,
+                                                aspect: (display?.bounds.width ?? 16) / max(1, display?.bounds.height ?? 10))
+        highlightedLayout = layoutChoices.firstIndex { grid.matches($0) } ?? 0
         resizing = true
     }
     /// Return in the Layouts panel: the highlighted preset, or the custom grid.
@@ -599,9 +604,9 @@ struct GridAppChoice: Identifiable, Sendable {
     }
     /// Moves the panes into a preset in reading order; extras drop off the end, as a smaller grid does.
     func choosePreset(_ index: Int) {
-        guard !busy, LayoutPreset.all.indices.contains(index) else { return }
+        guard !busy, layoutChoices.indices.contains(index) else { return }
         let gap = CGSize(width: 10 / (display?.bounds.width ?? 1250), height: 10 / (display?.bounds.height ?? 1250))
-        edit { $0 = $0.arranged(in: LayoutPreset.all[index], gap: gap) }
+        edit { $0 = $0.arranged(in: layoutChoices[index], gap: gap) }
         selectedCell = 0
         closeLayers()
     }

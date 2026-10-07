@@ -396,7 +396,32 @@ func checkGathering() {
     let roomy = DesktopGrid.tiling([pane(0)], aspect: wide).arranged(in: LayoutPreset.all.first { $0.id == "quarters" }!)
     expect(roomy.slots.count == 4 && roomy.filledCount == 1, "Spare spaces stay empty")
     expectFalse(four.matches(mainLeft))
-    print("PASS: even tiling across screen shapes, reading order, layout presets, and screen memory that survives a disconnect")
+    // Layouts for the screen's windows: every one holds exactly that many, without overlap or tiny panes.
+    for count in 1...14 {
+        let variations = LayoutPreset.variations(for: count, aspect: wide)
+        expect(!variations.isEmpty && variations.count <= 11, "\(count) windows have up to eleven layouts")
+        for preset in variations {
+            expectEqual(preset.frames.count, count)
+            let area = preset.frames.reduce(CGFloat(0)) { $0 + $1.width * $1.height }
+            expect(abs(area - 1) < 0.001, "\(preset.name) for \(count) fills the screen")
+            expect(preset.frames.allSatisfy { $0.minX >= -0.001 && $0.maxX <= 1.001 && $0.minY >= -0.001 && $0.maxY <= 1.001 })
+            let gapped = preset.frames(gap: CGSize(width: 0.01, height: 0.01))
+            for (i, frame) in gapped.enumerated() {
+                for other in gapped.dropFirst(i + 1) { expectFalse(frame.intersects(other), "\(preset.name) for \(count) never overlaps") }
+            }
+        }
+    }
+    let six = LayoutPreset.variations(for: 6, aspect: wide).map(\.name)
+    expect(six.first == "3 × 2 grid" && six.contains("Main and 5 beside") && six.contains("6 columns") && six.contains("2 × 3 grid"),
+           "Six windows: the even grid first, then a main window, columns, and other shapes: \(six)")
+    expect(LayoutPreset.variations(for: 5, aspect: wide).first?.name == "3 over 2", "Five windows split as evenly as they can")
+    expect(!six.contains { $0.contains("1 over 1") || $0.contains(", 1") }, "No lopsided rows or stacks of one: \(six)")
+    let three = LayoutPreset.variations(for: 3, aspect: wide).map(\.name)
+    expect(three.contains("3 rows") && !three.contains("Tall middle, sides stacked"), "Three windows: rows by name, no tall middle: \(three)")
+    expectEqual(LayoutPreset.variations(for: 1, aspect: wide).map(\.id), ["full"])
+    expectEqual(LayoutPreset.variations(for: 0, aspect: wide), LayoutPreset.all)
+    expectEqual(LayoutPreset.rowsOf(7, rows: 3), [3, 2, 2])
+    print("PASS: even tiling across screen shapes, reading order, layout presets and variations for any window count, and screen memory that survives a disconnect")
 }
 
 private func checkMenuPanelGeometry() {

@@ -245,9 +245,10 @@ MainActor.assumeIsolated {
     assert(key(5, "g")); assert(key(125, "", .shift)); assert(key(36))
     assert(model.grid.rows == 3 && !model.resizing && !model.busy, "Return confirms the custom size without opening windows")
     model.undo()
-    assert(key(5, "g") && key(18, "2") && !model.resizing && model.grid.matches(LayoutPreset.all[1]),
-           "A number picks that layout")
-    assert(model.grid.slots.compactMap(\.app).count == min(2, beforeResize.filledCount), "Panes move into it in reading order")
+    assert(key(5, "g") && model.layoutChoices.allSatisfy { $0.frames.count == model.grid.filledCount },
+           "Every layout offered fits all the screen's windows")
+    assert(key(18, "2") && !model.resizing && model.grid.matches(model.layoutChoices[1]), "A number picks that layout")
+    assert(model.grid.filledCount == beforeResize.filledCount, "No window is left out")
     assert(key(6, "z", .command) && model.grid == beforeResize)
     assert(key(1, "s", .command) && model.saving && model.saveKind == .workspace, "⌘S names a new workspace when the screen shows none")
     assert(!key(124, "", .shift, editing: true), "Saving preserves normal name editing")
