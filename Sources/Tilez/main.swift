@@ -33,6 +33,7 @@ final class ActionItem: NSMenuItem {
     private var screenLayout: ScreenLayout!
     private var tileHotkey: GridHotKey!
     private var layoutHotkey: GridHotKey!
+    private var undoHotkey: GridHotKey!
     private let updateReminder = UpdateReminder()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -59,6 +60,7 @@ final class ActionItem: NSMenuItem {
         screenLayout = ScreenLayout(manager: manager)
         tileHotkey = GridHotKey(keyCode: kVK_ANSI_T, id: 8) { [weak self] in self?.arrangeScreen(tiling: true) }
         layoutHotkey = GridHotKey(keyCode: kVK_ANSI_G, id: 9) { [weak self] in self?.arrangeScreen(tiling: false) }
+        undoHotkey = GridHotKey(keyCode: kVK_ANSI_Z, id: 10) { [weak self] in self?.undoArrangement() }
         workspaces = WorkspaceStore(manager: manager)
         overlay.model.workspaces = workspaces
         quickAdd.workspaces = workspaces
@@ -132,6 +134,9 @@ final class ActionItem: NSMenuItem {
             overlay.model.isError = true
         } else if !realignHotkey.registered {
             overlay.model.message = "⌃⌥R is already in use, so windows can’t be realigned with it."
+            overlay.model.isError = true
+        } else if !undoHotkey.registered {
+            overlay.model.message = "⌃⌥Z is already in use. Undo window arrangements from the grid’s … menu instead."
             overlay.model.isError = true
         } else if !tileHotkey.registered || !layoutHotkey.registered {
             overlay.model.message = "\(tileHotkey.registered ? "⌃⌥G" : "⌃⌥T") is already in use. Open the grid and press \(tileHotkey.registered ? "G" : "T") instead."
@@ -216,6 +221,16 @@ final class ActionItem: NSMenuItem {
         Task {
             if zoom.hasEnlarged(on: display) { await zoom.restore(on: display) }
             if tiling { await screenLayout.tile(on: display) } else { await screenLayout.nextLayout(on: display) }
+        }
+    }
+    /// ⌃⌥Z undoes the last window arrangement anywhere: a tile, a layout, a realign, an Apply, a
+    /// swap. With the grid open it undoes the draft's last edit instead.
+    private func undoArrangement() {
+        if overlay.isShown { overlay.model.undo(); return }
+        guard let label = manager.undoLabel else { NSSound.beep(); return }
+        manager.undo()
+        if let target = overlay.targetScreen(nil), let display = Display.all.first(where: { $0.screen == target }) {
+            screenLayout.show("Undid \(label)", on: display)
         }
     }
     @objc private func toggleGrid() { showGrid(on: statusItem.button?.window?.screen) }

@@ -57,7 +57,9 @@ Press **Control–Option–N** anywhere to open a search panel of your apps, wit
 
 ### Tile or cycle layouts without the grid
 
-**Control–Option–T** tiles every window on the current screen and desktop in an even grid, like **T** in the grid. **Control–Option–G** moves them into the next layout that fits all of them, from the same choices as **Layouts**; press it again to keep cycling, and a pill names each layout. Windows glide into place, an enlarged window returns to its pane first, and **… → Undo last window arrangement** puts everything back. With the grid open, both act on its draft instead.
+**Control–Option–T** tiles every window on the current screen and desktop in an even grid, like **T** in the grid. **Control–Option–G** moves them into the next layout that fits all of them, from the same choices as **Layouts**; press it again to keep cycling, and a pill names each layout. Windows glide into place, an enlarged window returns to its pane first, and **Control–Option–Z** puts everything back. With the grid open, both act on its draft instead.
+
+**Control–Option–Z** undoes the last window arrangement from anywhere: a tile, a layout, a realign, an Apply from the grid, an opened workspace, or a Quick Add, one step at a time. A pill says what it undid. With the grid open, it undoes the draft's last edit, like **⌘Z**. Also under **… → Undo last window arrangement**.
 
 ### Realign windows
 

@@ -56,7 +56,8 @@ import TilezCore
 
     // MARK: The pill
 
-    private func show(_ message: String, on display: Display) {
+    /// Shows `message` in the pill at the bottom of `display` for a moment.
+    func show(_ message: String, on display: Display) {
         self.message = message
         if panel == nil {
             let panel = NSPanel(contentRect: .zero, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)

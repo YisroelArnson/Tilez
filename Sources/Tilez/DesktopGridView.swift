@@ -1040,7 +1040,7 @@ private final class GridMenuItem: NSMenuItem {
 
 /// Every shortcut in one place: those that work anywhere, and those inside the grid.
 struct ShortcutSheet: View {
-    private let anywhere = [("⌃⌥Space", "Show or hide the grid"), ("⌃⌥N", "Quick add a tile"), ("⌃⌥R", "Realign windows"), ("⌃⌥T", "Tile all windows"), ("⌃⌥G", "Next layout"),
+    private let anywhere = [("⌃⌥Space", "Show or hide the grid"), ("⌃⌥N", "Quick add a tile"), ("⌃⌥R", "Realign windows"), ("⌃⌥T", "Tile all windows"), ("⌃⌥G", "Next layout"), ("⌃⌥Z", "Undo arrangement"),
                             ("⌃⌥W", "Workspaces"), ("⌃⌥1–9", "Switch workspace"), ("⌃⌥S", "Save the workspace"),
                             ("⌃⌥⇧S", "Save a new workspace"), ("⌃⌥Return", "Enlarge a window"), ("⌃⌥ right-click", "Another window of that app")]
     private let grid = [("Arrows", "Select a pane"), ("⌥ Arrows", "Split"), ("⌥⇧ Arrows", "Merge"), ("⇧ Arrows", "Move"), ("1–9", "Choose a pane’s app"),
