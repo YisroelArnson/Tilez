@@ -2,8 +2,8 @@ import AppKit
 import SwiftUI
 import TilezCore
 
-// Light control surfaces use black; desktop selections use white for contrast.
-private let gridAccent = Color.black
+// Selection and emphasis are white on the smoked-glass surfaces.
+private let gridAccent = Palette.accent
 
 /// The overlay's pointer, polled by `PointerTracker` in the `gridRootSpace` coordinate space.
 /// SwiftUI's own hover never fires in the overlay panel, so controls read this instead.
@@ -38,14 +38,14 @@ struct GridButtonStyle: ButtonStyle {
         let shape = RoundedRectangle(cornerRadius: capsule ? height / 2 : height > Metrics.control ? Metrics.dockControlRadius : Metrics.controlRadius)
         return configuration.label
             .font(.system(size: 13, weight: .medium))
-            .foregroundStyle(primary ? Color.white : Color.primary)
+            .foregroundStyle(primary ? Color.black : Color.primary)
             .padding(.horizontal, Space.md).frame(minHeight: height)
             .background {
                 PointerHover { hovered in
                     let hovered = hovered && enabled
                     shape.fill(primary
-                        ? gridAccent.opacity(configuration.isPressed ? 0.7 : hovered ? 0.8 : 1)
-                        : Color.white.opacity(configuration.isPressed ? 0.95 : hovered ? 0.8 : 0.45))
+                        ? gridAccent.opacity(configuration.isPressed ? 0.7 : hovered ? 0.85 : 1)
+                        : configuration.isPressed ? Palette.pressed : hovered ? Palette.hover : Palette.raised)
                 }
             }
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
@@ -70,8 +70,8 @@ private struct QuietButtonStyle: ButtonStyle {
             .frame(minWidth: height, minHeight: height)
             .background {
                 PointerHover { hovered in
-                    RoundedRectangle(cornerRadius: height > Metrics.control ? Metrics.dockControlRadius : Metrics.controlRadius).fill(Color.white.opacity(
-                        configuration.isPressed ? 0.95 : selected ? 0.85 : hovered && enabled ? 0.6 : 0))
+                    RoundedRectangle(cornerRadius: height > Metrics.control ? Metrics.dockControlRadius : Metrics.controlRadius).fill(
+                        configuration.isPressed ? Palette.pressed : selected ? Palette.selected : hovered && enabled ? Palette.hover : Color.clear)
                 }
             }
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
@@ -107,7 +107,7 @@ struct DesktopGridView: View {
             let width = min(max(320, canvas.width * 0.90), availableHeight * aspect)
             let gridHeight = width / aspect
             ZStack(alignment: .top) {
-                Color.black.opacity(0.12).ignoresSafeArea()
+                Palette.scrim.ignoresSafeArea()
                     .onTapGesture { if model.choosingApp { model.choosingApp = false } else { model.dismissLayer() } }
                 // G shows the Layouts panel in the panes' place.
                 Group {
@@ -141,7 +141,7 @@ struct DesktopGridView: View {
             }
         }
         .tint(gridAccent)
-        .preferredColorScheme(.light)
+        .preferredColorScheme(.dark)
         .onChange(of: model.saving) { _, showing in nameFocused = showing }
         .onChange(of: model.hasActiveLayer) { _, active in
             if !active {
@@ -402,7 +402,7 @@ struct DesktopGridView: View {
     private func edgeButton(_ symbol: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             Image(systemName: symbol).font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(gridAccent).frame(width: 24, height: 24)
+                .foregroundStyle(Color.black).frame(width: 24, height: 24)
                 .background(.white, in: Circle()).shadow(color: .black.opacity(0.15), radius: 3, y: 1)
                 .frame(width: 32, height: 32).contentShape(Circle())
         }.buttonStyle(.plain)
@@ -420,9 +420,9 @@ struct DesktopGridView: View {
         return ZStack {
             RoundedRectangle(cornerRadius: Metrics.paneRadius)
                 // A dark tint keeps white icons and labels legible over light windows.
-                .fill(reduceTransparency ? Color(white: 0.25) : Color.black.opacity(hoveredCell == index ? 0.55 : 0.45))
+                .fill(reduceTransparency ? Color(white: 0.16) : Color.black.opacity(hoveredCell == index ? 0.5 : 0.4))
             RoundedRectangle(cornerRadius: Metrics.paneRadius)
-                .strokeBorder(selected ? Color.white : .white.opacity(0.45), lineWidth: selected ? 3 : 1)
+                .strokeBorder(selected ? Palette.accent : Palette.hairline, lineWidth: selected ? 2 : 1)
                 .shadow(color: .black.opacity(selected ? 0.75 : 0), radius: 2)
             // Clicking a pane only selects it; double-click or its center opens the chooser.
             Color.clear.contentShape(Rectangle())
@@ -461,13 +461,6 @@ struct DesktopGridView: View {
                                               set: { if !$0 { model.choosingApp = false } }), arrowEdge: .trailing) {
                     appPopover(index)
                 }
-            VStack {
-                HStack {
-                    Text("\(index + 1)").font(.system(size: 12, weight: .medium)).opacity(0.8)
-                    Spacer()
-                }
-                Spacer()
-            }.foregroundStyle(.white).padding(Space.md).allowsHitTesting(false)
         }
         .contextMenu {
             Button("Choose app…") { model.choose(index) }
@@ -529,7 +522,7 @@ struct DesktopGridView: View {
                     .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, Space.sm)
                     .help("Closes this window when you apply the layout")
             }
-        }.padding(Space.md).frame(width: 280).preferredColorScheme(.light)
+        }.padding(Space.md).frame(width: 280).preferredColorScheme(.dark)
             .environment(\.gridPointer, nil)
             .onDisappear { model.onFocusGrid?() }
     }
@@ -554,7 +547,7 @@ struct DesktopGridView: View {
             Button("Save", action: model.save).buttonStyle(GridButtonStyle(primary: true))
                 .disabled(model.saveName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 .frame(maxWidth: .infinity, alignment: .trailing)
-        }.padding(Space.lg).frame(width: 300).preferredColorScheme(.light).onAppear { nameFocused = true }
+        }.padding(Space.lg).frame(width: 300).preferredColorScheme(.dark).onAppear { nameFocused = true }
             .environment(\.gridPointer, nil)
     }
 
@@ -655,7 +648,7 @@ struct DesktopGridView: View {
                     Image(systemName: "square.on.square").font(.system(size: 15))
                     Text("Some windows overlap")
                     Button(action: { model.tileAll() }) {
-                        HStack(spacing: Space.sm) { Text("Tile all"); keycap("⌘T").colorScheme(.dark) }
+                        HStack(spacing: Space.sm) { Text("Tile all"); keycap("⌘T") }
                     }.buttonStyle(GridButtonStyle(primary: true, capsule: true))
                         .help("Arrange every window on this screen in an even grid. Apply moves them.")
                 }
@@ -696,7 +689,7 @@ struct DesktopGridView: View {
             .padding(.leading, Space.lg).padding(.trailing, trailing)
             .frame(minHeight: Metrics.pillHeight)
             .glassSurface(Capsule(), reduceTransparency: reduceTransparency)
-            .preferredColorScheme(.light)
+            .preferredColorScheme(.dark)
     }
 
     /// Up to four apps' icons, overlapping, for the windows a pill is about.
@@ -815,14 +808,14 @@ struct GridLayoutPreview: View {
     var body: some View {
         let frames = grid.frames(in: CGRect(origin: .zero, size: Self.size), gap: 1.5)
         ZStack(alignment: .topLeading) {
-            RoundedRectangle(cornerRadius: Metrics.insetRadius).fill(Color.white.opacity(0.6))
+            RoundedRectangle(cornerRadius: Metrics.insetRadius).fill(Color(white: 0.16))
             ForEach(grid.slots.indices.reversed(), id: \.self) { index in
                 let frame = frames[index]
                 // The selected pane is darker rather than outlined.
                 let selected = selectedCell == index
                 RoundedRectangle(cornerRadius: 1.5)
-                    .fill(grid.slots[index].app == nil ? Color.black.opacity(selected ? 0.2 : 0.08)
-                                                       : gridAccent.opacity(selected ? 0.8 : 0.45))
+                    .fill(grid.slots[index].app == nil ? Color.white.opacity(selected ? 0.22 : 0.1)
+                                                       : gridAccent.opacity(selected ? 0.85 : 0.55))
                     .frame(width: max(0, frame.width), height: max(0, frame.height))
                     .offset(x: frame.minX, y: frame.minY)
             }
@@ -846,7 +839,7 @@ private struct GridSizePicker: View {
                 HStack(spacing: Space.xs) {
                     ForEach(0..<DesktopGrid.maxColumns, id: \.self) { column in
                         RoundedRectangle(cornerRadius: Space.xs)
-                            .fill(column < columns && row < rows ? gridAccent : Color.black.opacity(0.1))
+                            .fill(column < columns && row < rows ? gridAccent : Palette.hover)
                             .frame(width: cell, height: cell)
                     }
                 }
@@ -903,7 +896,7 @@ struct SearchBox: View {
             }
         }
         .padding(.horizontal, Space.sm).frame(height: Metrics.control)
-        .background(Color.black.opacity(0.05), in: RoundedRectangle(cornerRadius: Metrics.controlRadius))
+        .background(Palette.raised, in: RoundedRectangle(cornerRadius: Metrics.controlRadius))
     }
 }
 
@@ -953,7 +946,7 @@ struct SavedList: View {
                 }
             }
         }
-        .padding(Space.sm).frame(width: 280).preferredColorScheme(.light)
+        .padding(Space.sm).frame(width: 280).preferredColorScheme(.dark)
         .environment(\.gridPointer, nil)
     }
 
@@ -1050,7 +1043,7 @@ struct ShortcutSheet: View {
     private let anywhere = [("⌃⌥Space", "Show or hide the grid"), ("⌃⌥N", "Quick add a tile"), ("⌃⌥R", "Realign windows"),
                             ("⌃⌥W", "Workspaces"), ("⌃⌥1–9", "Switch workspace"), ("⌃⌥S", "Save the workspace"),
                             ("⌃⌥⇧S", "Save a new workspace"), ("⌃⌥Return", "Enlarge a window")]
-    private let grid = [("Arrows", "Select a pane"), ("⌥ Arrows", "Split"), ("⌥⇧ Arrows", "Merge"), ("⇧ Arrows", "Move"),
+    private let grid = [("Arrows", "Select a pane"), ("⌥ Arrows", "Split"), ("⌥⇧ Arrows", "Merge"), ("⇧ Arrows", "Move"), ("1–9", "Choose a pane’s app"),
                         ("⌘K", "Add a pane"), ("⌘T", "Tile all"), ("⌘W", "Workspaces"), ("⌘R", "Realign"), ("G", "Grid size"),
                         ("⌘S / ⌘O", "Save / open"), ("⌘Z", "Undo"), ("↵", "Apply"), ("Esc", "Close")]
 
@@ -1062,7 +1055,7 @@ struct ShortcutSheet: View {
         .padding(Space.lg)
         .glassSurface(RoundedRectangle(cornerRadius: Metrics.barRadius))
         .fixedSize()
-        .preferredColorScheme(.light)
+        .preferredColorScheme(.dark)
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Keyboard shortcuts")
     }
@@ -1075,7 +1068,7 @@ struct ShortcutSheet: View {
                     Text(key).font(.system(size: 12, weight: .medium, design: .rounded))
                         .padding(.horizontal, Space.xs + Space.xxs).fixedSize()
                         .frame(width: 96, height: 22, alignment: .leading)
-                        .background(Color.black.opacity(0.06), in: RoundedRectangle(cornerRadius: Space.xs))
+                        .background(Palette.raised, in: RoundedRectangle(cornerRadius: Space.xs))
                     Text(label).font(.system(size: 13))
                 }
             }
@@ -1121,7 +1114,7 @@ struct LayoutsPanel: View {
         .padding(Space.xl)
         .frame(width: size.width, height: size.height, alignment: .top)
         .glassSurface(RoundedRectangle(cornerRadius: Metrics.paneRadius + Space.sm))
-        .preferredColorScheme(.light)
+        .preferredColorScheme(.dark)
     }
 
     private func presetCard(_ index: Int, preview: CGSize) -> some View {
@@ -1136,7 +1129,7 @@ struct LayoutsPanel: View {
                 ForEach(frames.indices, id: \.self) { slot in
                     let frame = frames[slot]
                     RoundedRectangle(cornerRadius: Metrics.rowRadius)
-                        .fill(Color.white.opacity(slot < windows.count ? 0.95 : 0.5))
+                        .fill(Color.white.opacity(slot < windows.count ? 0.16 : 0.05))
                         .overlay {
                             if slot < windows.count, let app = windows[slot].app {
                                 Image(nsImage: model.icon(for: app)).resizable().interpolation(.high)
@@ -1172,13 +1165,13 @@ struct LayoutsPanel: View {
                 preview()
                     .padding(Space.md)
                     .frame(maxWidth: .infinity)
-                    .background(Color.black.opacity(0.06), in: RoundedRectangle(cornerRadius: Metrics.controlRadius + Space.xs))
+                    .background(Palette.raised, in: RoundedRectangle(cornerRadius: Metrics.controlRadius + Space.xs))
                 HStack(spacing: Space.sm) {
                     if let key {
                         Text(key).font(.system(size: 11, weight: .semibold, design: .rounded)).monospacedDigit()
                             .frame(width: 18, height: 18)
-                            .background(Color.black.opacity(highlighted ? 0.85 : 0.08), in: RoundedRectangle(cornerRadius: Space.xs))
-                            .foregroundStyle(highlighted ? Color.white : Color.primary)
+                            .background(highlighted ? Palette.accent : Palette.hover, in: RoundedRectangle(cornerRadius: Space.xs))
+                            .foregroundStyle(highlighted ? Color.black : Color.primary)
                     }
                     VStack(alignment: .leading, spacing: 0) {
                         Text(title).font(.system(size: 13, weight: .medium)).lineLimit(1)
@@ -1188,9 +1181,9 @@ struct LayoutsPanel: View {
                 .padding(.horizontal, Space.xs).frame(height: Self.labelHeight)
             }
             .padding(Space.sm)
-            .background(Color.white.opacity(highlighted ? 0.75 : 0.35), in: RoundedRectangle(cornerRadius: Metrics.controlRadius + Space.xs + Space.sm))
+            .background(highlighted ? Palette.selected : Palette.raised, in: RoundedRectangle(cornerRadius: Metrics.controlRadius + Space.xs + Space.sm))
             .overlay(RoundedRectangle(cornerRadius: Metrics.controlRadius + Space.xs + Space.sm)
-                .strokeBorder(highlighted ? gridAccent : Color.clear, lineWidth: 2))
+                .strokeBorder(highlighted ? gridAccent.opacity(0.7) : Color.clear, lineWidth: 1.5))
             .contentShape(Rectangle())
             .background(HoverReporter { model.highlightedLayout = index })
         }
@@ -1279,7 +1272,7 @@ struct WorkspacesPanel: View {
         .padding(Space.xl)
         .frame(width: size.width, height: size.height, alignment: .top)
         .glassSurface(RoundedRectangle(cornerRadius: Metrics.paneRadius + Space.sm))
-        .preferredColorScheme(.light)
+        .preferredColorScheme(.dark)
         .onChange(of: model.renamingWorkspace) { _, id in nameFocused = id != nil }
     }
 
@@ -1295,7 +1288,7 @@ struct WorkspacesPanel: View {
                     .frame(width: preview.width, height: preview.height)
                     .padding(Space.md)
                     .frame(maxWidth: .infinity)
-                    .background(Color.black.opacity(0.06), in: RoundedRectangle(cornerRadius: Metrics.controlRadius + Space.md))
+                    .background(Palette.raised, in: RoundedRectangle(cornerRadius: Metrics.controlRadius + Space.md))
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
@@ -1304,8 +1297,8 @@ struct WorkspacesPanel: View {
                 if index < 9 {
                     Text("\(index + 1)").font(.system(size: 11, weight: .semibold, design: .rounded)).monospacedDigit()
                         .frame(width: 18, height: 18)
-                        .background(Color.black.opacity(highlighted ? 0.85 : 0.08), in: RoundedRectangle(cornerRadius: Space.xs))
-                        .foregroundStyle(highlighted ? Color.white : Color.primary)
+                        .background(highlighted ? Palette.accent : Palette.hover, in: RoundedRectangle(cornerRadius: Space.xs))
+                        .foregroundStyle(highlighted ? Color.black : Color.primary)
                         .help("⌃⌥\(index + 1)")
                 }
                 VStack(alignment: .leading, spacing: 0) {
@@ -1338,8 +1331,8 @@ struct WorkspacesPanel: View {
             .padding(.horizontal, Space.xs).frame(height: Self.labelHeight)
         }
         .padding(Space.sm)
-        .background(Color.white.opacity(highlighted ? 0.75 : 0.35), in: RoundedRectangle(cornerRadius: outer))
-        .overlay(RoundedRectangle(cornerRadius: outer).strokeBorder(highlighted ? gridAccent : Color.clear, lineWidth: 2))
+        .background(highlighted ? Palette.selected : Palette.raised, in: RoundedRectangle(cornerRadius: outer))
+        .overlay(RoundedRectangle(cornerRadius: outer).strokeBorder(highlighted ? gridAccent.opacity(0.7) : Color.clear, lineWidth: 1.5))
         .background(HoverReporter { if model.renamingWorkspace == nil { model.highlightedWorkspace = index } })
         .contextMenu {
             Button("Open") { model.openWorkspace(workspace) }

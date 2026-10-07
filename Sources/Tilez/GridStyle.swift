@@ -36,6 +36,24 @@ enum Metrics {
     static let separatorHeight: CGFloat = 20
 }
 
+/// Dark smoked glass. Surfaces are translucent black over the blurred desktop, and everything on
+/// them is white at a few fixed strengths, so contrast stays the same everywhere.
+enum Palette {
+    /// Dims the desktop behind the grid.
+    static let scrim = Color.black.opacity(0.32)
+    /// Darkens the glass material into smoked glass.
+    static let tint = Color.black.opacity(0.38)
+    /// Insets on a surface: fields, previews, keycaps, resting cards.
+    static let raised = Color.white.opacity(0.06)
+    static let hover = Color.white.opacity(0.10)
+    static let selected = Color.white.opacity(0.16)
+    static let pressed = Color.white.opacity(0.22)
+    /// A surface's edge and the rules between groups.
+    static let hairline = Color.white.opacity(0.10)
+    /// Selection rings and the one emphasized action.
+    static let accent = Color.white
+}
+
 struct GridGlass: NSViewRepresentable {
     var material: NSVisualEffectView.Material = .hudWindow
     func makeNSView(context: Context) -> NSVisualEffectView {
@@ -43,25 +61,30 @@ struct GridGlass: NSViewRepresentable {
         view.blendingMode = .behindWindow
         view.state = .active
         view.material = material
+        // Smoked glass in any system appearance.
+        view.appearance = NSAppearance(named: .darkAqua)
         return view
     }
     func updateNSView(_ view: NSVisualEffectView, context: Context) { view.material = material }
 }
 
 extension View {
-    /// The frosted surface that bars, pills, and panels sit on.
+    /// The smoked-glass surface that the dock, pills, panels, and prompts sit on, in dark mode.
     func glassSurface<S: InsettableShape>(_ shape: S, reduceTransparency: Bool = false, elevated: Bool = true) -> some View {
         background {
-            GridGlass(material: .popover).overlay(Color.white.opacity(reduceTransparency ? 1 : 0.3)).clipShape(shape)
+            GridGlass(material: .hudWindow)
+                .overlay(reduceTransparency ? Color(white: 0.12) : Palette.tint)
+                .clipShape(shape)
         }
-        .overlay(shape.strokeBorder(.white.opacity(0.7)))
-        .shadow(color: .black.opacity(elevated ? 0.16 : 0), radius: 20, y: 8)
+        .overlay(shape.strokeBorder(Palette.hairline))
+        .shadow(color: .black.opacity(elevated ? 0.35 : 0), radius: 30, y: 12)
+        .environment(\.colorScheme, .dark)
     }
 }
 
 /// A hairline between groups of controls in a bar.
 struct BarSeparator: View {
     var body: some View {
-        Rectangle().fill(Color.black.opacity(0.1)).frame(width: 1, height: Metrics.separatorHeight)
+        Rectangle().fill(Palette.hairline).frame(width: 1, height: Metrics.separatorHeight)
     }
 }

@@ -34,14 +34,14 @@ struct WorkspaceThumbnail: View {
     private func screen(_ screen: WorkspaceScreen, size: CGSize) -> some View {
         let frames = screen.grid.normalizedFrames
         return ZStack(alignment: .topLeading) {
-            if opaque { RoundedRectangle(cornerRadius: cornerRadius).fill(Color(white: 0.9)) }
-            else { RoundedRectangle(cornerRadius: cornerRadius).fill(Color.black.opacity(0.1)) }
+            if opaque { RoundedRectangle(cornerRadius: cornerRadius).fill(Color(white: 0.14)) }
+            else { RoundedRectangle(cornerRadius: cornerRadius).fill(Color.white.opacity(0.05)) }
             ForEach(screen.grid.slots.indices, id: \.self) { index in
                 let frame = frames[index]
                 let pane = CGRect(x: frame.minX * size.width + 1, y: frame.minY * size.height + 1,
                                   width: max(1, frame.width * size.width - 2), height: max(1, frame.height * size.height - 2))
                 ZStack {
-                    RoundedRectangle(cornerRadius: max(1.5, cornerRadius - 2)).fill(Color.white.opacity(0.9))
+                    RoundedRectangle(cornerRadius: max(1.5, cornerRadius - 2)).fill(Color.white.opacity(0.14))
                     if let app = screen.grid.slots[index].app, pane.width > 9, pane.height > 9 {
                         Image(nsImage: AppIcons.icon(for: app)).resizable().interpolation(.high)
                             .frame(width: min(iconSize, pane.width - 3, pane.height * 0.6), height: min(iconSize, pane.width - 3, pane.height * 0.6))

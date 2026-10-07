@@ -167,11 +167,9 @@ private struct QuickAddView: View {
             }
             results
         }
-        .background {
-            GridGlass(material: .popover).overlay(Color.white.opacity(0.3)).clipShape(RoundedRectangle(cornerRadius: 22))
-        }
-        .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(.white.opacity(0.7)))
-        .preferredColorScheme(.light)
+        // The window draws the shadow; the surface only needs its glass.
+        .glassSurface(RoundedRectangle(cornerRadius: 22), elevated: false)
+        .preferredColorScheme(.dark)
         .disabled(model.busy)
     }
 
@@ -193,7 +191,7 @@ private struct QuickAddView: View {
                                 }
                             }
                             .padding(.horizontal, 12).frame(height: 44)
-                            .background(Color.black.opacity(selected ? 0.1 : 0), in: RoundedRectangle(cornerRadius: 10))
+                            .background(selected ? Palette.selected : Color.clear, in: RoundedRectangle(cornerRadius: 10))
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.plain).id(choice.id)

@@ -160,11 +160,9 @@ private struct WorkspacePanelView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-        .background {
-            GridGlass(material: .popover).overlay(Color.white.opacity(0.3)).clipShape(RoundedRectangle(cornerRadius: 22))
-        }
-        .overlay(RoundedRectangle(cornerRadius: 22).strokeBorder(.white.opacity(0.7)))
-        .preferredColorScheme(.light)
+        // The window draws the shadow; the surface only needs its glass.
+        .glassSurface(RoundedRectangle(cornerRadius: 22), elevated: false)
+        .preferredColorScheme(.dark)
     }
 
     private var statusRow: some View {
