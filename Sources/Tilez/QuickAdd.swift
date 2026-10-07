@@ -137,6 +137,29 @@ private final class QuickAddPanel: NSPanel {
         if model.busy { panel?.orderOut(nil) }
     }
 
+    /// ⌃⌥ right-click: another window of the clicked window's app, in half of that window's pane,
+    /// split along its longer side. It joins the workspace the screen shows, like any quick add.
+    func addAnother(at point: CGPoint) {
+        guard !model.busy, !isShown,
+              let display = Display.containing(CGRect(origin: point, size: CGSize(width: 1, height: 1))) else { return }
+        model.begin(on: display)
+        // Panes are front to back, so the first one under the pointer is the window that was clicked.
+        let frames = model.grid.frames(in: display.bounds)
+        guard let index = frames.indices.first(where: { frames[$0].contains(point) }),
+              let app = model.grid.slots[index].app else { NSSound.beep(); model.endEditing(); return }
+        remember(app.bundleID)
+        let pane = model.grid.normalizedFrames[index]
+        model.split(index, toward: pane.width * display.bounds.width >= pane.height * display.bounds.height ? .right : .bottom)
+        // split selects the new pane and opens its chooser; it declines when the pane is too small to halve.
+        guard model.choosingApp, let added = model.selectedCell else { NSSound.beep(); model.endEditing(); return }
+        model.assign(app)
+        model.onApplied = { [weak self] grid in
+            guard let self, grid.slots.indices.contains(added), let window = grid.slots[added].binding else { return }
+            self.workspaces?.join(window, arranged: grid, on: display)
+        }
+        model.openGrid()
+    }
+
     private func remember(_ bundleID: String) {
         defaults.set(Array(([bundleID] + recents.filter { $0 != bundleID }).prefix(8)), forKey: Self.recentsKey)
     }

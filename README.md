@@ -58,6 +58,10 @@ Press **Control–Option–N** anywhere to open a search panel of your apps, wit
 
 Press **Control–Option–R** anywhere to tidy the windows on the current screen and desktop without opening the grid. It works like **⌘R** in the grid: edges that nearly line up snap onto shared lines with an even gap, windows near the screen edge reach it, and near-even splits settle on halves, thirds, or quarters. Windows glide into place and keep their arrangement; wider holes, minimized, hidden, and full-screen windows are left alone. An enlarged window on that screen returns to its pane first. **… → Undo last window arrangement** puts everything back. With the grid open, the shortcut realigns its panes instead.
 
+### Open another window of an app
+
+Hold **Control–Option** and right-click a window (a two-finger click on a trackpad) to open another window of that app beside it. The clicked window's pane splits along its longer side, the new window takes one half, and every other window stays where it is. When the screen is showing a workspace, the new window joins it. The app never sees the click, so no context menu opens. Apps that can't open another window, or a pane too small to split, show why, the same as **Quick Add**.
+
 ### Swap two windows by dragging
 
 Hold **Control–Option** and drag a window from anywhere inside it. The window follows the pointer; move it over another window and the two trade places live, gliding into position: the other window slides into your window's original spot and yours takes on its size. Release there to keep the swap. Release anywhere else, even after a small nudge, and the window returns exactly to where it started. A Control–Option click without dragging enlarges the window instead, and ordinary title-bar drags move windows as usual. Enlarged and full-screen windows never swap.

@@ -3,7 +3,8 @@ import ApplicationServices
 import Carbon
 
 /// ⌃⌥Return or ⌃⌥-click enlarges a window over its neighbors without moving anything else;
-/// ⌃⌥-drag is passed to WindowSwap instead.
+/// ⌃⌥-drag is passed to WindowSwap instead, and ⌃⌥ right-click (a two-finger click) asks for
+/// another window of the clicked app.
 /// Each screen and desktop keeps its own enlarged window. It stays enlarged while focus moves
 /// elsewhere; only the shortcut or another ⌃⌥-click puts it back exactly.
 @MainActor final class WindowZoom {
@@ -23,6 +24,9 @@ import Carbon
     var onDragBegan: ((CGPoint) -> Void)?
     var onDragMoved: ((CGPoint) -> Void)?
     var onDragEnded: (() -> Void)?
+    /// ⌃⌥ right-click, at the clicked point.
+    var onSecondaryClick: ((CGPoint) -> Void)?
+    private var swallowingSecondary = false
 
     init() {
         hotkey = GridHotKey(keyCode: kVK_Return, id: 2) { [weak self] in self?.toggle() }
@@ -157,7 +161,7 @@ import Carbon
     // right-click, which would otherwise open the app's context menu.
     private func installClickTap() {
         guard clickTap == nil, Accessibility.trusted else { return }
-        let types: [CGEventType] = [.leftMouseDown, .leftMouseDragged, .leftMouseUp]
+        let types: [CGEventType] = [.leftMouseDown, .leftMouseDragged, .leftMouseUp, .rightMouseDown, .rightMouseUp]
         let mask = types.reduce(CGEventMask(0)) { $0 | (1 << $1.rawValue) }
         guard let tap = CGEvent.tapCreate(tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
                                           eventsOfInterest: mask, callback: { _, type, event, refcon in
@@ -197,6 +201,18 @@ import Carbon
             // Releasing without moving is a click: enlarge or restore.
             if dragging { onDragEnded?() } else { toggle(at: clickStart) }
             dragging = false
+            return nil
+        case .rightMouseDown:
+            let modifiers = event.flags.intersection([.maskControl, .maskAlternate, .maskShift, .maskCommand])
+            guard modifiers == [.maskControl, .maskAlternate],
+                  NSWorkspace.shared.frontmostApplication?.processIdentifier != getpid() else { break }
+            // The app never sees it, so no context menu opens under the new window.
+            swallowingSecondary = true
+            clickStart = event.location
+            return nil
+        case .rightMouseUp where swallowingSecondary:
+            swallowingSecondary = false
+            onSecondaryClick?(clickStart)
             return nil
         default: break
         }

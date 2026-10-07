@@ -1042,7 +1042,7 @@ private final class GridMenuItem: NSMenuItem {
 struct ShortcutSheet: View {
     private let anywhere = [("⌃⌥Space", "Show or hide the grid"), ("⌃⌥N", "Quick add a tile"), ("⌃⌥R", "Realign windows"),
                             ("⌃⌥W", "Workspaces"), ("⌃⌥1–9", "Switch workspace"), ("⌃⌥S", "Save the workspace"),
-                            ("⌃⌥⇧S", "Save a new workspace"), ("⌃⌥Return", "Enlarge a window")]
+                            ("⌃⌥⇧S", "Save a new workspace"), ("⌃⌥Return", "Enlarge a window"), ("⌃⌥ right-click", "Another window of that app")]
     private let grid = [("Arrows", "Select a pane"), ("⌥ Arrows", "Split"), ("⌥⇧ Arrows", "Merge"), ("⇧ Arrows", "Move"), ("1–9", "Choose a pane’s app"),
                         ("⌘K", "Add a pane"), ("⌘T", "Tile all"), ("⌘W", "Workspaces"), ("⌘R", "Realign"), ("G", "Grid size"),
                         ("⌘S / ⌘O", "Save / open"), ("⌘Z", "Undo"), ("↵", "Apply"), ("Esc", "Close")]
@@ -1067,7 +1067,7 @@ struct ShortcutSheet: View {
                 HStack(spacing: Space.md) {
                     Text(key).font(.system(size: 12, weight: .medium, design: .rounded))
                         .padding(.horizontal, Space.xs + Space.xxs).fixedSize()
-                        .frame(width: 96, height: 22, alignment: .leading)
+                        .frame(width: 116, height: 22, alignment: .leading)
                         .background(Palette.raised, in: RoundedRectangle(cornerRadius: Space.xs))
                     Text(label).font(.system(size: 13))
                 }

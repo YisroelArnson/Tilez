@@ -49,6 +49,7 @@ final class ActionItem: NSMenuItem {
         zoom.onDragBegan = { [weak self] in self?.swap.begin(at: $0) }
         zoom.onDragMoved = { [weak self] in self?.swap.move(to: $0) }
         zoom.onDragEnded = { [weak self] in self?.swap.end() }
+        zoom.onSecondaryClick = { [weak self] point in self?.addAnother(at: point) }
         quickAdd = QuickAddController(manager: manager)
         quickAddHotkey = GridHotKey(keyCode: kVK_ANSI_N, id: 3) { [weak self] in self?.showQuickAdd() }
         realignHotkey = GridHotKey(keyCode: kVK_ANSI_R, id: 4) { [weak self] in self?.realign() }
@@ -155,6 +156,15 @@ final class ActionItem: NSMenuItem {
         guard let target = overlay.targetScreen(nil), let display = Display.all.first(where: { $0.screen == target }) else { return }
         guard zoom.hasEnlarged(on: display) else { quickAdd.show(on: display); return }
         Task { await zoom.restore(on: display); quickAdd.show(on: display) }
+    }
+    /// ⌃⌥ right-click opens another window of the clicked app beside it, after that screen's
+    /// enlarged window returns to its pane so the split uses the real layout.
+    private func addAnother(at point: CGPoint) {
+        guard !overlay.isShown, !quickAdd.isShown else { return }
+        workspacePanel.close()
+        guard let display = Display.containing(CGRect(origin: point, size: CGSize(width: 1, height: 1))),
+              zoom.hasEnlarged(on: display) else { quickAdd.addAnother(at: point); return }
+        Task { await zoom.restore(on: display); quickAdd.addAnother(at: point) }
     }
     /// Workspace shortcuts act on the screen the grid would open on, never while the grid is editing.
     /// Pressing the panel's own shortcut again closes it; a number switches even while it's open.
