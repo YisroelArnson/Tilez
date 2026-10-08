@@ -1,204 +1,60 @@
 # Tilez
 
-*Formerly Window Quilt.*
+**Window management made easy.** Tilez is a free, open-source window manager for macOS that you drive from the keyboard.
 
-A native macOS pane editor for the screen and desktop you are using. The overlay starts from every window on the desktop, at its actual size and position, including uneven sizes, overlapping arrangements, and windows hidden behind others. An empty desktop starts with one empty pane.
+Press **Control–Option–Space** and your screen becomes a grid of its windows. Split, merge, resize, and swap them, pick a layout that fits, then press Return and everything moves into place.
 
-Press **Control–Option–Space** or click the grid icon in the menu bar. The preview mirrors the current desktop. Opening it does not move, restore, or open any windows.
+- **Layouts that fit your windows.** Tilez shows every good way to arrange the windows you have, and **⌃⌥G** cycles through them from anywhere.
+- **Workspaces.** Save the windows on a screen and bring the same ones back later, from wherever they went.
+- **Screens that remember.** Unplug a monitor and plug it back in, and your windows go back where they were.
+- **One key away.** Tile, realign, enlarge, swap, and undo without opening anything.
+- **Stays on your Mac.** No accounts, no analytics, no network. It only needs Accessibility access to move your windows.
 
-- Use a **+ on any pane edge** to split off a neighbor, then choose its app. **Drag any edge of a pane** to resize it, or **drag a corner** to resize in both directions. An edge shared with other panes moves them along with it, like dragging the divider between them; an edge at the screen border or facing empty space moves on its own and stops just short of the next pane. Dragging a corner where panes meet moves that whole junction. **Double-click** a divider to center it between its panes again. Next to each edge's **+**, a merge button grows that pane over its neighbors on that side when they line up, such as turning a column of stacked panes into one tall pane. The pane whose button you click keeps its app. Drag panes to swap them.
-- **The dock** at the bottom holds the main actions, each labeled with its shortcut: **Layouts (G)**, **Add pane (K)**, **Tile all (T)**, **Workspaces (W)**, **Apply (↵)**, **Shortcuts (?)**, which lists every other command, and **…** for the rest. Narrow screens keep the icons and shortcuts and drop the labels.
-- Click a pane to select it. **Double-click** it, or click its app icon, to search for an installed app and select it. Hovering a pane shows its edge controls, so you can split or merge without selecting it first. Mix apps or choose the same app more than once.
-- **Drag a cell onto another to swap** their apps and existing window assignments. While you drag, the other pane slides into your pane's spot so you can see the result; move back to cancel. **Shift-drag to copy an app** into another pane, creating a separate window when the grid opens. Right-click a cell to repeat its app into every empty cell.
-- **Return** applies the preview. New panes open independent windows on the desktop where you invoked Tilez. Existing windows on other desktops are not borrowed.
-- **Remove pane / Delete** expands a neighboring pane where possible and closes the removed window on Apply. Undo restores the pane before applying; Escape cancels the draft. Native save dialogs remain under the app’s control.
-- **⌘Shift–Delete** removes all panes from the current draft, leaving one empty cell. Press **Return** to close their windows, or **⌘Z** to restore the entire layout in one step. Also available under **… → Close all panes on Apply**.
-- Invoke the same shortcut again to edit the current desktop's grid, then choose **Apply**.
-- The keyboard shortcut targets the active app’s foremost window’s display; clicking the menu icon targets that menu bar’s display. Each desktop remembers the selected cell during the session.
-- **Arrow keys** select neighboring cells without wrapping. **Shift–Arrow** moves or swaps the selected app and its exact window assignment. **⌘Shift–Arrow** copies the app into the neighboring cell and follows the copy. Copying onto a different app replaces it, and that pane's window closes on Apply; copying onto the same app just moves the selection, keeping its window. These edit the draft; **Return** applies it to your windows.
-- **Option–Arrow** splits the selected pane toward that arrow (left, right, above, or below) and opens the app chooser for the new pane. Type an app name and press Return to assign it. **⌘Z** undoes the split after dismissing the chooser.
-- **Letters are commands in the grid, no ⌘ needed:** **G** Layouts, **K** add a pane, **T** tile all, **W** workspaces, **R** realign, **S** save the workspace (**⇧S** a new one), **O** saved layouts, **N** a new empty grid. The ⌘ versions work too, and **⌘Z** undoes. **?** lists every shortcut.
-- **Space** chooses an app for the selected pane, and **1–9** for that pane; a double-click works too. Type the app's name, use **↑/↓**, and **Return** assigns it; **Escape** goes back. **Delete** removes the selected pane.
-- **Option–Shift–Arrow** merges the selected pane with the pane or panes beside it in that direction, when they line up into one rectangle. The selected pane keeps its app; absorbed windows close on Apply, and **⌘Z** undoes the merge.
-- **T** tiles every pane in an even grid: in reading order, sized close to square for the screen's shape, with a short last row stretched to fill it. When windows overlap, including ones stacked exactly on top of each other, a pill at the bottom offers the same **Tile all**. **Control–Option–T** does it anywhere, without the grid (see below). **⌘Z** undoes it, and Apply moves the windows. Also under **… → Tile all**.
-- **Bring windows from another screen** with **… → Bring N windows from *screen***. They join this screen's windows in an even grid, and Apply moves them here.
-- **R** realigns panes that have drifted out of line, such as windows captured from the desktop. Edges within a few percent of each other snap onto one shared line with an even gap, panes near the screen edge reach it, and near-even splits settle on halves, thirds, or quarters. The arrangement stays the same, larger holes are kept, and **⌘Z** undoes it. Also available under **… → Realign panes**.
-- **G** opens **Layouts** in the panes' place: ways to arrange exactly the windows on the screen, so none is left out. They're worked out from the window count: the even grid first, then a main window with the rest beside it (on either side), columns, a tall middle with stacked sides, two on top of the rest, a wide top, and the other grid shapes that fit, without lopsided layouts or panes too small to use. With no windows, it offers fixed presets for filling panes with apps. A custom grid of up to **6 columns × 4 rows** is always last. Each card shows where your windows would go, in reading order. Press **1–9** for a layout, or use the arrows and **Return**; **⇧ arrows** size the custom grid. **Escape** or **G** again closes it. The draft changes; Apply moves the windows.
-- **K** uses an empty pane or splits the selected pane to make room. **⌘C / ⌘V** copies an app assignment into an empty cell, without sharing its live window binding.
-- **⌘Z** undoes a grid edit, and **N** starts a new empty grid. The bar's **…** menu lists the grid's actions with their shortcuts, plus Undo last window arrangement, Keyboard Shortcuts, Check for Updates, and Quit.
-- **O** opens a popup above the dock's **Workspaces** button for saving and for your workspaces and saved layouts. At the top: save the workspace this screen is showing, save a new workspace, or **Save as layout…**, which keeps the grid's apps as a reusable layout of app choices, not windows or a fixed screen or desktop. Below: your workspaces and layouts, each drawn as its arrangement. Type to filter, use ↑/↓, then Return; a search field appears once the list is long. A workspace brings back its windows; a layout loads a draft of apps on any desktop. **S** saves the shown workspace directly, or names a new one when the screen shows none (see Workspaces below); **⇧S** saves a new workspace.
-- **?** shows every shortcut in one sheet, with or without Shift; any key closes it.
-- **Escape** closes the app picker first, then the overlay. Clicking on another screen also closes it. While opening windows it stops the request; windows already created stay available.
+Website: [yisroelarnson.github.io/Tilez](https://yisroelarnson.github.io/Tilez/)
 
-### Workspaces
+## Download
 
-A **workspace** is a set of open windows kept in one arrangement, on one screen or several. A **saved layout** is its opposite: apps only, and opening it always opens new windows.
+**[Download Tilez for Mac](https://github.com/YisroelArnson/Tilez/releases/latest/download/Tilez.dmg)** (macOS 14 or later)
 
-- **Open a workspace** from the **Workspaces** gallery: **W** in the grid, or **Control–Option–W** anywhere, shows every workspace as a large preview of its arrangement, with each window's app icon, in the panes' place. Click one, press its number, or use the arrows and **Return**. Its exact windows come back into their panes from wherever they are: minimized, on another desktop, or on another screen. A one-screen workspace comes to the screen you're on; a multi-screen workspace returns to each of its screens at once. Other windows already on those screens stay where they are.
-- **Switch with Control–Option–1 through 9.** The number is the workspace's position in the gallery. **⌘← / ⌘→** move the highlighted workspace earlier or later, and right-click → **Move to position** puts it anywhere, renumbering the shortcuts. The pencil, or a double-click on the name, renames it in place; names are unique, since saving under an existing name replaces that workspace. The trash deletes it; its windows stay open.
-- **The gallery's header** saves the workspace this screen shows (**S**) or a new one (**⇧S**). The workspace this screen shows is marked **On this screen**.
-- **A workspace never opens a window.** When one of its windows closes, or its app quits, the window leaves the workspace for good and a neighboring pane grows into its space. When the last one closes, the workspace is gone.
-- **Save** with **Control–Option–S** (or **S** in the grid). That saves the workspace the screen is showing. When it isn't showing one, you name a new one. **Control–Option–Shift–S** (or **⇧S** in the grid) always saves a new workspace; with more than one display, choose **This screen** or **All screens**. A new workspace with an existing name replaces it.
-- **Rearranging, resizing, or swapping** windows marks the workspace as edited (a dot on the grid's workspaces button) until you save. Closing a window, or adding one with **Quick Add**, updates the workspace by itself. Quick Add's new window joins the workspace its screen is showing. A window can belong to several workspaces.
-- A screen shows a workspace from when you open or save it on that screen's current desktop until you open a different workspace or a saved layout there. A screen also shows a workspace when most of that workspace's windows are on it, however they got there, so **S** updates it rather than making a new one.
-- **New windows join the workspace the screen shows:** panes you add in the grid and Apply, windows brought from another screen, Quick Add, and ⌃⌥ right-click. Saving is only needed after rearranging.
-- **When saving would make a new workspace** but some already share windows with the screen, the save form offers to update them first, best match first, such as **Update “Coding” · 4 of its 5 windows are here**. The ⌃⌥⇧S panel offers the best match the same way.
-- Pulling windows off other desktops uses the same desktop bridge as the grid (macOS 26.4+). When a screen is showing a full-screen app, that screen switches to a regular desktop for the workspace and the app stays in full screen on its own desktop. The workspace's own full-screen windows leave full screen and join the layout.
+Open the disk image and drag Tilez to Applications. The app is notarized by Apple and keeps itself up to date: when an update is out, a pill in the grid offers it.
 
-### Put windows back when a screen reconnects
+## Get started
 
-When a monitor disconnects, macOS moves its windows onto the screens that are left and often doesn't move them back. While more than one screen is connected, Tilez remembers which screen each window is on and where. When a screen comes back and windows that belonged to it are still on another screen, a prompt at the top of that screen offers **Put Back**. They return to their places on the screen's current desktop. Minimized windows, windows of hidden apps, and windows opened while the screen was away stay where they are.
+1. Open Tilez. It lives in the menu bar as a small three-pane icon.
+2. Allow **Accessibility** access when it asks, in System Settings → Privacy & Security → Accessibility. That's the only permission it needs.
+3. Press **Control–Option–Space** to open the grid on the screen you're using.
+4. Press **?** to see every shortcut, or use the dock at the bottom of the grid.
+5. Press **Return** to apply your changes, or **Escape** to close without moving anything.
 
-- Check **Always put windows back** in the prompt, or choose **… → Put windows back when a screen reconnects → Automatically** in the grid, to skip the prompt.
-- After **Not Now**, the grid on that screen shows a **Put back** pill for 15 minutes.
-- Tilez waits a few seconds after a screen comes or goes, so windows macOS puts back by itself are left alone. The same goes for screens that disconnect while the Mac sleeps.
+## The keys to know
 
-### Quick add a tile
+| Keys | What they do |
+| --- | --- |
+| **⌃⌥ Space** | Open the grid |
+| **⌃⌥ G** | Move the screen's windows into the next layout |
+| **⌃⌥ T** | Tile every window on the screen |
+| **⌃⌥ R** | Realign windows that have drifted out of line |
+| **⌃⌥ W** | Browse your workspaces; **⌃⌥ 1–9** opens one |
+| **⌃⌥ S** | Save the workspace on this screen |
+| **⌃⌥ Z** | Undo the last arrangement |
+| **⌃⌥ Return** | Enlarge a window, and put it back |
+| **⌃⌥ N** | Quick Add an app as a new tile |
+| **?** | Every other shortcut, inside the grid |
 
-Press **Control–Option–N** anywhere to open a search panel of your apps, with recently added apps at the top. Type to filter, use ↑/↓ to choose, and press Return (or click) to open the app as a new tile. Tilez fills an empty pane if the desktop has one; otherwise it splits the largest pane along its longer side and fits the new window there. Every other window stays where it is. Escape, or clicking elsewhere, closes the panel.
+## Learn more
 
-### Tile or cycle layouts without the grid
+- **[The Tilez guide](GUIDE.md)** walks through every control, option, and ability.
+- **[Developing Tilez](DEVELOPMENT.md)** covers building from source, testing, and releasing.
 
-**Control–Option–T** tiles every window on the current screen and desktop in an even grid, like **T** in the grid. **Control–Option–G** moves them into the next layout that fits all of them, from the same choices as **Layouts**; press it again to keep cycling, and a pill names each layout. Windows glide into place, an enlarged window returns to its pane first, and **Control–Option–Z** puts everything back. With the grid open, both act on its draft instead.
-
-**Control–Option–Z** undoes the last window arrangement from anywhere: a tile, a layout, a realign, an Apply from the grid, an opened workspace, or a Quick Add, one step at a time. A pill says what it undid. With the grid open, it undoes the draft's last edit, like **⌘Z**. Also under **… → Undo last window arrangement**.
-
-### Realign windows
-
-Press **Control–Option–R** anywhere to tidy the windows on the current screen and desktop without opening the grid. It works like **R** in the grid: edges that nearly line up snap onto shared lines with an even gap, windows near the screen edge reach it, and near-even splits settle on halves, thirds, or quarters. Windows glide into place and keep their arrangement; wider holes, minimized, hidden, and full-screen windows are left alone. An enlarged window on that screen returns to its pane first. **… → Undo last window arrangement** puts everything back. With the grid open, the shortcut realigns its panes instead.
-
-### Open another window of an app
-
-Hold **Control–Option** and right-click a window (a two-finger click on a trackpad) to open another window of that app beside it. The clicked window's pane splits along its longer side, the new window takes one half, and every other window stays where it is. When the screen is showing a workspace, the new window joins it. The app never sees the click, so no context menu opens. When macOS opens the new window as a tab, because the window already shows tabs or you prefer tabs, Tilez moves the tab into its own window with the app's **Move Tab to New Window** command, so it gets its own pane. Apps that can't open another window, or a pane too small to split, show why, the same as **Quick Add**.
-
-### Swap two windows by dragging
-
-Hold **Control–Option** and drag a window from anywhere inside it. The window follows the pointer; move it over another window and the two trade places live, gliding into position: the other window slides into your window's original spot and yours takes on its size. Release there to keep the swap. Release anywhere else, even after a small nudge, and the window returns exactly to where it started. A Control–Option click without dragging enlarges the window instead, and ordinary title-bar drags move windows as usual. Enlarged and full-screen windows never swap.
-
-### Enlarge a window temporarily
-
-Press **Control–Option–Return** in any window, or **Control–Option–click** it, to enlarge it over its neighbors, filling the screen with a 10-point margin. Nothing else moves. It stays enlarged while you click or switch to other windows. Each screen and desktop keeps its own enlarged window, so you can enlarge one window per monitor and per desktop without them affecting each other. Press the shortcut again on the same screen and desktop, or Control–Option–click the enlarged window, to return it to exactly where it was. Control–Option–clicking a different window puts back the one enlarged on that screen and desktop and enlarges the clicked one. Tilez consumes Control–Option–clicks so apps don't also treat them as right-clicks; ordinary clicks and Control-clicks are untouched. Opening the grid puts back only the enlarged window on the screen and desktop it opens on; quitting Tilez puts them all back. Only standard, resizable windows outside full screen can be enlarged; anything else beeps.
-
-The website lives in `docs/index.html` and is served by GitHub Pages at https://yisroelarnson.github.io/Tilez/. It's one self-contained file; push to `main` to update it.
-
-## Build and run
-
-Requires macOS 14 or later, Swift 5.9 or later, and Apple's Command Line Tools. Desktop movement uses the existing private macOS bridge and is available on supported macOS versions (currently gated at macOS 26.4+). Opening an app whose new windows inherit full screen needs that bridge to move the new windows back to the target desktop.
+## Build from source
 
 ```bash
-bash scripts/build.sh
-open "dist.noindex/Tilez.app"
-```
-
-The app uses a black-and-white three-pane icon and monochrome interface accents. The approved icon artwork lives in `Resources/AppIcon.png`. To regenerate the macOS icon sizes and `.icns` bundle after replacing the artwork:
-
-```bash
-swift -module-cache-path .build/module-cache scripts/icon.swift Resources
-bash scripts/build.sh
-```
-
-The built app is version **2.0.0**, bundle ID `com.yisroelarnson.tilez`. Grant it Accessibility access when the inline prompt appears. No Input Monitoring permission is needed for the grid shortcut.
-
-Builds go to `dist.noindex/`, which Spotlight skips, so local builds don't appear next to the installed app. Only one copy should run at a time. The app in `dist.noindex/` and an installed copy use the same bundle identity and preferences.
-
-## Release a DMG
-
-Commit and push, then run one command with the new version:
-
-```bash
-bash scripts/release.sh 2.1.0
-```
-
-It builds Tilez (version 2.1.0, build number = commit count), signs it and the embedded Sparkle updater with your Developer ID and the hardened runtime, packages `dist.noindex/Tilez.dmg` with an Applications shortcut, notarizes and staples it, signs it for Sparkle, writes `dist.noindex/appcast.xml`, tags `v2.1.0`, and publishes a GitHub release with both files. It stops first if there are uncommitted changes, the tag exists, or `main` isn't pushed.
-
-People who installed the DMG get the update automatically: Sparkle checks `releases/latest/download/appcast.xml` daily (and when the grid opens, if the last check was over an hour ago). A found update appears as a **Tilez x.y.z is available · Update** pill at the bottom of the grid instead of interrupting with an alert, and **… → Check for Updates…** checks right away. With automatic updates on, Sparkle downloads the update first; the pill then reads **ready · Restart**, and the menu item becomes **Restart to Install Tilez x.y.z**. Builds from source have no feed and keep updating with `scripts/update.sh`. The site's Download button links to `releases/latest/download/Tilez.dmg`.
-
-One-time setup:
-
-1. **Developer ID certificate.** In Keychain Access, choose Certificate Assistant → Request a Certificate From a Certificate Authority, and save the request to disk. At [developer.apple.com → Certificates](https://developer.apple.com/account/resources/certificates/add), create a **Developer ID Application** certificate from that request (only the account holder can), download it, and double-click it to add it to your login keychain. `security find-identity -v -p codesigning` should then list it.
-2. **Notarization credentials.** Create an app-specific password at [account.apple.com](https://account.apple.com) → Sign-In and Security → App-Specific Passwords, then save it under the profile the script uses:
-
-   ```bash
-   xcrun notarytool store-credentials tilez-notary --apple-id you@example.com --team-id YOURTEAMID
-   ```
-
-3. **Sparkle update key.** `.build/sparkle-2.10.0/bin/generate_keys` stores the private key in your login keychain and prints the public key, which `scripts/build.sh` embeds as `SUPublicEDKey`. Back up the private key with `generate_keys -x tilez-sparkle-key` and keep the file somewhere safe; without it, installed copies can't verify future updates.
-
-## Install on another Mac
-
-### First-time setup
-
-1. Install Apple's Command Line Tools, which include Swift and git:
-
-   ```bash
-   xcode-select --install
-   ```
-
-2. Install the GitHub CLI and sign in. The repo is private, so this Mac needs your GitHub account. If Homebrew isn't installed yet, get it from [brew.sh](https://brew.sh) first:
-
-   ```bash
-   brew install gh
-   gh auth login
-   ```
-
-3. Clone the repo and run the update script. On a first run it builds the app, installs it into `/Applications`, and launches it:
-
-   ```bash
-   mkdir -p ~/Developer/tools && cd ~/Developer/tools
-   gh repo clone YisroelArnson/Tilez
-   cd Tilez
-   bash scripts/update.sh
-   ```
-
-4. When Tilez asks, allow Accessibility access in **System Settings → Privacy & Security → Accessibility**.
-
-5. Optional: turn on **Launch Tilez at login** in the app.
-
-### Updating
-
-After pushing changes from your main Mac, run this on the other Mac:
-
-```bash
-cd ~/Developer/tools/Tilez
+xcode-select --install
+git clone https://github.com/YisroelArnson/Tilez.git
+cd Tilez
 bash scripts/update.sh
 ```
 
-The script pulls the latest `main`, rebuilds, quits the running copy, replaces `/Applications/Tilez.app`, and relaunches it. Accessibility access carries over between updates because the app is signed against its bundle ID. The script stops without changing anything if that copy has uncommitted changes, so make edits on your main Mac and push them. To install somewhere other than `/Applications`, set `TILEZ_INSTALL_DIR`.
+The script builds Tilez, installs it in `/Applications`, and launches it. Run it again from the folder to update. Details are in [DEVELOPMENT.md](DEVELOPMENT.md).
 
-## Window behavior
-
-The invocation captures a particular display and desktop. Tilez reuses eligible windows there and opens independent windows for remaining cells. New windows can inherit an app's full-screen Space; Tilez identifies those new windows, waits for their transitions, restores them, and moves them back before applying the grid. Existing windows on unrelated desktops are not gathered. A window's identity includes its owning process launch, preventing stale IDs from matching after an app restart.
-
-Each invocation takes a fresh WindowServer snapshot of the current desktop. Every window on the desktop becomes a pane at its actual bounds, front windows drawn above the ones behind them. A pane can also hold a window brought from another screen's current desktop; Apply moves it onto this screen and desktop. Accessibility refinement runs off the UI thread and never overwrites a draft once editing starts. Escape discards the draft. Only explicitly saved templates persist; they include unequal pane geometry but no live window identities. The editor does not run legacy all-app polling or auto-restore monitors.
-
-A native macOS full-screen window appears as one pane. Applying it unchanged keeps it full screen. Applying edits first restores that exact window to its regular desktop on the same display, re-reads the usable display bounds, and opens any added panes there. The overlay explains this transition before Apply. Switching desktops while editing dismisses the overlay.
-
-Apps must support independent windows to occupy multiple cells. Tilez uses their enabled New Window command, not New Chat or New Conversation actions that might replace existing content. If an app cannot create a window, is showing a dialog, or imposes a minimum size, the overlay reports the problem. AX bounds are checked after the app has time to settle, with bounded retries for only the windows that have not settled. Windows already in place finish immediately.
-
-New Window submenus are resolved to an enabled action, preferring the default profile's Command-N item. This supports Terminal-style profile menus without pressing the submenu heading or choosing an arbitrary profile. Menu traversal remains bounded and runs on the Accessibility worker during grid application.
-
-## Verification
-
-```bash
-bash scripts/test.sh
-bash scripts/test-grid-editor.sh --require-display
-# Native AppKit window-creation check with a disposable profile submenu:
-bash scripts/test-window-menu.sh
-# Optional native keyboard fixture with in-memory preferences:
-bash scripts/build-keyboard-fixture.sh
-```
-
-The core suite covers geometry, app/window matching, window creation, desktop membership, live layouts, and grid resizing, empty cells, repeated apps, exact-window swaps, persistence, and overflow. The editor checks exercise selection, exact-window swaps, keyboard copying into empty and occupied cells, text-field shortcut routing, size preview/confirmation/cancellation, app and saved-grid search, atomic repetition undo, saved-grid loading/deletion, and the edit lock during launch with isolated preferences.
-
-The isolated keyboard fixture was also checked with native input: Shift–Arrow swaps, ⌘Shift–Arrow copies into empty cells and protects occupied cells, rapid type-to-search preserves the first character, ↑/↓ moves the result highlight, Return and Escape restore grid focus, G/arrows/Return resizes, and ⌘S/⌘O saves and searches reusable grids. The fixture uses in-memory preferences.
-
-Native UI checks include invoking the menu and shortcut, positioning the overlay on a large display, typing in app search, selecting Finder with Return, dragging cells, undoing swaps, saving/loading/removing a test grid, and applying both four- and eight-window ChatGPT grids. Some apps enforce sizes that cannot fit dense grids; their constraints remain visible in the editor.
-
-## Preserved original
-
-Before the redesign, the complete original Window Quilt source and built app were archived to:
-
-`backups/WindowQuilt-before-grid-2026-09-14.tar.gz`
-
-The Git commit `d59a1f5` on `main` and `backup/pre-grid-2026-09-14` preserves Window Quilt version 1.7.1. The desktop grid redesign is merged into `main`. The archive includes the original app bundle and distribution zip; disposable Swift build caches are excluded. Old preferences and saved setups are left intact (under the former `com.local.windowquilt` bundle ID), while saved templates remain under `savedGridsV2`. Legacy `desktopGridsV2` drafts are left intact but no longer override the live desktop.
-
+*Tilez was formerly Window Quilt.*
