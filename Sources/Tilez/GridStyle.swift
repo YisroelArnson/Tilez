@@ -52,6 +52,8 @@ enum Palette {
     static let hairline = Color.white.opacity(0.10)
     /// Selection rings and the one emphasized action.
     static let accent = Color.white
+    /// The one color in Tilez, kept for an update waiting to install. The menu bar dot matches it.
+    static let update = Color(nsColor: .systemBlue)
 }
 
 struct GridGlass: NSViewRepresentable {

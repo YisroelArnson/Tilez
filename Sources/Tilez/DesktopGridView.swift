@@ -195,18 +195,18 @@ struct DesktopGridView: View {
         .fixedSize()
     }
 
-    /// An update stands out as the dock's one filled button. A downloaded update installs and
-    /// relaunches in one click; otherwise the click opens the update window.
+    /// An update is a dock button like the others, marked by the one color Tilez uses, which the
+    /// menu bar dot shares. A downloaded update installs and relaunches in one click; otherwise
+    /// the click opens the update window.
     @ViewBuilder private var updateButton: some View {
         if let version = model.availableUpdate, let update = model.onUpdate {
             Button(action: update) {
                 HStack(spacing: Space.sm) {
-                    Image(systemName: "arrow.down.circle.fill")
+                    Image(systemName: "arrow.down.circle.fill").foregroundStyle(Palette.update)
                     Text(model.updateReady ? "Restart to update" : "Update to \(version)")
                 }
             }
-            .buttonStyle(GridButtonStyle(primary: true, height: Metrics.dockControl))
-            .padding(.leading, Space.xs)
+            .buttonStyle(QuietButtonStyle(leading: Space.sm + Space.xxs, trailing: Space.md, height: Metrics.dockControl))
             .help(model.updateReady ? "Tilez \(version) is downloaded. Restart Tilez to install it." : "Tilez \(version) is available.")
             .accessibilityLabel(model.updateReady ? "Restart to update to Tilez \(version)" : "Update to Tilez \(version)")
         }

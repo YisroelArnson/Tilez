@@ -154,10 +154,11 @@ final class ActionItem: NSMenuItem {
         }
     }
     /// Template artwork follows the app icon's three panes and adapts to the menu bar.
-    /// `badged` adds a dot in the top corner, cut out from the panes so it reads at menu bar size.
+    /// `badged` adds a blue dot in the top corner, cut out from the panes so it reads at menu bar
+    /// size. A badged icon isn't a template, so its panes take the menu bar's text color themselves.
     private static func menuBarIcon(badged: Bool = false) -> NSImage {
         let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
-            NSColor.black.setFill()
+            (badged ? NSColor.labelColor : NSColor.black).setFill()
             for rect in [NSRect(x: 1, y: 12, width: 16, height: 5),
                          NSRect(x: 1, y: 1, width: 7, height: 9),
                          NSRect(x: 10, y: 1, width: 7, height: 9)] {
@@ -167,11 +168,12 @@ final class ActionItem: NSMenuItem {
                 context.compositingOperation = .clear
                 NSBezierPath(ovalIn: NSRect(x: 10, y: 10, width: 9, height: 9)).fill()
                 context.compositingOperation = .sourceOver
+                NSColor.systemBlue.setFill()
                 NSBezierPath(ovalIn: NSRect(x: 11.5, y: 11.5, width: 6, height: 6)).fill()
             }
             return true
         }
-        image.isTemplate = true
+        image.isTemplate = !badged
         image.accessibilityDescription = badged ? "Tilez, update available" : "Tilez"
         return image
     }
