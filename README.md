@@ -16,7 +16,7 @@ Website: [yisroelarnson.github.io/Tilez](https://yisroelarnson.github.io/Tilez/)
 
 **[Download Tilez for Mac](https://github.com/YisroelArnson/Tilez/releases/latest/download/Tilez.dmg)** (macOS 14 or later)
 
-Open the disk image and drag Tilez to Applications. The app is notarized by Apple and keeps itself up to date: it checks every hour and downloads new versions in the background. When one is ready, a blue dot appears on the menu bar icon and the grid shows **Restart to update**. One click installs it.
+Open the disk image and drag Tilez to Applications. The app is notarized by Apple and keeps itself up to date: it checks every 15 minutes and downloads new versions in the background. When one is ready, a blue dot appears on the menu bar icon and the grid shows **Restart to update**. One click installs it.
 
 ## Get started
 

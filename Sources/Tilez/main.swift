@@ -22,6 +22,10 @@ final class ActionItem: NSMenuItem {
     private var zoom: WindowZoom!
     private var swap: WindowSwap!
     private var updater: SPUStandardUpdaterController?
+    /// Sparkle schedules checks at most hourly, so Tilez asks more often itself.
+    private var updateTimer: Timer?
+    private var wakeObserver: NSObjectProtocol?
+    private static let updateCheckEvery: TimeInterval = 15 * 60
     private var quickAdd: QuickAddController!
     private var quickAddHotkey: GridHotKey!
     private var realignHotkey: GridHotKey!
@@ -122,6 +126,14 @@ final class ActionItem: NSMenuItem {
             overlay.model.onUpdate = { [weak self] in
                 if let install = self?.updateReminder.install { install() } else { self?.overlay.model.onCheckForUpdates?() }
             }
+            // Every 15 minutes and after waking, so a new release shows up soon after it's out.
+            updateTimer = Timer.scheduledTimer(withTimeInterval: Self.updateCheckEvery, repeats: true) { [weak self] _ in
+                MainActor.assumeIsolated { self?.checkForUpdatesQuietly(ifOlderThan: Self.updateCheckEvery) }
+            }
+            updateTimer?.tolerance = 60
+            wakeObserver = NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
+                MainActor.assumeIsolated { self?.checkForUpdatesQuietly(ifOlderThan: Self.updateCheckEvery) }
+            }
         }
         configureMainMenu()
         // A small first-run introduction is the actual grid, with permission inline if needed.
@@ -166,10 +178,13 @@ final class ActionItem: NSMenuItem {
             }
             if badged, let context = NSGraphicsContext.current {
                 context.compositingOperation = .clear
-                NSBezierPath(ovalIn: NSRect(x: 10, y: 10, width: 9, height: 9)).fill()
+                NSBezierPath(ovalIn: NSRect(x: 9.5, y: 9.5, width: 9, height: 9)).fill()
                 context.compositingOperation = .sourceOver
+                // A ring in the menu bar's text color keeps the blue visible on any menu bar tint.
+                NSColor.labelColor.setFill()
+                NSBezierPath(ovalIn: NSRect(x: 10.5, y: 10.5, width: 7.5, height: 7.5)).fill()
                 NSColor.systemBlue.setFill()
-                NSBezierPath(ovalIn: NSRect(x: 11.5, y: 11.5, width: 6, height: 6)).fill()
+                NSBezierPath(ovalIn: NSRect(x: 12, y: 12, width: 4.5, height: 4.5)).fill()
             }
             return true
         }
@@ -248,16 +263,20 @@ final class ActionItem: NSMenuItem {
             screenLayout.show("Undid \(label)", on: display)
         }
     }
+    /// A background check: a found update downloads quietly, then the dot and Restart to update
+    /// appear. Skipped while one is already waiting to install, or a check is underway.
+    private func checkForUpdatesQuietly(ifOlderThan age: TimeInterval) {
+        guard updateReminder.install == nil, let updater = updater?.updater, updater.canCheckForUpdates,
+              (updater.lastUpdateCheckDate ?? .distantPast) < Date().addingTimeInterval(-age) else { return }
+        updater.checkForUpdatesInBackground()
+    }
     @objc private func toggleGrid() { showGrid(on: statusItem.button?.window?.screen) }
     /// That screen's enlarged window returns to its pane first so the grid captures the real layout.
     private func showGrid(on screen: NSScreen? = nil, then shown: (() -> Void)? = nil) {
         quickAdd.close()
         workspacePanel.close()
-        // Opening the grid also checks for updates if it has been a while, so the pill appears promptly.
-        if !overlay.isShown, let updater = updater?.updater, updater.canCheckForUpdates,
-           (updater.lastUpdateCheckDate ?? .distantPast) < Date().addingTimeInterval(-3600) {
-            updater.checkForUpdatesInBackground()
-        }
+        // Opening the grid also checks for updates if it has been a while.
+        if !overlay.isShown { checkForUpdatesQuietly(ifOlderThan: Self.updateCheckEvery) }
         let target = overlay.targetScreen(screen)
         guard !overlay.isShown, let display = Display.all.first(where: { $0.screen == target }),
               zoom.hasEnlarged(on: display) else { overlay.toggle(on: target); shown?(); return }
