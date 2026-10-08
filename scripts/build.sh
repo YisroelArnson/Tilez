@@ -26,7 +26,9 @@ UPDATES=""
 if [ "${TILEZ_RELEASE:-0}" = 1 ]; then
   UPDATES="<key>SUFeedURL</key><string>$SPARKLE_FEED</string>
 <key>SUPublicEDKey</key><string>$SPARKLE_PUBLIC_KEY</string>
-<key>SUEnableAutomaticChecks</key><true/>"
+<key>SUEnableAutomaticChecks</key><true/>
+<key>SUScheduledCheckInterval</key><integer>3600</integer>
+<key>SUAutomaticallyUpdate</key><true/>"
 fi
 cat > "$TILEZ_APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>

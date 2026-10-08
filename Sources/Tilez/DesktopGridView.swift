@@ -187,11 +187,29 @@ struct DesktopGridView: View {
             }
             // New users find every other command here.
             dockButton("Shortcuts", systemImage: "questionmark.circle", key: "?", labels: labels, action: model.toggleShortcuts)
+            updateButton
             moreButton
         }
         .padding(Metrics.barPadding)
         .glassSurface(RoundedRectangle(cornerRadius: Metrics.dockRadius), reduceTransparency: reduceTransparency)
         .fixedSize()
+    }
+
+    /// An update stands out as the dock's one filled button. A downloaded update installs and
+    /// relaunches in one click; otherwise the click opens the update window.
+    @ViewBuilder private var updateButton: some View {
+        if let version = model.availableUpdate, let update = model.onUpdate {
+            Button(action: update) {
+                HStack(spacing: Space.sm) {
+                    Image(systemName: "arrow.down.circle.fill")
+                    Text(model.updateReady ? "Restart to update" : "Update to \(version)")
+                }
+            }
+            .buttonStyle(GridButtonStyle(primary: true, height: Metrics.dockControl))
+            .padding(.leading, Space.xs)
+            .help(model.updateReady ? "Tilez \(version) is downloaded. Restart Tilez to install it." : "Tilez \(version) is available.")
+            .accessibilityLabel(model.updateReady ? "Restart to update to Tilez \(version)" : "Update to Tilez \(version)")
+        }
     }
 
     private func dockButton(_ title: String, systemImage: String, key: String, labels: Bool, enabled: Bool? = nil,
@@ -656,13 +674,6 @@ struct DesktopGridView: View {
 
     private var footer: some View {
         VStack(spacing: Space.sm) {
-            if let version = model.availableUpdate, let update = model.onUpdate {
-                pill {
-                    Image(systemName: "arrow.down.circle.fill").font(.system(size: 16))
-                    Text("Tilez \(version) is \(model.updateReady ? "ready" : "available")")
-                    Button(model.updateReady ? "Restart" : "Update", action: update).buttonStyle(GridButtonStyle(primary: true, capsule: true))
-                }
-            }
             if !model.busy && !model.displaced.isEmpty {
                 pill {
                     appIcons(model.displaced)

@@ -97,8 +97,14 @@ final class ActionItem: NSMenuItem {
         // Only release builds carry an update feed; builds from source update with scripts/update.sh.
         if Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil {
             updateReminder.onChange = { [weak self] version in
-                self?.overlay.model.availableUpdate = version
-                self?.overlay.model.updateReady = self?.updateReminder.install != nil
+                guard let self else { return }
+                self.overlay.model.availableUpdate = version
+                self.overlay.model.updateReady = self.updateReminder.install != nil
+                // A dot on the menu bar icon says there's an update, without opening anything.
+                self.statusItem.button?.image = Self.menuBarIcon(badged: version != nil)
+                self.statusItem.button?.toolTip = version.map {
+                    "Tilez · \(self.updateReminder.install != nil ? "Update ready" : "Update available"): \($0) · ⌃⌥Space"
+                } ?? "Tilez · ⌃⌥Space"
             }
             updater = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: updateReminder, userDriverDelegate: updateReminder)
             overlay.model.onCheckForUpdates = { [weak self] in
@@ -148,7 +154,8 @@ final class ActionItem: NSMenuItem {
         }
     }
     /// Template artwork follows the app icon's three panes and adapts to the menu bar.
-    private static func menuBarIcon() -> NSImage {
+    /// `badged` adds a dot in the top corner, cut out from the panes so it reads at menu bar size.
+    private static func menuBarIcon(badged: Bool = false) -> NSImage {
         let image = NSImage(size: NSSize(width: 18, height: 18), flipped: false) { _ in
             NSColor.black.setFill()
             for rect in [NSRect(x: 1, y: 12, width: 16, height: 5),
@@ -156,10 +163,16 @@ final class ActionItem: NSMenuItem {
                          NSRect(x: 10, y: 1, width: 7, height: 9)] {
                 NSBezierPath(roundedRect: rect, xRadius: 1.2, yRadius: 1.2).fill()
             }
+            if badged, let context = NSGraphicsContext.current {
+                context.compositingOperation = .clear
+                NSBezierPath(ovalIn: NSRect(x: 10, y: 10, width: 9, height: 9)).fill()
+                context.compositingOperation = .sourceOver
+                NSBezierPath(ovalIn: NSRect(x: 11.5, y: 11.5, width: 6, height: 6)).fill()
+            }
             return true
         }
         image.isTemplate = true
-        image.accessibilityDescription = "Tilez"
+        image.accessibilityDescription = badged ? "Tilez, update available" : "Tilez"
         return image
     }
     /// Quick Add opens where the grid would, after that screen's enlarged window returns to its pane.
