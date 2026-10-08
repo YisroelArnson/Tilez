@@ -185,6 +185,8 @@ struct DesktopGridView: View {
                            enabled: !(model.grid.filledCount == 0 && model.originalGrid.filledCount == 0) && model.desktop != nil,
                            action: model.openGrid)
             }
+            // New users find every other command here.
+            dockButton("Shortcuts", systemImage: "questionmark.circle", key: "?", labels: labels, action: model.toggleShortcuts)
             moreButton
         }
         .padding(Metrics.barPadding)

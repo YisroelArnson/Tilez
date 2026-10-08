@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="description" content="Tilez is an open-source macOS tile manager: split, merge, resize, swap, and enlarge windows from your keyboard.">
+<meta name="description" content="Tilez is open-source, keyboard-first window management for macOS: layouts that fit your windows, workspaces that bring them back, and screens that remember where they were.">
 <title>Tilez</title>
 <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23000'/%3E%3Crect x='11.8' y='11.5' width='40.4' height='14.4' rx='2' fill='%23fff'/%3E%3Crect x='11.8' y='28.5' width='18.8' height='24.5' rx='2' fill='%23fff'/%3E%3Crect x='33.4' y='28.5' width='18.8' height='24.5' rx='2' fill='%23fff'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -266,12 +266,43 @@ h2 b { color: var(--ink); font-weight: inherit; }
 .v-term .p { color: #6f6f76; }
 .v-term .ok { color: #fff; }
 
+/* ---------- shortcut strip ---------- */
+.strip { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 18px; margin-top: 6px; color: var(--ink-2); font-size: 13.5px; }
+.strip span { display: inline-flex; align-items: center; gap: 8px; }
+kbd { font: 500 12px/1 var(--mono); color: #e6e6ea; padding: 6px 8px; border-radius: 8px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.12); }
+
+/* ---------- new feature visuals ---------- */
+.v-layouts { width: 100%; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.lay { position: relative; aspect-ratio: 16 / 10; border-radius: 12px; background: rgba(255,255,255,.03); border: 1px solid rgba(255,255,255,.08); }
+.lay.on { border-color: rgba(255,255,255,.5); background: rgba(255,255,255,.07); }
+.lay i { position: absolute; border-radius: 4px; background: rgba(255,255,255,.16); }
+.lay.on i { background: rgba(255,255,255,.3); }
+.v-saved .num { font: 500 12px/1 var(--mono); color: var(--ink-3); }
+.v-screens { display: flex; align-items: flex-end; gap: 18px; }
+.scr { position: relative; border-radius: 10px; border: 1.5px solid rgba(255,255,255,.3); background: rgba(255,255,255,.03); }
+.scr.big { width: 210px; height: 128px; }
+.scr.small { width: 120px; height: 76px; }
+.scr i { position: absolute; border-radius: 4px; background: rgba(255,255,255,.2); }
+.scr i.back { background: rgba(255,255,255,.42); box-shadow: 0 0 0 1px rgba(255,255,255,.5); }
+.v-screens .arrow { align-self: center; color: var(--ink-3); font: 500 20px/1 var(--mono); }
+.v-keys { display: grid; gap: 10px; width: 100%; max-width: 280px; }
+.v-keys div { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 14px; background: rgba(255,255,255,.04); border: 1px solid rgba(255,255,255,.08); font: 600 14px/1 var(--body); }
+.v-keys kbd { min-width: 52px; text-align: center; }
+.v-quick { width: 100%; max-width: 300px; display: grid; gap: 8px; }
+.v-quick .field { padding: 12px 14px; border-radius: 14px; background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.14); font: 500 15px/1 var(--body); }
+.v-quick .field b { display: inline-block; width: 1.5px; height: 1em; vertical-align: -.15em; background: #fff; animation: blink 1.1s steps(1) infinite; }
+.v-quick .row { display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 12px; font: 500 13px/1 var(--body); color: var(--ink-2); }
+.v-quick .row.on { background: rgba(255,255,255,.1); color: #fff; }
+.v-quick .ico { width: 20px; height: 20px; border-radius: 6px; }
+
 /* ---------- install ---------- */
 .install { padding-block: 20px 120px; }
 .install-grid { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .install-col { display: grid; gap: 18px; align-content: start; padding: clamp(18px, 2.2vw, 28px); border-radius: 34px;
   border: 1px solid rgba(255,255,255,.08); background: linear-gradient(180deg, rgba(255,255,255,.045), rgba(255,255,255,.015)); }
 .install-col h3 { margin: 0 0 0 6px; font: 600 clamp(22px, 2vw, 28px)/1.15 var(--display); letter-spacing: -.03em; }
+.install-col > p { margin: 0 6px; color: var(--ink-2); max-width: 46ch; text-wrap: pretty; }
+.install-col .btn { justify-self: start; margin-left: 6px; }
 .term-card { display: flex; flex-direction: column; border-radius: 24px; overflow: hidden;
   background: rgba(0,0,0,.45); border: 1px solid rgba(255,255,255,.07); }
 .term-head { display: flex; align-items: center; justify-content: space-between; padding: 12px 12px 12px 18px; border-bottom: 1px solid rgba(255,255,255,.06); }
@@ -320,13 +351,13 @@ footer a:hover { color: var(--ink); }
   </nav>
   <div class="wrap">
     <h1 class="headline">
-      Window management made easy
+      Every window, in its place.
     </h1>
   </div>
 </header>
 
 <section class="intro wrap">
-  <p class="lede">Open source macOS tile management.</p>
+  <p class="lede">Keyboard-first window management for macOS. Layouts that fit the windows you have, workspaces that bring them back, and screens that remember.</p>
   <div class="cta">
     <a class="btn primary" href="https://github.com/YisroelArnson/Tilez/releases/latest/download/Tilez.dmg">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
@@ -334,11 +365,20 @@ footer a:hover { color: var(--ink); }
     </a>
     <a class="btn ghost glass" href="https://github.com/YisroelArnson/Tilez">View source</a>
   </div>
+  <p class="fine">Free and open source · Notarized · Updates itself · macOS 14 or later</p>
+  <div class="strip" aria-label="Shortcuts that work anywhere">
+    <span><kbd>⌃⌥ Space</kbd> Grid</span>
+    <span><kbd>⌃⌥ G</kbd> Next layout</span>
+    <span><kbd>⌃⌥ T</kbd> Tile all</span>
+    <span><kbd>⌃⌥ W</kbd> Workspaces</span>
+    <span><kbd>⌃⌥ Z</kbd> Undo</span>
+    <span><kbd>?</kbd> Every shortcut</span>
+  </div>
 </section>
 
 <section class="try wrap" id="try">
   <div class="section-head">
-    <h2><b>Try it here.</b> Hover the desktop, then drive it with your keyboard or the keys below.</h2>
+    <h2><b>Try it here.</b> Hover the desktop, then press G to cycle layouts, T to tile, or use the keys below.</h2>
   </div>
   <div class="mac" id="desk" tabindex="0" aria-label="Interactive Tilez demo desktop">
     <div class="menubar">
@@ -349,7 +389,7 @@ footer a:hover { color: var(--ink); }
       <span id="clock">9:41</span>
     </div>
     <div class="area" id="area"></div>
-    <div class="empty" id="empty" hidden>Empty desktop. Press ⌘K to open an app.</div>
+    <div class="empty" id="empty" hidden>Empty desktop. Press K to open an app.</div>
     <div class="editor-hint glass">Grid editor · ↩ Apply · Esc Close</div>
     <div class="hud glass" id="hud" role="status" aria-live="polite"></div>
   </div>
@@ -358,18 +398,51 @@ footer a:hover { color: var(--ink); }
 
 <section class="features wrap" id="features">
   <div class="section-head">
-    <h2><b>Small tool, sharp edges.</b> Everything Tilez does to your windows, one tile at a time.</h2>
+    <h2><b>Small tool, sharp edges.</b> Everything Tilez does to your windows, and the key that does it.</h2>
   </div>
   <div class="bento">
     <article class="card wide" style="--span:7">
-      <div class="vis"><div class="v-desk"><div class="fp "><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l8 4.6v9.2l-8 4.6-8-4.6V7.4z"/><circle cx="12" cy="12" r="3.2"/></svg></span>ChatGPT</div><div class="fp on"><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/></svg></span>Claude</div><div class="fp "><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg></span>Safari</div><div class="fp "><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7l5 5-5 5M12.5 17H19"/></svg></span>Terminal</div></div></div>
-      <div class="copy"><span class="chip">⌃⌥ Space</span><h3>Starts from your real desktop</h3>
-        <p>The grid mirrors the windows already on screen, uneven sizes and all. Nothing moves until you press Return.</p></div>
+      <div class="vis"><div class="v-layouts" aria-hidden="true"><div class="lay on"><i style="left:0.0%;top:0.0%;width:32.1%;height:48.8%"></i><i style="left:34.5%;top:0.0%;width:30.9%;height:48.8%"></i><i style="left:67.9%;top:0.0%;width:32.1%;height:48.8%"></i><i style="left:0.0%;top:51.2%;width:48.8%;height:48.8%"></i><i style="left:51.2%;top:51.2%;width:48.8%;height:48.8%"></i></div><div class="lay"><i style="left:0.0%;top:0.0%;width:53.8%;height:100.0%"></i><i style="left:56.2%;top:0.0%;width:43.8%;height:23.8%"></i><i style="left:56.2%;top:26.2%;width:43.8%;height:22.6%"></i><i style="left:56.2%;top:51.2%;width:43.8%;height:22.6%"></i><i style="left:56.2%;top:76.2%;width:43.8%;height:23.8%"></i></div><div class="lay"><i style="left:0.0%;top:0.0%;width:28.8%;height:48.8%"></i><i style="left:0.0%;top:51.2%;width:28.8%;height:48.8%"></i><i style="left:31.2%;top:0.0%;width:37.6%;height:100.0%"></i><i style="left:71.2%;top:0.0%;width:28.8%;height:48.8%"></i><i style="left:71.2%;top:51.2%;width:28.8%;height:48.8%"></i></div><div class="lay"><i style="left:0.0%;top:0.0%;width:18.8%;height:100.0%"></i><i style="left:21.2%;top:0.0%;width:17.6%;height:100.0%"></i><i style="left:41.2%;top:0.0%;width:17.6%;height:100.0%"></i><i style="left:61.2%;top:0.0%;width:17.6%;height:100.0%"></i><i style="left:81.2%;top:0.0%;width:18.8%;height:100.0%"></i></div><div class="lay"><i style="left:0.0%;top:0.0%;width:48.8%;height:48.8%"></i><i style="left:51.2%;top:0.0%;width:48.8%;height:48.8%"></i><i style="left:0.0%;top:51.2%;width:32.1%;height:48.8%"></i><i style="left:34.5%;top:51.2%;width:30.9%;height:48.8%"></i><i style="left:67.9%;top:51.2%;width:32.1%;height:48.8%"></i></div><div class="lay"><i style="left:0.0%;top:0.0%;width:100.0%;height:58.8%"></i><i style="left:0.0%;top:61.2%;width:23.8%;height:38.8%"></i><i style="left:26.2%;top:61.2%;width:22.6%;height:38.8%"></i><i style="left:51.2%;top:61.2%;width:22.6%;height:38.8%"></i><i style="left:76.2%;top:61.2%;width:23.8%;height:38.8%"></i></div></div></div>
+      <div class="copy"><span class="chip">G · ⌃⌥ G</span><h3>Layouts that fit your windows</h3>
+        <p>Five windows on screen? Tilez shows every good way to arrange exactly five, from an even grid to a main window with the rest stacked beside it. Press ⌃⌥G anywhere to cycle through them.</p></div>
     </article>
     <article class="card wide" style="--span:5">
+      <div class="vis"><div class="v-desk"><div class="fp "><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8l8 4.6v9.2l-8 4.6-8-4.6V7.4z"/><circle cx="12" cy="12" r="3.2"/></svg></span>ChatGPT</div><div class="fp on"><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/></svg></span>Claude</div><div class="fp "><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg></span>Safari</div><div class="fp "><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7l5 5-5 5M12.5 17H19"/></svg></span>Terminal</div></div></div>
+      <div class="copy"><span class="chip">⌃⌥ Space</span><h3>Starts from your real desktop</h3>
+        <p>The grid mirrors every window on screen, uneven sizes and ones hidden behind others included. Nothing moves until you press Return.</p></div>
+    </article>
+    <article class="card wide" style="--span:5">
+      <div class="vis"><div class="v-saved">
+        <div class="item on"><div class="thumb" style="grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr)"><i style="grid-row:span 2"></i><i style=""></i><i style=""></i><i style="grid-column:span 2"></i></div><b>Coding</b><span class="num">⌃⌥1</span></div>
+        <div class="item"><div class="thumb" style="grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(1,1fr)"><i style=""></i><i style=""></i></div><b>Writing</b><span class="num">⌃⌥2</span></div>
+        <div class="item"><div class="thumb" style="grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr)"><i style="grid-row:span 2"></i><i style=""></i><i style=""></i><i style=""></i><i style=""></i><i style=""></i><i style=""></i></div><b>Launch day</b><span class="num">⌃⌥3</span></div>
+      </div></div>
+      <div class="copy"><span class="chip">⌃⌥ W · ⌃⌥ 1–9</span><h3>Workspaces bring them back</h3>
+        <p>Save the windows on a screen and get the same ones back later, from wherever they went: minimized, another desktop, another screen. New windows join on their own.</p></div>
+    </article>
+    <article class="card wide" style="--span:7">
+      <div class="vis"><div class="v-screens" aria-hidden="true">
+        <div class="scr small"><i style="left:6%;top:8%;width:42%;height:84%"></i><i style="left:52%;top:8%;width:42%;height:84%"></i></div>
+        <span class="arrow">→</span>
+        <div class="scr big"><i class="back" style="left:3%;top:5%;width:46%;height:90%"></i><i class="back" style="left:51%;top:5%;width:46%;height:43%"></i><i class="back" style="left:51%;top:52%;width:46%;height:43%"></i></div>
+      </div></div>
+      <div class="copy"><span class="chip">Automatic</span><h3>Screens that remember</h3>
+        <p>Unplug your monitor and macOS piles its windows onto the laptop. Plug it back in and Tilez puts each one back where it was, or asks first if you prefer.</p></div>
+    </article>
+    <article class="card">
+      <div class="vis"><div class="v-keys"><div><kbd>⌃⌥ T</kbd>Tile all</div><div><kbd>⌃⌥ R</kbd>Realign</div><div><kbd>⌃⌥ Z</kbd>Undo</div></div></div>
+      <div class="copy"><span class="chip">No grid needed</span><h3>Tidy from anywhere</h3>
+        <p>Tile every window on a screen, snap a messy one back into line, and undo any arrangement, one key away.</p></div>
+    </article>
+    <article class="card">
       <div class="vis"><div class="v-zoom"><div class="fp"></div><div class="fp"></div><div class="fp"></div><div class="fp"></div><div class="fp"></div><div class="fp"></div><div class="fp on big"><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v18M3 12h18M5.6 5.6l12.8 12.8M18.4 5.6L5.6 18.4"/></svg></span>Claude</div></div></div>
-      <div class="copy"><span class="chip">⌃⌥ Return · ⌃⌥ Click</span><h3>Enlarge, then put it back</h3>
-        <p>Blow a window up over its neighbors, then drop it exactly where it was. Each screen and desktop keeps its own.</p></div>
+      <div class="copy"><span class="chip">⌃⌥ Return · ⌃⌥ Drag</span><h3>Hands on the window</h3>
+        <p>Enlarge a window over its neighbors and drop it back exactly. ⌃⌥-drag swaps two windows, and ⌃⌥ right-click opens another of that app beside it.</p></div>
+    </article>
+    <article class="card">
+      <div class="vis"><div class="v-quick"><div class="field">Saf<b></b></div><div class="row on"><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg></span>Safari</div><div class="row"><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7l5 5-5 5M12.5 17H19"/></svg></span>Terminal</div></div></div>
+      <div class="copy"><span class="chip">⌃⌥ N</span><h3>Quick Add</h3>
+        <p>Type an app's name and its new window slots into the layout. Every other window keeps its place.</p></div>
     </article>
     <article class="card">
       <div class="vis"><div class="v-split"><div class="fp "><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 7l5 5-5 5M12.5 17H19"/></svg></span>Terminal</div><div class="fp on"><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/></svg></span>Xcode</div><div class="fp "><span class="ico"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M15.5 8.5l-2 5-5 2 2-5z"/></svg></span>Safari</div><span class="bar"></span></div></div>
@@ -387,35 +460,25 @@ footer a:hover { color: var(--ink); }
       <div class="copy"><span class="chip">Accessibility only</span><h3>Stays on your Mac</h3>
         <p>No screen recording and no Input Monitoring. Tilez only needs to move your windows.</p></div>
     </article>
-    <article class="card wide" style="--span:5">
-      <div class="vis"><div class="v-saved">
-        <div class="item on"><div class="thumb" style="grid-template-columns:repeat(3,1fr);grid-template-rows:repeat(2,1fr)"><i style="grid-row:span 2"></i><i style=""></i><i style=""></i><i style="grid-column:span 2"></i></div><b>Writing</b><span>4 apps</span></div>
-        <div class="item"><div class="thumb" style="grid-template-columns:repeat(2,1fr);grid-template-rows:repeat(1,1fr)"><i style=""></i><i style=""></i></div><b>Reading</b><span>2 apps</span></div>
-        <div class="item"><div class="thumb" style="grid-template-columns:repeat(4,1fr);grid-template-rows:repeat(2,1fr)"><i style="grid-row:span 2"></i><i style=""></i><i style=""></i><i style=""></i><i style=""></i><i style=""></i><i style=""></i></div><b>Launch day</b><span>7 apps</span></div>
-      </div></div>
-      <div class="copy"><span class="chip">⌘S · ⌘O</span><h3>Saved grids</h3>
-        <p>Name a layout once and open it on any desktop. Saved grids keep app choices and pane shapes.</p></div>
-    </article>
-    <article class="card wide" style="--span:7">
-      <div class="vis v-term"><div>
-        <div><span class="p">~ %</span> gh repo clone YisroelArnson/Tilez</div>
-        <div><span class="p">~ %</span> cd Tilez &amp;&amp; bash scripts/update.sh</div>
-        <div class="p">Build complete!</div>
-        <div class="ok">Installed and launched: /Applications/Tilez.app</div>
-      </div></div>
-      <div class="copy"><span class="chip">Swift · macOS 14+</span><h3>Open source, one-line updates</h3>
-        <p>Read it, change it, build it. The same script installs Tilez the first time and updates it after every push.</p></div>
-    </article>
   </div>
 </section>
 
 <section class="install wrap" id="install">
   <div class="section-head">
-    <h2><b>Install in a minute.</b> Clone it once, and one command keeps it current.</h2>
+    <h2><b>Install in a minute.</b> Download it once, and it keeps itself up to date.</h2>
   </div>
   <div class="install-grid">
     <div class="install-col">
-      <h3>First install</h3>
+      <h3>Download</h3>
+      <p>A notarized app for macOS 14 or later. When an update is out, a pill in the grid offers it, and Restart installs it.</p>
+      <a class="btn primary" href="https://github.com/YisroelArnson/Tilez/releases/latest/download/Tilez.dmg">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11M7 10l5 5 5-5M5 20h14"/></svg>
+        Download for Mac
+      </a>
+      <p>Open it, drag Tilez to Applications, and allow Accessibility when it asks. Press <kbd>⌃⌥ Space</kbd>, then <kbd>?</kbd> to see everything it can do.</p>
+    </div>
+    <div class="install-col">
+      <h3>Build from source</h3>
       <div class="term-card">
         <div class="term-head"><span class="chip">Terminal</span><button class="copy-btn glass" type="button" data-copy="first">Copy</button></div>
 <pre id="cmd-first"><span class="p">% </span>xcode-select --install
@@ -423,14 +486,7 @@ footer a:hover { color: var(--ink); }
 <span class="p">% </span>cd Tilez
 <span class="p">% </span>bash scripts/update.sh</pre>
       </div>
-    </div>
-    <div class="install-col">
-      <h3>Update</h3>
-      <div class="term-card">
-        <div class="term-head"><span class="chip">Terminal</span><button class="copy-btn glass" type="button" data-copy="update">Copy</button></div>
-<pre id="cmd-update"><span class="p">% </span>cd Tilez
-<span class="p">% </span>bash scripts/update.sh</pre>
-      </div>
+      <p>Run the last line again from the folder to update after every push.</p>
     </div>
   </div>
 </section>
@@ -675,6 +731,84 @@ footer a:hover { color: var(--ink); }
     return { ...a, x, y, w: Math.max(maxX(a), maxX(b)) - x, h: Math.max(maxY(a), maxY(b)) - y };
   }
   const intersects = (a, b) => a.x < maxX(b) && b.x < maxX(a) && a.y < maxY(b) && b.y < maxY(a);
+  /* Layouts that fit every window: a port of Tilez's LayoutPreset.variations. */
+  const R = (x, y, w, h) => ({ x, y, w, h });
+  function rowsOf(n, rows) { return Array.from({ length: rows }, (_, i) => Math.floor(n / rows) + (i < n % rows ? 1 : 0)); }
+  function rowFrames(counts, a = R(0, 0, 1, 1)) {
+    const h = a.h / counts.length;
+    return counts.flatMap((c, r) => Array.from({ length: c }, (_, k) => R(a.x + a.w * k / c, a.y + h * r, a.w / c, h)));
+  }
+  function colFrames(counts, a = R(0, 0, 1, 1)) {
+    return rowFrames(counts, R(a.y, a.x, a.h, a.w)).map(f => R(f.y, f.x, f.h, f.w));
+  }
+  function tilingShape(n, aspect) {
+    let best = [1, 1], score = Infinity;
+    for (let c = 1; c <= Math.min(6, n); c++) {
+      const r = Math.ceil(n / c); if (r > 4) continue;
+      const s = Math.abs(Math.log(aspect * r / c)) + .3 * (c * r - n);
+      if (s < score) { score = s; best = [c, r]; }
+    }
+    return best;
+  }
+  function gridName(rows) {
+    if (rows.length === 1) return `${rows[0]} columns`;
+    if (rows.every(r => r === 1)) return `${rows.length} rows`;
+    if (new Set(rows).size === 1) return `${rows[0]} × ${rows.length} grid`;
+    return rows.join(' over ');
+  }
+  const sameFrames = (a, b) => a.length === b.length && a.every(f => b.some(g =>
+    Math.abs(f.x - g.x) < .01 && Math.abs(f.y - g.y) < .01 && Math.abs(f.w - g.w) < .01 && Math.abs(f.h - g.h) < .01));
+  function variations(n, aspect) {
+    if (n < 1) return [];
+    if (n === 1) return [{ name: 'One window', frames: [R(0, 0, 1, 1)] }];
+    const out = [], rest = n - 1;
+    const add = (name, frames) => {
+      if (frames.length !== n || frames.some(f => f.w < .11 || f.h < .2) || out.some(v => sameFrames(v.frames, frames))) return;
+      out.push({ name, frames });
+    };
+    const main = left => {
+      const mw = rest === 1 ? .5 : .55;
+      const side = R(left ? mw : 0, 0, 1 - mw, 1);
+      return [R(left ? 0 : 1 - mw, 0, mw, 1), ...(rest <= 4 ? colFrames([rest], side) : colFrames(rowsOf(rest, 2), side))];
+    };
+    const [, evenRows] = tilingShape(n, aspect);
+    add(gridName(rowsOf(n, evenRows)), rowFrames(rowsOf(n, evenRows)));
+    add(`Main and ${rest} beside`, main(true));
+    add(`${n} columns`, rowFrames([n]));
+    if (n >= 4) {
+      const l = Math.floor(n / 2), r = n - 1 - l;
+      add('Tall middle, sides stacked', [...colFrames([l], R(0, 0, .3, 1)), R(.3, 0, .4, 1), ...colFrames([r], R(.7, 0, .3, 1))]);
+    }
+    add(`${rest} beside and main`, main(false));
+    for (let rc = 1; rc <= Math.min(n, 4); rc++) {
+      if (rc === evenRows) continue;
+      const split = rowsOf(n, rc);
+      if (split.length === n || split.filter(c => c === 1).length <= 1) add(gridName(split), rowFrames(split));
+    }
+    if (n >= 4) add(`2 over ${n - 2}`, rowFrames([2, n - 2]));
+    add(`Wide top, ${rest} below`, [R(0, 0, 1, .6), ...rowFrames([rest], R(0, .6, 1, .4))]);
+    for (let c = 2; c <= Math.min(n, 6); c++) {
+      if (n <= c) continue;
+      const stacks = rowsOf(n, c);
+      if (stacks.every(k => k >= 2)) add(`Stacks of ${stacks.join(', ')}`, colFrames(stacks));
+    }
+    if (n === 3) add('Wide middle', [R(0, 0, .25, 1), R(.25, 0, .5, 1), R(.75, 0, .25, 1)]);
+    return out.slice(0, 11);
+  }
+  function gapped(f) {
+    const l = f.x < .001 ? 0 : GX / 2, r = f.x + f.w > .999 ? 0 : GX / 2, t = f.y < .001 ? 0 : GY / 2, b = f.y + f.h > .999 ? 0 : GY / 2;
+    return R(f.x + l, f.y + t, f.w - l - r, f.h - t - b);
+  }
+  const readingOrder = fs => fs.map((f, i) => i).sort((a, b) =>
+    Math.round(fs[a].y / .1) - Math.round(fs[b].y / .1) || fs[a].x - fs[b].x || a - b);
+  const fitsLayout = (ps, frames) => sameFrames(ps.map(p => R(p.x, p.y, p.w, p.h)), frames.map(gapped))
+    || frames.every(f => { const g = gapped(f); return ps.some(p => Math.abs(p.x - g.x) < .02 && Math.abs(p.y - g.y) < .02 && Math.abs(p.w - g.w) < .03 && Math.abs(p.h - g.h) < .03); });
+  /** Moves the panes into `frames` in reading order, so windows keep their order on screen. */
+  function arrangeInto(frames) {
+    const targets = readingOrder(frames).map(i => gapped(frames[i]));
+    readingOrder(panes).forEach((pi, k) => Object.assign(panes[pi], targets[k]));
+  }
+
   function removePane(ps, i) {
     const removed = ps[i];
     for (const edge of ['left', 'right', 'top', 'bottom']) {
@@ -912,6 +1046,23 @@ footer a:hover { color: var(--ink); }
       selectedId = added.id;
       hud(`Opened ${nameOf(added)}`);
     },
+    tile() {
+      if (!panes.length) { hud('Press K to open an app first'); return; }
+      const r = area.getBoundingClientRect();
+      snapshot(); zoomedId = null;
+      arrangeInto(variations(panes.length, r.width / r.height)[0].frames);
+      hud(`Tiled ${panes.length} window${panes.length === 1 ? '' : 's'}`);
+    },
+    layout() {
+      if (!panes.length) { hud('Press K to open an app first'); return; }
+      const r = area.getBoundingClientRect();
+      const list = variations(panes.length, r.width / r.height);
+      const at = list.findIndex(v => fitsLayout(panes, v.frames));
+      const next = (at + 1) % list.length;
+      snapshot(); zoomedId = null;
+      arrangeInto(list[next].frames);
+      hud(`${list[next].name} · ${next + 1} of ${list.length}`);
+    },
     undo() {
       const last = undoStack.pop();
       if (!last) { hud('Nothing to undo'); return; }
@@ -948,8 +1099,10 @@ footer a:hover { color: var(--ink); }
     { action: 'swap', label: 'Swap', combo: '⇧ Arrow', dir: true },
     { action: 'split', label: 'Split', combo: '⌥ Arrow', dir: true },
     { action: 'merge', label: 'Merge', combo: '⌥⇧ Arrow', dir: true },
+    { action: 'layout', label: 'Next layout', combo: '⌃⌥ G' },
+    { action: 'tile', label: 'Tile all', combo: 'T' },
     { action: 'zoom', label: 'Enlarge', combo: '⌃⌥ Return' },
-    { action: 'add', label: 'Add', combo: '⌘K' },
+    { action: 'add', label: 'Add', combo: 'K' },
     { action: 'remove', label: 'Close', combo: '⌫' },
     { action: 'undo', label: 'Undo', combo: '⌘Z' },
     { action: 'editor', label: 'Grid editor', combo: '⌃⌥ Space' }
@@ -1013,7 +1166,10 @@ footer a:hover { color: var(--ink); }
     else if (key === 'Enter' && e.ctrlKey && e.altKey) action = 'zoom';
     else if (key === 'Enter' && plain && !editing) action = 'zoom';
     else if ((e.metaKey || e.ctrlKey) && e.code === 'KeyZ') action = 'undo';
-    else if ((e.metaKey || e.ctrlKey) && e.code === 'KeyK') action = 'add';
+    else if (e.code === 'KeyK' && (plain || e.metaKey || e.ctrlKey)) action = 'add';
+    // Tilez claims ⌃⌥G and ⌃⌥T on a Mac running it, so plain G and T stand in for them too.
+    else if (e.code === 'KeyG' && (plain || (e.ctrlKey && e.altKey))) action = 'layout';
+    else if (e.code === 'KeyT' && (plain || (e.ctrlKey && e.altKey))) action = 'tile';
     else if (dir && !e.metaKey && !e.ctrlKey) action = e.altKey && e.shiftKey ? 'merge' : e.altKey ? 'split' : e.shiftKey ? 'swap' : 'select';
     else if ((key === 'Backspace' || key === 'Delete') && !e.metaKey) action = 'remove';
     else if (editing && (key === 'Escape' || key === 'Enter')) {
