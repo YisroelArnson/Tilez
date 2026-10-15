@@ -78,6 +78,10 @@ struct GridAppChoice: Identifiable, Sendable {
         didSet { defaults.set(putBackAutomatically, forKey: Self.putBackKey) }
     }
     static let putBackKey = "putWindowsBackAutomatically"
+    @Published var keepDesktopsSeparate: Bool {
+        didSet { defaults.set(keepDesktopsSeparate, forKey: Self.keepDesktopsKey) }
+    }
+    static let keepDesktopsKey = "keepDesktopsSeparateOnDisconnect"
     private var loadedLayout = false
     private var selections: [String: Int] = [:]
     private(set) var display: Display?
@@ -99,6 +103,7 @@ struct GridAppChoice: Identifiable, Sendable {
     init(manager: WindowManager, defaults: UserDefaults = .standard) {
         self.manager = manager; self.defaults = defaults
         putBackAutomatically = defaults.bool(forKey: Self.putBackKey)
+        keepDesktopsSeparate = defaults.object(forKey: Self.keepDesktopsKey) as? Bool ?? true
         saved = defaults.data(forKey: "savedGridsV2")
             .flatMap { try? JSONDecoder().decode([SavedGrid].self, from: $0) }?
             .filter { $0.grid.isValid } ?? []
@@ -119,6 +124,7 @@ struct GridAppChoice: Identifiable, Sendable {
         let away = snapshot == nil ? displacedWindows?(display) : nil
         displaced = away?.windows ?? []; displacedLocation = away?.location ?? ""
         putBackAutomatically = defaults.bool(forKey: Self.putBackKey)
+        keepDesktopsSeparate = defaults.object(forKey: Self.keepDesktopsKey) as? Bool ?? true
         selectedCell = selections[locationKey].flatMap { grid.slots.indices.contains($0) ? $0 : nil } ?? 0
         closeLayers()
         search = ""; message = ""; isError = false; undoDrafts = []; dividerDraft = nil

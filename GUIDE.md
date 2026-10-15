@@ -4,6 +4,7 @@ Everything Tilez can do, and the keys that do it. New to Tilez? Start with the [
 
 - [The grid](#the-grid)
 - [Workspaces](#workspaces)
+- [Keep desktops separate when screens disconnect](#keep-desktops-separate-when-screens-disconnect)
 - [Put windows back when a screen reconnects](#put-windows-back-when-a-screen-reconnects)
 - [Quick add a tile](#quick-add-a-tile)
 - [Tile or cycle layouts without the grid](#tile-or-cycle-layouts-without-the-grid)
@@ -58,9 +59,15 @@ A **workspace** is a set of open windows kept in one arrangement, on one screen 
 - **When saving would make a new workspace** but some already share windows with the screen, the save form offers to update them first, best match first, such as **Update “Coding” · 4 of its 5 windows are here**. The ⌃⌥⇧S panel offers the best match the same way.
 - Pulling windows off other desktops uses the same desktop bridge as the grid (macOS 26.4+). When a screen is showing a full-screen app, that screen switches to a regular desktop for the workspace and the app stays in full screen on its own desktop. The workspace's own full-screen windows leave full screen and join the layout.
 
+## Keep desktops separate when screens disconnect
+
+When you unplug a monitor, Tilez keeps each of its regular desktops as a separate desktop on the laptop (or another remaining screen). It reuses the original desktop if macOS preserved it; otherwise it creates a desktop for that group of windows and fits their arrangement to the smaller screen. Your laptop's own desktops stay separate, and Tilez returns you to the desktop you were using afterward. Existing terminal tabs stay with their windows.
+
+This is on by default. Turn off **… → Keep desktops separate when a screen disconnects** to let macOS handle the windows instead. Tilez must be running while the monitors are connected so it can remember each window's original desktop. Desktop movement requires macOS 26.4 or later and Accessibility access. Native full-screen windows, minimized windows, hidden apps, and windows assigned to several desktops are left alone. Tilez waits a few seconds for the screens to settle before acting.
+
 ## Put windows back when a screen reconnects
 
-When a monitor disconnects, macOS moves its windows onto the screens that are left and often doesn't move them back. While more than one screen is connected, Tilez remembers which screen each window is on and where. When a screen comes back and windows that belonged to it are still on another screen, a prompt at the top of that screen offers **Put Back**. They return to their places on the screen's current desktop. Minimized windows, windows of hidden apps, and windows opened while the screen was away stay where they are.
+While more than one screen is connected, Tilez remembers which screen and desktop each window is on and where. When a screen comes back and windows that belonged to it are still on another screen, a prompt at the top of that screen offers **Put Back**. They return in their original desktop groups, creating replacement desktops on that screen when necessary. Records from older Tilez versions without desktop information return to the screen's current desktop. Minimized windows, windows of hidden apps, and windows opened while the screen was away stay where they are.
 
 - Check **Always put windows back** in the prompt, or choose **… → Put windows back when a screen reconnects → Automatically** in the grid, to skip the prompt.
 - After **Not Now**, the grid on that screen shows a **Put back** pill for 15 minutes.

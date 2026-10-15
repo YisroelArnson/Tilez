@@ -12,6 +12,8 @@ struct Desktop: Identifiable, Equatable {
     let displayName: String
     var isFullScreen = false
     var id: String { "\(displayID)|\(uuid.isEmpty ? "session-\(number)" : uuid)" }
+    /// Stable when macOS transfers a Space to a different display.
+    var spaceIdentity: String { uuid.isEmpty ? "session-\(number)" : uuid }
     var title: String { "Desktop \(index) · \(displayName)" + (isCurrent ? " (current)" : "") }
 }
 

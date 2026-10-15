@@ -622,6 +622,9 @@ struct DesktopGridView: View {
         add("Close all panes on Apply", "\u{8}", [.command, .shift]) { model.removeAllPanes() }
         menu.addItem(.separator())
         add("Keyboard Shortcuts", "?") { model.toggleShortcuts() }
+        let keepDesktops = GridMenuItem("Keep desktops separate when a screen disconnects") { model.keepDesktopsSeparate.toggle() }
+        keepDesktops.state = model.keepDesktopsSeparate ? .on : .off
+        menu.addItem(keepDesktops)
         if Display.all.count > 1 || model.putBackAutomatically {
             let putBack = NSMenuItem(title: "Put windows back when a screen reconnects", action: nil, keyEquivalent: "")
             let choices = NSMenu()

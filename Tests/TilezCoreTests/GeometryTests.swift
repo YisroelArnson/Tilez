@@ -373,6 +373,46 @@ func checkGathering() {
     expect(memory.screens.isEmpty)
     let encoded = try! JSONEncoder().encode(ScreenMemory())
     expectEqual(try! JSONDecoder().decode(ScreenMemory.self, from: encoded), ScreenMemory())
+
+    // Two monitor desktops spill onto one laptop desktop: preserve the original groups,
+    // exact terminal-window bindings, relative frames, and front-to-back order.
+    memory = ScreenMemory()
+    memory.record(DesktopGrid(panes: (0..<6).map(pane), frames: [left, right, right, left, left, right]), on: "Monitor",
+        desktops: [binding(0): "Coding", binding(1): "Research", binding(2): "Coding", binding(3): "Research", binding(5): "Closed"])
+    memory.record(DesktopGrid(panes: [pane(6)], frames: [left]), on: "Laptop", desktops: [binding(6): "Home"])
+    memory.record(DesktopGrid(panes: [pane(7)], frames: [right]), on: "Other monitor", desktops: [binding(7): "Chat"])
+    let movable = Set((0..<5).map(binding) + [binding(6), binding(7)])
+    let groups = memory.desktopGroups(on: ["Monitor"], keeping: movable)
+    expectEqual(groups.map(\.desktop), ["Coding", "Research"])
+    expectEqual(groups[0].grid.slots.map(\.binding), [binding(0), binding(2)])
+    expectEqual(groups[1].grid.slots.map(\.binding), [binding(1), binding(3)])
+    expectEqual(groups[0].grid.normalizedFrames, [left, right])
+    expectEqual(groups[1].grid.normalizedFrames, [right, left])
+    expect(groups.allSatisfy { $0.displayID == "Monitor" && $0.grid.isValid }, "The laptop's own windows and other connected screens stay out")
+    expectEqual(memory.desktopGroups(on: ["Monitor", "Other monitor"], keeping: movable).count, 3)
+    expect(memory.desktopGroups(on: ["Monitor"], keeping: []).isEmpty, "Closed, hidden and minimized windows create no desktops")
+    let restarted = GridWindowBinding(windowID: binding(0).windowID, processSession: "a different launch")
+    expect(memory.desktopGroups(on: ["Monitor"], keeping: [restarted]).isEmpty, "A reused window ID from a restarted app is not moved")
+    expect(memory.desktopGroups(on: [], keeping: movable).isEmpty, "Resolution changes without a disconnect create no desktops")
+    memory.rememberReplacement("Laptop Coding", for: groups[0], on: "Laptop")
+    expectEqual(memory.replacement(for: groups[0], on: "Laptop"), "Laptop Coding")
+    expect(memory.replacement(for: groups[1], on: "Laptop") == nil, "Each original desktop needs its own replacement")
+    expect(memory.replacement(for: groups[0], on: "Monitor") == nil, "Reconnecting does not reuse a laptop desktop on the monitor")
+    let groupedData = try! JSONEncoder().encode(memory)
+    let restoredMemory = try! JSONDecoder().decode(ScreenMemory.self, from: groupedData)
+    expectEqual(restoredMemory, memory)
+    expectEqual(restoredMemory.replacement(for: groups[0], on: "Laptop"), "Laptop Coding")
+    // Persisted v1 records still restore on reconnect, but cannot invent original desktop groups.
+    var legacyJSON = try! JSONSerialization.jsonObject(with: groupedData) as! [String: Any]
+    var legacyScreens = legacyJSON["screens"] as! [String: [[String: Any]]]
+    for (display, windows) in legacyScreens {
+        legacyScreens[display] = windows.map { window in var old = window; old.removeValue(forKey: "desktop"); return old }
+    }
+    legacyJSON["screens"] = legacyScreens
+    legacyJSON.removeValue(forKey: "replacements")
+    let legacy = try! JSONDecoder().decode(ScreenMemory.self, from: JSONSerialization.data(withJSONObject: legacyJSON))
+    expect(legacy.desktopGroups(on: ["Monitor"], keeping: movable).isEmpty, "Legacy screen memory has no inferred desktop membership")
+    expectEqual(legacy.screens["Monitor"]?.count, 6)
     // Presets: each covers the screen without overlap, and panes move in reading order.
     expectEqual(LayoutPreset.all.count, 11)
     expectEqual(Set(LayoutPreset.all.map(\.id)).count, LayoutPreset.all.count)

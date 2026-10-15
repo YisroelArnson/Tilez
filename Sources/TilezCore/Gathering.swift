@@ -62,18 +62,23 @@ public struct ScreenMemory: Codable, Equatable {
         public var slot: GridSlot
         /// Normalized within the screen's usable area.
         public var frame: CGRect
+        /// The original Space UUID (or its session ID on systems without a UUID).
+        /// Nil in records written before desktop grouping, and for windows on several Spaces.
+        public var desktop: String?
     }
     /// Front to back, per display ID.
     public private(set) var screens: [String: [Window]] = [:]
+    /// Replacement Space identities survive retries and app restarts while a monitor is away.
+    private var replacements: [String: String]?
     public init() {}
 
     /// What a screen shows now replaces what it showed before, and its windows leave every other
     /// screen's record. `grid` holds the screen's windows front to back at their exact frames.
-    public mutating func record(_ grid: DesktopGrid, on displayID: String) {
+    public mutating func record(_ grid: DesktopGrid, on displayID: String, desktops: [GridWindowBinding: String] = [:]) {
         let frames = grid.normalizedFrames
         let windows = grid.slots.indices.compactMap { index -> Window? in
             guard grid.slots[index].app != nil, grid.slots[index].binding != nil else { return nil }
-            return Window(slot: grid.slots[index], frame: frames[index])
+            return Window(slot: grid.slots[index], frame: frames[index], desktop: grid.slots[index].binding.flatMap { desktops[$0] })
         }
         let ids = Set(windows.compactMap { $0.slot.binding?.windowID })
         for (other, kept) in screens where other != displayID {
@@ -101,5 +106,42 @@ public struct ScreenMemory: Codable, Equatable {
         }
         guard !away.isEmpty else { return nil }
         return DesktopGrid(panes: away.map(\.slot), frames: away.map(\.frame))
+    }
+
+    public struct DesktopGroup {
+        public let displayID: String
+        public let desktop: String
+        public let grid: DesktopGrid
+    }
+
+    public func replacement(for group: DesktopGroup, on displayID: String) -> String? {
+        replacements?["\(displayID)|\(group.displayID)|\(group.desktop)"]
+    }
+
+    public mutating func rememberReplacement(_ desktop: String, for group: DesktopGroup, on displayID: String) {
+        if replacements == nil { replacements = [:] }
+        replacements?["\(displayID)|\(group.displayID)|\(group.desktop)"] = desktop
+    }
+
+    /// Each original desktop stays a separate group, even when macOS piles its windows onto
+    /// the same surviving desktop. Only exact, still-movable window bindings are included.
+    /// Legacy records and windows assigned to several Spaces have no unambiguous group.
+    public func desktopGroups(on displayIDs: Set<String>, keeping movable: Set<GridWindowBinding>) -> [DesktopGroup] {
+        var result: [DesktopGroup] = []
+        for displayID in displayIDs.sorted() {
+            var order: [String] = []
+            var groups: [String: [Window]] = [:]
+            for window in screens[displayID] ?? [] {
+                guard let desktop = window.desktop, let binding = window.slot.binding, movable.contains(binding) else { continue }
+                if groups[desktop] == nil { order.append(desktop) }
+                groups[desktop, default: []].append(window)
+            }
+            for desktop in order {
+                let windows = groups[desktop]!
+                result.append(DesktopGroup(displayID: displayID, desktop: desktop,
+                    grid: DesktopGrid(panes: windows.map(\.slot), frames: windows.map(\.frame))))
+            }
+        }
+        return result
     }
 }

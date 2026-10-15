@@ -29,6 +29,7 @@ MainActor.assumeIsolated {
 final class GridMemoryDefaults: UserDefaults {
     var values: [String: Any] = [:]
     override func data(forKey key: String) -> Data? { values[key] as? Data }
+    override func object(forKey key: String) -> Any? { values[key] }
     override func set(_ value: Any?, forKey key: String) { values[key] = value }
     override func stringArray(forKey key: String) -> [String]? { values[key] as? [String] }
 }
@@ -37,6 +38,10 @@ MainActor.assumeIsolated {
     let storage = GridMemoryDefaults(suiteName: nil)!
     let manager = WindowManager(preferences: Preferences(defaults: storage), backgroundArrangements: false)
     let model = GridEditorModel(manager: manager, defaults: storage)
+    assert(model.keepDesktopsSeparate, "Disconnecting screens preserves desktop groups by default")
+    model.keepDesktopsSeparate = false
+    assert(!GridEditorModel(manager: manager, defaults: storage).keepDesktopsSeparate, "The opt-out survives editor recreation")
+    model.keepDesktopsSeparate = true
     let safari = GridApp(bundleID: "com.apple.Safari", name: "Safari")
     let finder = GridApp(bundleID: "com.apple.finder", name: "Finder")
     let binding = GridWindowBinding(windowID: "old-window", processSession: "old-launch")
