@@ -1080,7 +1080,7 @@ private final class GridMenuItem: NSMenuItem {
 struct ShortcutSheet: View {
     private let anywhere = [("⌃⌥Space", "Show or hide the grid"), ("⌃⌥N", "Quick add a tile"), ("⌃⌥R", "Realign windows"), ("⌃⌥T", "Tile all windows"), ("⌃⌥G", "Next layout"), ("⌃⌥Z", "Undo arrangement"),
                             ("⌃⌥W", "Workspaces"), ("⌃⌥1–9", "Switch workspace"), ("⌃⌥S", "Save the workspace"),
-                            ("⌃⌥⇧S", "Save a new workspace"), ("⌃⌥Return", "Enlarge a window"), ("⌃⌥ right-click", "Another window of that app")]
+                            ("⌃⌥⇧S", "Save a new workspace"), ("⌃⌥Return / click", "Enlarge a window"), ("⌃⌥ right-click", "Another window of that app")]
     private let grid = [("Arrows", "Select a pane"), ("⌥ Arrows", "Split"), ("⌥⇧ Arrows", "Merge"), ("⇧ Arrows", "Move"), ("1–9", "Choose a pane’s app"),
                         ("G", "Layouts"), ("K", "Add a pane"), ("T", "Tile all"), ("W", "Workspaces"), ("R", "Realign"),
                         ("S / ⇧S", "Save / save new"), ("O", "Saved layouts"), ("Space", "Choose an app"), ("⌘Z", "Undo"),
@@ -1088,7 +1088,7 @@ struct ShortcutSheet: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: Space.xl) {
-            column("Anywhere", anywhere)
+            column("Anywhere", anywhere, keyWidth: 140)
             column("In the grid", grid)
         }
         .padding(Space.lg)
@@ -1099,14 +1099,14 @@ struct ShortcutSheet: View {
         .accessibilityLabel("Keyboard shortcuts")
     }
 
-    private func column(_ title: String, _ rows: [(String, String)]) -> some View {
+    private func column(_ title: String, _ rows: [(String, String)], keyWidth: CGFloat = 116) -> some View {
         VStack(alignment: .leading, spacing: Space.sm) {
             Text(title).font(.system(size: 11, weight: .semibold)).foregroundStyle(.secondary)
             ForEach(rows, id: \.0) { key, label in
                 HStack(spacing: Space.md) {
                     Text(key).font(.system(size: 12, weight: .medium, design: .rounded))
                         .padding(.horizontal, Space.xs + Space.xxs).fixedSize()
-                        .frame(width: 116, height: 22, alignment: .leading)
+                        .frame(width: keyWidth, height: 22, alignment: .leading)
                         .background(Palette.raised, in: RoundedRectangle(cornerRadius: Space.xs))
                     Text(label).font(.system(size: 13))
                 }

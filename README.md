@@ -37,7 +37,7 @@ Open the disk image and drag Tilez to Applications. The app is notarized by Appl
 | **⌃⌥ W** | Browse your workspaces; **⌃⌥ 1–9** opens one |
 | **⌃⌥ S** | Save the workspace on this screen |
 | **⌃⌥ Z** | Undo the last arrangement |
-| **⌃⌥ Return** | Enlarge a window, and put it back |
+| **⌃⌥ Return** or **⌃⌥ click** | Enlarge a window, and put it back |
 | **⌃⌥ N** | Quick Add an app as a new tile |
 | **?** | Every other shortcut, inside the grid |
 
