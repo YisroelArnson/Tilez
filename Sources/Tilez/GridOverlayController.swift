@@ -1,6 +1,7 @@
 import AppKit
 import SwiftUI
 import Carbon
+import TilezCore
 
 private final class GridPanel: NSPanel {
     override var canBecomeKey: Bool { true }
@@ -92,7 +93,13 @@ private final class GridPanel: NSPanel {
     }
     /// The screen the grid opens on: the one given, else the active app's foremost window's.
     func targetScreen(_ screen: NSScreen? = nil) -> NSScreen? {
-        screen ?? keyboardScreen() ?? NSScreen.main ?? NSScreen.screens.first
+        let displays = Display.all
+        func id(_ screen: NSScreen?) -> String? { displays.first { $0.screen == screen }?.id }
+        let target = ScreenDestination.choose(explicit: id(screen), visibleGrid: isShown ? model.display?.id : nil,
+                                              pointer: displays.first { NSMouseInRect(NSEvent.mouseLocation, $0.screen.frame, false) }?.id,
+                                              activeWindow: id(keyboardScreen()), fallback: id(NSScreen.main ?? NSScreen.screens.first),
+                                              connected: Set(displays.map(\.id)))
+        return displays.first { $0.id == target }?.screen
     }
 
     /// WindowServer's front-to-back list locates the active app's foremost normal

@@ -20,14 +20,12 @@ private final class PutBackPanel: NSPanel {
     private let store: WorkspaceStore
     private let defaults: UserDefaults
     private var memory: ScreenMemory
-    private var connected: Set<String>
+    private var transition: ScreenTransition
     private var disconnectedToPreserve: Set<String> = []
     private var screenGeneration = UUID()
     /// Reconnected screens whose windows can still go back, until the time given. Nothing is
     /// recorded while any are waiting, so their windows keep belonging to them.
     private var pending: [String: Date] = [:]
-    /// Screens are changing, so where windows are now isn't where they belong.
-    private var settling = false
     private var timer: Timer?
     private var settleWork: DispatchWorkItem?
     private var hideWork: DispatchWorkItem?
@@ -40,7 +38,7 @@ private final class PutBackPanel: NSPanel {
     init(store: WorkspaceStore, defaults: UserDefaults = .standard) {
         self.store = store; self.defaults = defaults
         memory = defaults.data(forKey: Self.memoryKey).flatMap { try? JSONDecoder().decode(ScreenMemory.self, from: $0) } ?? ScreenMemory()
-        connected = Set(Display.all.map(\.id))
+        transition = ScreenTransition(connected: Set(Display.all.map(\.id)))
         let center = NotificationCenter.default, workspace = NSWorkspace.shared.notificationCenter
         observers = [
             (center, center.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
@@ -48,10 +46,10 @@ private final class PutBackPanel: NSPanel {
             }),
             // A screen can come or go while the Mac sleeps; record before, and look again after.
             (workspace, workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.record(); self?.settling = true }
+                MainActor.assumeIsolated { self?.willSleep() }
             }),
             (workspace, workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.screensChanged() }
+                MainActor.assumeIsolated { self?.didWake() }
             }),
         ]
         timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
@@ -75,7 +73,7 @@ private final class PutBackPanel: NSPanel {
     /// its windows to come back. With one screen there's nowhere else for windows to be.
     private func record() {
         expire()
-        guard !settling, pending.isEmpty, task == nil else { return }
+        guard transition.permitsRecording, pending.isEmpty, task == nil else { return }
         let displays = Display.all
         // WindowServer drops a screen, and moves its windows, before AppKit's list catches up.
         guard displays.count > 1, Set(displays.map(\.id)).isSubset(of: Self.activeDisplayIDs) else { return }
@@ -153,8 +151,18 @@ private final class PutBackPanel: NSPanel {
 
     // MARK: Screens coming back
 
+    private func willSleep() {
+        record()
+        transition.sleep(remembered: Set(memory.screens.keys))
+    }
+
+    private func didWake() {
+        transition.wake()
+        screensChanged()
+    }
+
     private func screensChanged() {
-        settling = true
+        transition.screensChanged()
         screenGeneration = UUID()
         task?.cancel()
         settleWork?.cancel()
@@ -166,20 +174,17 @@ private final class PutBackPanel: NSPanel {
     }
 
     private func screensSettled() {
-        settling = false
         let now = Set(Display.all.map(\.id))
-        let returned = now.subtracting(connected)
-        let removed = connected.subtracting(now)
-        connected = now
-        disconnectedToPreserve.formUnion(removed)
+        guard let change = transition.settle(on: now) else { return }
+        disconnectedToPreserve.formUnion(change.removed)
         disconnectedToPreserve.subtract(now)
         for id in pending.keys where !now.contains(id) { pending[id] = nil }
-        for id in returned where memory.screens[id] != nil { pending[id] = Date().addingTimeInterval(15 * 60) }
+        for id in change.recover where memory.screens[id] != nil { pending[id] = Date().addingTimeInterval(15 * 60) }
         handleScreenChanges()
     }
 
     private func handleScreenChanges() {
-        guard !settling, task == nil else { return }
+        guard transition.permitsRecording, task == nil else { return }
         if !disconnectedToPreserve.isEmpty {
             keepDesktopsSeparate(from: disconnectedToPreserve)
         }

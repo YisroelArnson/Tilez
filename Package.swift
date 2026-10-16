@@ -10,6 +10,7 @@ let package = Package(
         .target(name: "TilezCore"),
         .target(name: "TilezSpacesBridge", cSettings: [.unsafeFlags(["-fobjc-arc"])]),
         .executableTarget(name: "Tilez", dependencies: ["TilezCore", "TilezSpacesBridge", .product(name: "Sparkle", package: "Sparkle")]),
-        .executableTarget(name: "TilezCoreChecks", dependencies: ["TilezCore"], path: "Tests/TilezCoreTests")
+        .executableTarget(name: "TilezCoreChecks", dependencies: ["TilezCore"], path: "Tests/TilezCoreTests"),
+        .executableTarget(name: "TilezMonitorChecks", dependencies: ["TilezCore"], path: "Tests/MonitorChecks")
     ]
 )
