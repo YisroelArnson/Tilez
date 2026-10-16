@@ -195,9 +195,10 @@ final class ActionItem: NSMenuItem {
     /// Quick Add opens where the grid would, after that screen's enlarged window returns to its pane.
     private func showQuickAdd() {
         if quickAdd.isShown { quickAdd.close(); return }
+        let target = overlay.targetScreen()
         workspacePanel.close()
         if overlay.isShown { overlay.model.cancel(); overlay.close(restoreFocus: false) }
-        guard let target = overlay.targetScreen(nil), let display = Display.all.first(where: { $0.screen == target }) else { return }
+        guard let display = Display.all.first(where: { $0.screen == target }) else { return }
         guard zoom.hasEnlarged(on: display) else { quickAdd.show(on: display); return }
         Task { await zoom.restore(on: display); quickAdd.show(on: display) }
     }
@@ -213,13 +214,14 @@ final class ActionItem: NSMenuItem {
     /// Workspace shortcuts act on the screen the grid would open on, never while the grid is editing.
     /// Pressing the panel's own shortcut again closes it; a number switches even while it's open.
     private func showWorkspaces(toggles: Bool = true, _ action: (WorkspacePanelController, Display) -> Void) {
+        let target = overlay.targetScreen()
         if workspacePanel.isShown {
             workspacePanel.close(restoreFocus: toggles)
             if toggles { return }
         }
         if overlay.isShown { overlay.model.cancel(); overlay.close(restoreFocus: false) }
         quickAdd.close()
-        guard let target = overlay.targetScreen(nil), let display = Display.all.first(where: { $0.screen == target }) else { return }
+        guard let display = Display.all.first(where: { $0.screen == target }) else { return }
         action(workspacePanel, display)
     }
     private func openWorkspace(number: Int) {

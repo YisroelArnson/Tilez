@@ -20,14 +20,12 @@ private final class PutBackPanel: NSPanel {
     private let store: WorkspaceStore
     private let defaults: UserDefaults
     private var memory: ScreenMemory
-    private var connected: Set<String>
+    private var transition: ScreenTransition
     private var disconnectedToPreserve: Set<String> = []
     private var screenGeneration = UUID()
     /// Reconnected screens whose windows can still go back, until the time given. Nothing is
     /// recorded while any are waiting, so their windows keep belonging to them.
     private var pending: [String: Date] = [:]
-    /// Screens are changing, so where windows are now isn't where they belong.
-    private var settling = false
     private var timer: Timer?
     private var settleWork: DispatchWorkItem?
     private var hideWork: DispatchWorkItem?
@@ -40,7 +38,7 @@ private final class PutBackPanel: NSPanel {
     init(store: WorkspaceStore, defaults: UserDefaults = .standard) {
         self.store = store; self.defaults = defaults
         memory = defaults.data(forKey: Self.memoryKey).flatMap { try? JSONDecoder().decode(ScreenMemory.self, from: $0) } ?? ScreenMemory()
-        connected = Set(Display.all.map(\.id))
+        transition = ScreenTransition(connected: Set(Display.all.map(\.id)))
         let center = NotificationCenter.default, workspace = NSWorkspace.shared.notificationCenter
         observers = [
             (center, center.addObserver(forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main) { [weak self] _ in
@@ -48,10 +46,10 @@ private final class PutBackPanel: NSPanel {
             }),
             // A screen can come or go while the Mac sleeps; record before, and look again after.
             (workspace, workspace.addObserver(forName: NSWorkspace.willSleepNotification, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.record(); self?.settling = true }
+                MainActor.assumeIsolated { self?.willSleep() }
             }),
             (workspace, workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil, queue: .main) { [weak self] _ in
-                MainActor.assumeIsolated { self?.screensChanged() }
+                MainActor.assumeIsolated { self?.didWake() }
             }),
         ]
         timer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
@@ -75,7 +73,7 @@ private final class PutBackPanel: NSPanel {
     /// its windows to come back. With one screen there's nowhere else for windows to be.
     private func record() {
         expire()
-        guard !settling, pending.isEmpty, task == nil else { return }
+        guard transition.permitsRecording, pending.isEmpty, task == nil else { return }
         let displays = Display.all
         // WindowServer drops a screen, and moves its windows, before AppKit's list catches up.
         guard displays.count > 1, Set(displays.map(\.id)).isSubset(of: Self.activeDisplayIDs) else { return }
@@ -153,12 +151,32 @@ private final class PutBackPanel: NSPanel {
 
     // MARK: Screens coming back
 
+    private func willSleep() {
+        record()
+        screenGeneration = UUID()
+        settleWork?.cancel(); settleWork = nil
+        task?.cancel()
+        hide()
+        transition.sleep(remembered: Set(memory.screens.keys))
+    }
+
+    private func didWake() {
+        transition.wake()
+        screensChanged()
+    }
+
     private func screensChanged() {
-        settling = true
+        transition.screensChanged()
         screenGeneration = UUID()
         task?.cancel()
         settleWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in MainActor.assumeIsolated { self?.screensSettled() } }
+        let generation = screenGeneration
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.screenGeneration == generation else { return }
+                self.screensSettled()
+            }
+        }
         settleWork = work
         // macOS keeps moving windows for a few seconds after a screen comes or goes, sometimes
         // back where they were; only what's still away afterwards needs putting back.
@@ -166,20 +184,17 @@ private final class PutBackPanel: NSPanel {
     }
 
     private func screensSettled() {
-        settling = false
         let now = Set(Display.all.map(\.id))
-        let returned = now.subtracting(connected)
-        let removed = connected.subtracting(now)
-        connected = now
-        disconnectedToPreserve.formUnion(removed)
+        guard let change = transition.settle(on: now) else { return }
+        disconnectedToPreserve.formUnion(change.removed)
         disconnectedToPreserve.subtract(now)
         for id in pending.keys where !now.contains(id) { pending[id] = nil }
-        for id in returned where memory.screens[id] != nil { pending[id] = Date().addingTimeInterval(15 * 60) }
+        for id in change.recover where memory.screens[id] != nil { pending[id] = Date().addingTimeInterval(15 * 60) }
         handleScreenChanges()
     }
 
     private func handleScreenChanges() {
-        guard !settling, task == nil else { return }
+        guard transition.permitsRecording, task == nil else { return }
         if !disconnectedToPreserve.isEmpty {
             keepDesktopsSeparate(from: disconnectedToPreserve)
         }
@@ -215,9 +230,11 @@ private final class PutBackPanel: NSPanel {
             do {
                 let pids = Set(visible.compactMap { $0.windowID.split(separator: ":").first.flatMap { Int32($0) } })
                 try await self.manager.refresh(for: pids)
+                try Task.checkCancellation()
                 let movable = self.movableBindings().intersection(visible)
                 let groups = self.memory.desktopGroups(on: removed, keeping: movable)
                 try await self.arrangeGroups(groups, on: { _ in display.id })
+                try Task.checkCancellation()
                 self.phase = .done; self.title = "Kept your desktops separate"; self.detail = ""
                 self.scheduleHide(after: 2)
             } catch is CancellationError {
@@ -327,7 +344,7 @@ private final class PutBackPanel: NSPanel {
     /// Moves the windows waiting to go back to their remembered places: all of them, or only
     /// those for `displayIDs`. Minimized windows stay minimized.
     func putBack(on displayIDs: [String]? = nil) {
-        guard task == nil else { return }
+        guard transition.permitsRecording, task == nil else { return }
         if always { defaults.set(true, forKey: GridEditorModel.putBackKey); always = false }
         hideWork?.cancel()
         let entries = away().entries.filter { displayIDs?.contains($0.displayID) ?? true }
@@ -341,15 +358,17 @@ private final class PutBackPanel: NSPanel {
             scheduleHide(after: 8)
             return
         }
+        let generation = screenGeneration
         task = Task { [weak self] in
             guard let self else { return }
             defer {
                 self.task = nil
-                if !self.disconnectedToPreserve.isEmpty { self.handleScreenChanges() }
+                if generation != self.screenGeneration || !self.disconnectedToPreserve.isEmpty { self.handleScreenChanges() }
             }
             do {
                 let pids = Set(entries.flatMap { $0.grid.slots.compactMap { $0.binding?.windowID.split(separator: ":").first.flatMap { Int32($0) } } })
                 try await self.manager.refresh(for: pids)
+                try Task.checkCancellation()
                 let movable = Set(self.manager.windows.filter { !$0.availability.minimized && !$0.availability.hidden }.map(\.id))
                 let groups = Desktops.canMove ? self.memory.desktopGroups(on: Set(entries.map(\.displayID)), keeping: self.movableBindings()) : []
                 let grouped = Set(groups.flatMap { $0.grid.slots.compactMap { $0.binding?.windowID } })
@@ -365,13 +384,16 @@ private final class PutBackPanel: NSPanel {
                     return WorkspaceScreen(displayID: entry.displayID, arranging: grid).map { ($0, entry.displayID) }
                 }
                 if !groups.isEmpty { try await self.arrangeGroups(groups, on: { $0 }) }
+                try Task.checkCancellation()
                 if !destinations.isEmpty { try await self.store.arrange(destinations, progress: { self.detail = $0 }) }
+                try Task.checkCancellation()
                 for entry in entries { self.pending[entry.displayID] = nil }
                 self.phase = .done
                 self.title = count == 0 ? "Those windows are already back" : "Put \(count) window\(count == 1 ? "" : "s") back"
                 self.detail = ""
                 self.scheduleHide(after: 1.6)
             } catch {
+                if generation != self.screenGeneration { self.hide(); return }
                 self.phase = .failed
                 self.title = error is CancellationError ? "Stopped" : "Some windows couldn’t go back"
                 self.detail = error is CancellationError ? "" : error.localizedDescription

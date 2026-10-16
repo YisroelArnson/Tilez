@@ -5,6 +5,7 @@ cd "$TILEZ_ROOT"
 mkdir -p .build/module-cache
 export CLANG_MODULE_CACHE_PATH="$TILEZ_ROOT/.build/module-cache"
 swift run --disable-sandbox TilezCoreChecks
+swift run --disable-sandbox TilezMonitorChecks
 TILEZ_BIN="$(swift build --show-bin-path --disable-sandbox)"
 swiftc -module-cache-path "$TILEZ_ROOT/.build/module-cache" -I "$TILEZ_BIN/Modules" \
   "$TILEZ_ROOT/Sources/Tilez/Preferences.swift" "$TILEZ_ROOT/Tests/PreferencesChecks/main.swift" \
