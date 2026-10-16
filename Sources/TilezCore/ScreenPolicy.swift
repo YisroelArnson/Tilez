@@ -1,7 +1,7 @@
 public enum ScreenDestination {
     public static func choose(explicit: String?, visibleGrid: String?, pointer: String?,
                               activeWindow: String?, fallback: String?, connected: Set<String>) -> String? {
-        explicit ?? activeWindow ?? fallback
+        [explicit, visibleGrid, pointer, activeWindow, fallback].compactMap { $0 }.first { connected.contains($0) }
     }
 }
 
@@ -28,17 +28,23 @@ public struct ScreenTransition {
     }
 
     public mutating func sleep(remembered: Set<String>) {
-        phase = .asleep(remembered: remembered)
+        if case .asleep = phase { return }
+        phase = .asleep(remembered: remembered.intersection(connected))
     }
 
     public mutating func wake() {
         if case .asleep(let remembered) = phase { phase = .waking(remembered: remembered) }
     }
 
-    public mutating func screensChanged() { phase = .changing }
+    public mutating func screensChanged() {
+        if case .stable = phase { phase = .changing }
+    }
 
     public mutating func settle(on current: Set<String>) -> Change? {
-        let change = Change(removed: connected.subtracting(current), recover: current.subtracting(connected))
+        if case .asleep = phase { return nil }
+        var recover = current.subtracting(connected)
+        if case .waking(let remembered) = phase { recover.formUnion(remembered.intersection(current)) }
+        let change = Change(removed: connected.subtracting(current), recover: recover)
         connected = current
         phase = .stable
         return change

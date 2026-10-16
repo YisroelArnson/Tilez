@@ -91,7 +91,6 @@ private final class GridPanel: NSPanel {
             previousApp.activate(options: [])
         }
     }
-    /// The screen the grid opens on: the one given, else the active app's foremost window's.
     func targetScreen(_ screen: NSScreen? = nil) -> NSScreen? {
         let displays = Display.all
         func id(_ screen: NSScreen?) -> String? { displays.first { $0.screen == screen }?.id }

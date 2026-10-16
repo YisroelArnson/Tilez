@@ -153,6 +153,10 @@ private final class PutBackPanel: NSPanel {
 
     private func willSleep() {
         record()
+        screenGeneration = UUID()
+        settleWork?.cancel(); settleWork = nil
+        task?.cancel()
+        hide()
         transition.sleep(remembered: Set(memory.screens.keys))
     }
 
@@ -166,7 +170,13 @@ private final class PutBackPanel: NSPanel {
         screenGeneration = UUID()
         task?.cancel()
         settleWork?.cancel()
-        let work = DispatchWorkItem { [weak self] in MainActor.assumeIsolated { self?.screensSettled() } }
+        let generation = screenGeneration
+        let work = DispatchWorkItem { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.screenGeneration == generation else { return }
+                self.screensSettled()
+            }
+        }
         settleWork = work
         // macOS keeps moving windows for a few seconds after a screen comes or goes, sometimes
         // back where they were; only what's still away afterwards needs putting back.
@@ -220,9 +230,11 @@ private final class PutBackPanel: NSPanel {
             do {
                 let pids = Set(visible.compactMap { $0.windowID.split(separator: ":").first.flatMap { Int32($0) } })
                 try await self.manager.refresh(for: pids)
+                try Task.checkCancellation()
                 let movable = self.movableBindings().intersection(visible)
                 let groups = self.memory.desktopGroups(on: removed, keeping: movable)
                 try await self.arrangeGroups(groups, on: { _ in display.id })
+                try Task.checkCancellation()
                 self.phase = .done; self.title = "Kept your desktops separate"; self.detail = ""
                 self.scheduleHide(after: 2)
             } catch is CancellationError {
@@ -332,7 +344,7 @@ private final class PutBackPanel: NSPanel {
     /// Moves the windows waiting to go back to their remembered places: all of them, or only
     /// those for `displayIDs`. Minimized windows stay minimized.
     func putBack(on displayIDs: [String]? = nil) {
-        guard task == nil else { return }
+        guard transition.permitsRecording, task == nil else { return }
         if always { defaults.set(true, forKey: GridEditorModel.putBackKey); always = false }
         hideWork?.cancel()
         let entries = away().entries.filter { displayIDs?.contains($0.displayID) ?? true }
@@ -346,15 +358,17 @@ private final class PutBackPanel: NSPanel {
             scheduleHide(after: 8)
             return
         }
+        let generation = screenGeneration
         task = Task { [weak self] in
             guard let self else { return }
             defer {
                 self.task = nil
-                if !self.disconnectedToPreserve.isEmpty { self.handleScreenChanges() }
+                if generation != self.screenGeneration || !self.disconnectedToPreserve.isEmpty { self.handleScreenChanges() }
             }
             do {
                 let pids = Set(entries.flatMap { $0.grid.slots.compactMap { $0.binding?.windowID.split(separator: ":").first.flatMap { Int32($0) } } })
                 try await self.manager.refresh(for: pids)
+                try Task.checkCancellation()
                 let movable = Set(self.manager.windows.filter { !$0.availability.minimized && !$0.availability.hidden }.map(\.id))
                 let groups = Desktops.canMove ? self.memory.desktopGroups(on: Set(entries.map(\.displayID)), keeping: self.movableBindings()) : []
                 let grouped = Set(groups.flatMap { $0.grid.slots.compactMap { $0.binding?.windowID } })
@@ -370,13 +384,16 @@ private final class PutBackPanel: NSPanel {
                     return WorkspaceScreen(displayID: entry.displayID, arranging: grid).map { ($0, entry.displayID) }
                 }
                 if !groups.isEmpty { try await self.arrangeGroups(groups, on: { $0 }) }
+                try Task.checkCancellation()
                 if !destinations.isEmpty { try await self.store.arrange(destinations, progress: { self.detail = $0 }) }
+                try Task.checkCancellation()
                 for entry in entries { self.pending[entry.displayID] = nil }
                 self.phase = .done
                 self.title = count == 0 ? "Those windows are already back" : "Put \(count) window\(count == 1 ? "" : "s") back"
                 self.detail = ""
                 self.scheduleHide(after: 1.6)
             } catch {
+                if generation != self.screenGeneration { self.hide(); return }
                 self.phase = .failed
                 self.title = error is CancellationError ? "Stopped" : "Some windows couldn’t go back"
                 self.detail = error is CancellationError ? "" : error.localizedDescription

@@ -28,7 +28,7 @@ Press **Control–Option–Space** or click the grid icon in the menu bar. The p
 - **Remove pane / Delete** expands a neighboring pane where possible and closes the removed window on Apply. Undo restores the pane before applying; Escape cancels the draft. Native save dialogs remain under the app’s control.
 - **⌘Shift–Delete** removes all panes from the current draft, leaving one empty cell. Press **Return** to close their windows, or **⌘Z** to restore the entire layout in one step. Also available under **… → Close all panes on Apply**.
 - Invoke the same shortcut again to edit the current desktop's grid, then choose **Apply**.
-- The keyboard shortcut targets the active app’s foremost window’s display; clicking the menu icon targets that menu bar’s display. Each desktop remembers the selected cell during the session.
+- Keyboard shortcuts target the screen under the pointer. With the grid open, workspace and Quick Add shortcuts keep that grid's screen. Clicking the menu icon targets that menu bar's display. Each desktop remembers the selected cell during the session.
 - **Arrow keys** select neighboring cells without wrapping. **Shift–Arrow** moves or swaps the selected app and its exact window assignment. **⌘Shift–Arrow** copies the app into the neighboring cell and follows the copy. Copying onto a different app replaces it, and that pane's window closes on Apply; copying onto the same app just moves the selection, keeping its window. These edit the draft; **Return** applies it to your windows.
 - **Option–Arrow** splits the selected pane toward that arrow (left, right, above, or below) and opens the app chooser for the new pane. Type an app name and press Return to assign it. **⌘Z** undoes the split after dismissing the chooser.
 - **Letters are commands in the grid, no ⌘ needed:** **G** Layouts, **K** add a pane, **T** tile all, **W** workspaces, **R** realign, **S** save the workspace (**⇧S** a new one), **O** saved layouts, **N** a new empty grid. The ⌘ versions work too, and **⌘Z** undoes. **?** lists every shortcut.
@@ -71,7 +71,7 @@ While more than one screen is connected, Tilez remembers which screen and deskto
 
 - Check **Always put windows back** in the prompt, or choose **… → Put windows back when a screen reconnects → Automatically** in the grid, to skip the prompt.
 - After **Not Now**, the grid on that screen shows a **Put back** pill for 15 minutes.
-- Tilez waits a few seconds after a screen comes or goes, so windows macOS puts back by itself are left alone. The same goes for screens that disconnect while the Mac sleeps.
+- Tilez waits a few seconds after a screen comes or goes, so windows macOS puts back by itself are left alone. After wake, Tilez also checks the screens connected before sleep, even if none disconnected. Windows displaced during sleep use the same prompt or automatic setting. Resolution changes alone do not put windows back.
 
 ## Quick add a tile
 
