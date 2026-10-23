@@ -38,6 +38,8 @@ final class ActionItem: NSMenuItem {
     private var tileHotkey: GridHotKey!
     private var layoutHotkey: GridHotKey!
     private var undoHotkey: GridHotKey!
+    private var desktopHotkeys: [GridHotKey] = []
+    private var desktopTask: Task<Void, Never>?
     private let updateReminder = UpdateReminder()
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -97,6 +99,10 @@ final class ActionItem: NSMenuItem {
             GridHotKey(keyCode: kVK_ANSI_S, id: 7, modifiers: controlKey | optionKey | shiftKey) { [weak self] in
                 self?.showWorkspaces { $0.showSave(on: $1) }
             },
+        ]
+        desktopHotkeys = [
+            GridHotKey(keyCode: kVK_ANSI_D, id: 20) { [weak self] in self?.tidyDesktops(spreading: true) },
+            GridHotKey(keyCode: kVK_ANSI_X, id: 21) { [weak self] in self?.tidyDesktops(spreading: false) },
         ]
         // Only release builds carry an update feed; builds from source update with scripts/update.sh.
         if Bundle.main.object(forInfoDictionaryKey: "SUFeedURL") != nil {
@@ -162,6 +168,9 @@ final class ActionItem: NSMenuItem {
         } else if let taken = zip(["⌃⌥W", "⌃⌥S", "⌃⌥⇧S"] + (1...9).map { "⌃⌥\($0)" }, workspaceHotkeys + numberHotkeys)
                     .first(where: { !$0.1.registered })?.0 {
             overlay.model.message = "\(taken) is already in use. Open and save workspaces from the grid’s Save menu."
+            overlay.model.isError = true
+        } else if let taken = zip(["⌃⌥D", "⌃⌥X"], desktopHotkeys).first(where: { !$0.1.registered })?.0 {
+            overlay.model.message = "\(taken) is already in use, so \(taken == "⌃⌥D" ? "workspaces can’t be given their own desktops" : "empty desktops can’t be closed") with it."
             overlay.model.isError = true
         }
     }
@@ -263,6 +272,30 @@ final class ActionItem: NSMenuItem {
         manager.undo()
         if let target = overlay.targetScreen(nil), let display = Display.all.first(where: { $0.screen == target }) {
             screenLayout.show("Undid \(label)", on: display)
+        }
+    }
+    /// ⌃⌥D gives each workspace its own desktop and ⌃⌥X closes empty desktops, both through
+    /// Mission Control. A second press while one runs is ignored.
+    private func tidyDesktops(spreading: Bool) {
+        guard desktopTask == nil else { NSSound.beep(); return }
+        if overlay.isShown { overlay.model.cancel(); overlay.close(restoreFocus: false) }
+        quickAdd.close()
+        workspacePanel.close(restoreFocus: false)
+        guard let target = overlay.targetScreen(nil), let display = Display.all.first(where: { $0.screen == target }) else { return }
+        desktopTask = Task {
+            defer { desktopTask = nil }
+            let message: String
+            do {
+                if spreading {
+                    if zoom.hasEnlarged(on: display) { await zoom.restore(on: display) }
+                    let placed = try await workspaces.spread(from: display)
+                    message = placed == 1 ? "Your workspace has its own desktop" : "Each of \(placed) workspaces has its own desktop"
+                } else {
+                    let closed = try await Desktops.closeEmpty(returningTo: display)
+                    message = closed == 0 ? "No empty desktops to close" : "Closed \(closed) empty desktop\(closed == 1 ? "" : "s")"
+                }
+            } catch { message = error.localizedDescription }
+            screenLayout.show(message, on: display)
         }
     }
     /// A background check: a found update downloads quietly, then the dot and Restart to update

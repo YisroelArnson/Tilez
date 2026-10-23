@@ -36,6 +36,8 @@ Open the disk image and drag Tilez to Applications. The app is notarized by Appl
 | **⌃⌥ R** | Realign windows that have drifted out of line |
 | **⌃⌥ W** | Browse your workspaces; **⌃⌥ 1–9** opens one |
 | **⌃⌥ S** | Save the workspace on this screen |
+| **⌃⌥ D** | Give each workspace its own desktop |
+| **⌃⌥ X** | Close empty desktops |
 | **⌃⌥ Z** | Undo the last arrangement |
 | **⌃⌥ Return** or **⌃⌥ click** | Enlarge a window, and put it back |
 | **⌃⌥ N** | Quick Add an app as a new tile |

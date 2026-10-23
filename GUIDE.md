@@ -4,6 +4,8 @@ Everything Tilez can do, and the keys that do it. New to Tilez? Start with the [
 
 - [The grid](#the-grid)
 - [Workspaces](#workspaces)
+- [Give each workspace its own desktop](#give-each-workspace-its-own-desktop)
+- [Close empty desktops](#close-empty-desktops)
 - [Keep desktops separate when screens disconnect](#keep-desktops-separate-when-screens-disconnect)
 - [Put windows back when a screen reconnects](#put-windows-back-when-a-screen-reconnects)
 - [Quick add a tile](#quick-add-a-tile)
@@ -58,6 +60,14 @@ A **workspace** is a set of open windows kept in one arrangement, on one screen 
 - **New windows join the workspace the screen shows:** panes you add in the grid and Apply, windows brought from another screen, Quick Add, and ⌃⌥ right-click. Saving is only needed after rearranging.
 - **When saving would make a new workspace** but some already share windows with the screen, the save form offers to update them first, best match first, such as **Update “Coding” · 4 of its 5 windows are here**. The ⌃⌥⇧S panel offers the best match the same way.
 - Pulling windows off other desktops uses the same desktop bridge as the grid (macOS 26.4+). When a screen is showing a full-screen app, that screen switches to a regular desktop for the workspace and the app stays in full screen on its own desktop. The workspace's own full-screen windows leave full screen and join the layout.
+
+## Give each workspace its own desktop
+
+**Control–Option–D** puts every workspace on a desktop of its own and arranges it there. Each workspace keeps the desktop that already holds most of its windows; one with none of its windows anywhere takes an empty desktop, and when there isn't one, Tilez makes a new desktop. A one-screen workspace goes to the screen you're on, as when you open it; a multi-screen workspace gets a desktop on each of its screens. Other windows stay where they are. Afterward you're on the workspace your screen was showing, or else back on the desktop you started from. Needs macOS 26.4 or later; Mission Control flashes as Tilez switches desktops.
+
+## Close empty desktops
+
+**Control–Option–X** closes every desktop without windows, on every screen, the way Mission Control's close buttons do. A minimized window or a hidden app's window keeps its desktop open; a window shown on all desktops doesn't. The desktop each screen is on stays, so every screen keeps at least one. Needs macOS 26.4 or later.
 
 ## Keep desktops separate when screens disconnect
 

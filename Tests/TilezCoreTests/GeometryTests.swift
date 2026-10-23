@@ -524,9 +524,10 @@ private func checkMenuPanelGeometry() {
         checkSavedSetups()
         checkActiveLayouts()
         checkWorkspaces()
+        checkDesktopPlans()
         checkGathering()
         checkMenuPanelGeometry()
-        print("PASS: 33 geometry, matching, creation, visibility, saved-setup, active-layout, workspace, and menu-panel scenarios, \(assertionCount) assertions.")
+        print("PASS: 34 geometry, matching, creation, visibility, saved-setup, active-layout, workspace, and menu-panel scenarios, \(assertionCount) assertions.")
     }
 }
 
@@ -878,4 +879,25 @@ func checkWorkspaces() {
     shown.forget(spanning.id)
     expect(shown.screens.isEmpty)
     print("PASS: workspaces keep only live windows, grow neighbors on close, follow one screen or return to several, detect edits, save per screen, join Quick Add windows, and track the shown workspace")
+}
+
+func checkDesktopPlans() {
+    func desktop(_ id: String, current: Bool = false, windows: Int = 0) -> DesktopPlan.Desktop {
+        DesktopPlan.Desktop(id: id, displayID: String(id.prefix(1)), isCurrent: current, windows: windows)
+    }
+    // ⌃⌥X closes empty desktops, never the one a screen shows, and leaves each screen one.
+    expectEqual(DesktopPlan.closable([desktop("A1", current: true), desktop("A2"), desktop("A3", windows: 2), desktop("A4")]), ["A2", "A4"])
+    expect(DesktopPlan.closable([desktop("A1", current: true, windows: 1), desktop("B1", current: true), desktop("B2")]) == ["B2"], "Each screen is judged on its own")
+    expect(DesktopPlan.closable([desktop("A1", current: true)]) == [], "A screen's only desktop stays")
+    expect(DesktopPlan.closable([desktop("A1"), desktop("A2")]) == [], "Without a current desktop, one stays")
+    expectEqual(DesktopPlan.closable([desktop("A1"), desktop("A2", windows: 1)]), ["A1"])
+
+    // ⌃⌥D gives each workspace the desktop holding most of its windows, so the fewest move.
+    let desktops = ["A1", "A2", "A3", "A4"]
+    expectEqual(DesktopPlan.homes(for: [["A1": 3], ["A2": 2]], desktops: desktops, empty: []), ["A1", "A2"])
+    expect(DesktopPlan.homes(for: [["A1": 1, "A2": 1], ["A1": 4]], desktops: desktops, empty: []) == ["A2", "A1"], "A shared desktop goes to the workspace with more windows there")
+    expect(DesktopPlan.homes(for: [["A1": 2], ["A1": 2]], desktops: desktops, empty: ["A3", "A4"]) == ["A1", "A3"], "On a tie the earlier workspace keeps it; the other takes an empty desktop")
+    expect(DesktopPlan.homes(for: [["A1": 1], [:], [:]], desktops: desktops, empty: ["A4"]) == ["A1", "A4", nil], "Without an empty desktop, a workspace needs a new one")
+    expect(DesktopPlan.homes(for: [[:]], desktops: desktops, empty: ["A1"]) == ["A1"], "An empty current desktop can be used")
+    print("PASS: ⌃⌥X closes only empty desktops a screen can spare, and ⌃⌥D keeps workspaces where most of their windows are")
 }

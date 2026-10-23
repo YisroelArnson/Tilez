@@ -18,7 +18,7 @@ struct Desktop: Identifiable, Equatable {
 }
 
 enum DesktopError: LocalizedError {
-    case unavailable, missingDesktop, missionControl, creationFailed, moveFailed, switchFailed, missingDisplay
+    case unavailable, missingDesktop, missionControl, creationFailed, moveFailed, switchFailed, missingDisplay, closeFailed
     var errorDescription: String? {
         switch self {
         case .unavailable: return "Desktop control is unavailable on this macOS version. Your existing windows have not been moved."
@@ -28,6 +28,7 @@ enum DesktopError: LocalizedError {
         case .moveFailed: return "macOS did not move every window to the requested desktop. Tilez stopped before tiling."
         case .switchFailed: return "Tilez could not confirm the desktop switch. Open Mission Control to select the desktop."
         case .missingDisplay: return "The setup’s display is disconnected. Edit the setup to choose an available display."
+        case .closeFailed: return "macOS did not close every empty desktop. Close the rest in Mission Control."
         }
     }
 }
@@ -169,6 +170,49 @@ enum Desktops {
             if all(includeFullScreen: true).first(where: { $0.displayID == desktop.displayID && $0.isCurrent })?.number == desktop.number && missionControl() == nil { return }
         }
         throw DesktopError.switchFailed
+    }
+
+    /// Normal windows on each desktop, counting minimized and hidden ones. A window on every
+    /// desktop belongs to none of them.
+    static func windowCounts() -> [UInt64: Int] {
+        let apps = Set(NSWorkspace.shared.runningApplications.filter { $0.activationPolicy == .regular }.map(\.processIdentifier))
+        let records = CGWindowListCopyWindowInfo(.optionAll, kCGNullWindowID) as? [[String: Any]] ?? []
+        var counts: [UInt64: Int] = [:]
+        for record in records {
+            guard (record[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,
+                  let pid = (record[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value, apps.contains(pid),
+                  let number = (record[kCGWindowNumber as String] as? NSNumber)?.uint32Value,
+                  let raw = record[kCGWindowBounds as String] as? NSDictionary,
+                  let frame = CGRect(dictionaryRepresentation: raw), frame.width > 100, frame.height > 80 else { continue }
+            let spaces = spaces(for: number)
+            if spaces.count == 1, let space = spaces.first { counts[space, default: 0] += 1 }
+        }
+        return counts
+    }
+
+    /// Closes desktops through Mission Control, as its close buttons do. macOS moves any window
+    /// still there to another desktop. Mission Control closes on the screen's current desktop.
+    @MainActor static func close(_ desktops: [Desktop], returningTo current: Desktop) async throws {
+        guard !desktops.isEmpty else { return }
+        let mc = try await openMissionControl()
+        try await Task.sleep(nanoseconds: 500_000_000)
+        var failed = false
+        // Last first, so each one's position in Mission Control holds until it's closed.
+        for desktop in desktops.sorted(by: { $0.index > $1.index }) {
+            guard let refreshed = all(includeFullScreen: true).first(where: { $0.number == desktop.number }), !refreshed.isCurrent,
+                  let list = subgroup(mc, number: refreshed.displayNumber, identifier: "mc.spaces.list") else { failed = true; continue }
+            let buttons = children(list)
+            guard buttons.indices.contains(refreshed.index - 1),
+                  AXUIElementPerformAction(buttons[refreshed.index - 1], "AXRemoveDesktop" as CFString) == .success else { failed = true; continue }
+            var closed = false
+            for _ in 0..<20 {
+                try await Task.sleep(nanoseconds: 100_000_000)
+                if !all(includeFullScreen: true).contains(where: { $0.number == desktop.number }) { closed = true; break }
+            }
+            if !closed { failed = true }
+        }
+        try await activate(current)
+        if failed { throw DesktopError.closeFailed }
     }
 
     @MainActor static func move(_ windows: [ManagedWindow], to desktop: Desktop) async throws {

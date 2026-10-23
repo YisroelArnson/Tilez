@@ -3,13 +3,14 @@ import ApplicationServices
 import TilezCore
 
 enum WorkspaceError: LocalizedError {
-    case closed(String), disconnected(String), nothingToSave, noneShown, fullScreen(String)
+    case closed(String), disconnected(String), nothingToSave, noneShown, noneSaved, fullScreen(String)
     var errorDescription: String? {
         switch self {
         case .closed(let name): return "All of “\(name)”’s windows have closed, so it’s gone."
         case .disconnected(let name): return "None of the screens “\(name)” was saved on are connected."
         case .nothingToSave: return "There are no windows on this screen to save."
         case .noneShown: return "This screen isn’t showing a workspace. Save it as a new one."
+        case .noneSaved: return "There are no workspaces yet. Save one with ⌃⌥S."
         case .fullScreen(let screen): return "\(screen) has no regular desktop to show this workspace on. Leave full screen there and try again."
         }
     }
