@@ -100,12 +100,41 @@ public struct ScreenMemory: Codable, Equatable {
     /// remembered frames. `location` gives the screen a window is on now, or nil when it can't
     /// be moved back (closed, minimized, or its app is hidden). Nil when none are away.
     public func displaced(from displayID: String, location: (GridWindowBinding) -> String?) -> DesktopGrid? {
+        displaced(from: displayID, whereabouts: { binding in location(binding).map { Whereabouts(displayID: $0) } })
+    }
+
+    /// Where a window is now: its screen, and when known, its only desktop and its frame
+    /// normalized within that screen's usable area.
+    public struct Whereabouts: Equatable {
+        public var displayID: String
+        public var desktop: String?
+        public var frame: CGRect?
+        public init(displayID: String, desktop: String? = nil, frame: CGRect? = nil) {
+            self.displayID = displayID; self.desktop = desktop; self.frame = frame
+        }
+    }
+
+    /// Like `displaced(from:location:)`, but a window macOS already returned to its screen still
+    /// needs putting back when it's on another desktop than its own (or that desktop's
+    /// replacement), or away from its remembered frame.
+    public func displaced(from displayID: String, whereabouts: (GridWindowBinding) -> Whereabouts?) -> DesktopGrid? {
         let away = (screens[displayID] ?? []).filter { window in
-            guard let binding = window.slot.binding, let now = location(binding) else { return false }
-            return now != displayID
+            guard let binding = window.slot.binding, let now = whereabouts(binding) else { return false }
+            if now.displayID != displayID { return true }
+            if let desktop = window.desktop, let current = now.desktop, current != desktop,
+               current != replacements?["\(displayID)|\(displayID)|\(desktop)"] { return true }
+            if let frame = now.frame, !Self.isAt(frame, window.frame) { return true }
+            return false
         }
         guard !away.isEmpty else { return nil }
         return DesktopGrid(panes: away.map(\.slot), frames: away.map(\.frame))
+    }
+
+    /// True when a normalized frame is where one was remembered, give or take a window that
+    /// couldn't quite reach its size.
+    public static func isAt(_ frame: CGRect, _ remembered: CGRect, tolerance: CGFloat = 0.02) -> Bool {
+        abs(frame.minX - remembered.minX) <= tolerance && abs(frame.minY - remembered.minY) <= tolerance
+            && abs(frame.maxX - remembered.maxX) <= tolerance && abs(frame.maxY - remembered.maxY) <= tolerance
     }
 
     public struct DesktopGroup {

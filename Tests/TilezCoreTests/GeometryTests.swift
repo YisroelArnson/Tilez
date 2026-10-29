@@ -413,6 +413,29 @@ func checkGathering() {
     let legacy = try! JSONDecoder().decode(ScreenMemory.self, from: JSONSerialization.data(withJSONObject: legacyJSON))
     expect(legacy.desktopGroups(on: ["Monitor"], keeping: movable).isEmpty, "Legacy screen memory has no inferred desktop membership")
     expectEqual(legacy.screens["Monitor"]?.count, 6)
+
+    // macOS can return windows to a reconnected screen itself, but not to their own desktop or
+    // arrangement. Those still go back; windows at home, as remembered, stay out.
+    typealias Whereabouts = ScreenMemory.Whereabouts
+    var whereabouts: [GridWindowBinding: Whereabouts] = [
+        binding(0): Whereabouts(displayID: "Monitor", desktop: "Coding", frame: left),
+        binding(1): Whereabouts(displayID: "Monitor", desktop: "Research", frame: right),
+        binding(2): Whereabouts(displayID: "Monitor", desktop: "Coding", frame: CGRect(x: 0.505, y: 0.005, width: 0.49, height: 0.99)),
+        binding(3): Whereabouts(displayID: "Monitor", desktop: "Research", frame: left)]
+    expect(memory.displaced(from: "Monitor", whereabouts: { whereabouts[$0] }) == nil,
+           "Windows on their own desktop at their frames, give or take a few pixels, are home")
+    whereabouts[binding(2)] = Whereabouts(displayID: "Monitor", desktop: "Coding", frame: CGRect(x: 0.5, y: 0.5, width: 0.5, height: 0.5))
+    whereabouts[binding(3)] = Whereabouts(displayID: "Monitor", desktop: "Coding", frame: left)
+    expectEqual(memory.displaced(from: "Monitor", whereabouts: { whereabouts[$0] })?.slots.map(\.binding), [binding(2), binding(3)])
+    var replaced = memory
+    replaced.rememberReplacement("New Research", for: groups[1], on: "Monitor")
+    whereabouts[binding(2)] = Whereabouts(displayID: "Monitor", desktop: "Coding", frame: right)
+    whereabouts[binding(3)] = Whereabouts(displayID: "Monitor", desktop: "New Research", frame: left)
+    expect(replaced.displaced(from: "Monitor", whereabouts: { whereabouts[$0] }) == nil, "A desktop's replacement on its own screen counts as home")
+    whereabouts[binding(3)] = Whereabouts(displayID: "Laptop", desktop: "Research", frame: left)
+    expectEqual(memory.displaced(from: "Monitor", whereabouts: { whereabouts[$0] })?.slots.map(\.binding), [binding(3)])
+    whereabouts[binding(3)] = Whereabouts(displayID: "Monitor")
+    expect(memory.displaced(from: "Monitor", whereabouts: { whereabouts[$0] }) == nil, "Without a known desktop or frame, the screen decides")
     // Presets: each covers the screen without overlap, and panes move in reading order.
     expectEqual(LayoutPreset.all.count, 11)
     expectEqual(Set(LayoutPreset.all.map(\.id)).count, LayoutPreset.all.count)

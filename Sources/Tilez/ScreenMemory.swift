@@ -104,9 +104,11 @@ private final class PutBackPanel: NSPanel {
     }
 
     /// Every window of a regular app outside full screen, front to back, by the screen that
-    /// holds most of it; which screen each can be moved back from; and every open window.
+    /// holds most of it; which screen each can be moved back from, with its desktop and frame
+    /// there; and every open window.
     private static func windows(on displays: [Display], manager: WindowManager)
-        -> (screens: [String: [(GridSlot, CGRect)]], location: [GridWindowBinding: String], open: Set<GridWindowBinding>, desktops: [GridWindowBinding: String]) {
+        -> (screens: [String: [(GridSlot, CGRect)]], location: [GridWindowBinding: String], open: Set<GridWindowBinding>,
+            desktops: [GridWindowBinding: String], whereabouts: [GridWindowBinding: ScreenMemory.Whereabouts]) {
         let apps = Dictionary(uniqueKeysWithValues: NSWorkspace.shared.runningApplications
             .filter { $0.activationPolicy == .regular && $0.processIdentifier != getpid() }
             .map { ($0.processIdentifier, $0) })
@@ -122,6 +124,7 @@ private final class PutBackPanel: NSPanel {
         var location: [GridWindowBinding: String] = [:]
         var open: Set<GridWindowBinding> = []
         var membership: [GridWindowBinding: String] = [:]
+        var whereabouts: [GridWindowBinding: ScreenMemory.Whereabouts] = [:]
         for record in records {
             guard (record[kCGWindowLayer as String] as? NSNumber)?.intValue == 0,
                   let pid = (record[kCGWindowOwnerPID as String] as? NSNumber)?.int32Value,
@@ -144,9 +147,14 @@ private final class PutBackPanel: NSPanel {
                 membership[binding] = desktop.spaceIdentity
             }
             // A hidden app's windows stay hidden rather than coming back.
-            if !app.isHidden { location[binding] = display.id }
+            guard !app.isHidden else { continue }
+            location[binding] = display.id
+            let clipped = display.bounds.intersection(frame)
+            whereabouts[binding] = ScreenMemory.Whereabouts(displayID: display.id, desktop: desktop?.spaceIdentity,
+                frame: CGRect(x: (clipped.minX - display.bounds.minX) / display.bounds.width, y: (clipped.minY - display.bounds.minY) / display.bounds.height,
+                              width: clipped.width / display.bounds.width, height: clipped.height / display.bounds.height))
         }
-        return (screens, location, open, membership)
+        return (screens, location, open, membership, whereabouts)
     }
 
     // MARK: Screens coming back
@@ -261,8 +269,11 @@ private final class PutBackPanel: NSPanel {
     /// Reuse an original Space if macOS preserved it; otherwise create one per group. The
     /// launcher gathers only these exact windows, fitting their original arrangement to the
     /// destination screen, and never opens windows or detaches an app's tabs.
-    private func arrangeGroups(_ groups: [ScreenMemory.DesktopGroup], on destination: (String) -> String) async throws {
+    /// Putting back (`exact`) also rearranges a group whose windows are on its desktop but out of
+    /// place, as when macOS returned them itself.
+    private func arrangeGroups(_ groups: [ScreenMemory.DesktopGroup], on destination: (String) -> String, exact: Bool = false) async throws {
         let topology = Set(Display.all.map(\.id))
+        let whereabouts = exact ? Self.windows(on: Display.all, manager: manager).whereabouts : [:]
         let originalDesktops = Desktops.all(includeFullScreen: true).filter(\.isCurrent)
         var changedDesktop = false
         var failure: Error?
@@ -275,7 +286,12 @@ private final class PutBackPanel: NSPanel {
                 let existing = Desktops.all().first { $0.displayID == display.id && $0.spaceIdentity == group.desktop }
                     ?? Desktops.all().first { $0.displayID == display.id && $0.spaceIdentity == replacement }
                 let ids = Set(group.grid.slots.compactMap { $0.binding?.windowID })
-                if let existing, manager.windows.filter({ ids.contains($0.id) }).allSatisfy({ window in
+                let frames = group.grid.normalizedFrames
+                let inPlace = !exact || group.grid.slots.indices.allSatisfy { index in
+                    guard let binding = group.grid.slots[index].binding, let now = whereabouts[binding]?.frame else { return true }
+                    return ScreenMemory.isAt(now, frames[index])
+                }
+                if let existing, inPlace, manager.windows.filter({ ids.contains($0.id) }).allSatisfy({ window in
                     window.number.map { Desktops.spaces(for: $0).contains(existing.number) } == true
                 }) { continue }
                 let desktop: Desktop
@@ -310,11 +326,11 @@ private final class PutBackPanel: NSPanel {
     private func away() -> (entries: [(displayID: String, grid: DesktopGrid)], location: [GridWindowBinding: String]) {
         expire()
         guard !pending.isEmpty else { return ([], [:]) }
-        let location = Self.windows(on: Display.all, manager: manager).location
+        let windows = Self.windows(on: Display.all, manager: manager)
         let entries = pending.keys.sorted().compactMap { id in
-            memory.displaced(from: id, location: { location[$0] }).map { (displayID: id, grid: $0) }
+            memory.displaced(from: id, whereabouts: { windows.whereabouts[$0] }).map { (displayID: id, grid: $0) }
         }
-        return (entries, location)
+        return (entries, windows.location)
     }
 
     private func whereabouts(_ windows: [GridSlot], location: [GridWindowBinding: String]) -> String {
@@ -383,11 +399,16 @@ private final class PutBackPanel: NSPanel {
                     let grid = DesktopGrid(panes: kept.map { entry.grid.slots[$0] }, frames: kept.map { frames[$0] })
                     return WorkspaceScreen(displayID: entry.displayID, arranging: grid).map { ($0, entry.displayID) }
                 }
-                if !groups.isEmpty { try await self.arrangeGroups(groups, on: { $0 }) }
+                if !groups.isEmpty { try await self.arrangeGroups(groups, on: { $0 }, exact: true) }
                 try Task.checkCancellation()
                 if !destinations.isEmpty { try await self.store.arrange(destinations, progress: { self.detail = $0 }) }
                 try Task.checkCancellation()
-                for entry in entries { self.pending[entry.displayID] = nil }
+                // A screen whose windows didn't all make it back keeps waiting, so recording
+                // doesn't make the screen they're on their home. The grid offers Put back.
+                let location = Self.windows(on: Display.all, manager: self.manager).location
+                for entry in entries where self.memory.displaced(from: entry.displayID, location: { location[$0] }) == nil {
+                    self.pending[entry.displayID] = nil
+                }
                 self.phase = .done
                 self.title = count == 0 ? "Those windows are already back" : "Put \(count) window\(count == 1 ? "" : "s") back"
                 self.detail = ""
